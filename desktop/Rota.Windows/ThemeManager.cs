@@ -37,7 +37,9 @@ public static class ThemeManager
         ["SidebarMutedBrush"] = "#98A7BA",
         ["CalendarOutsideBrush"] = "#0B1320",
         ["SubtleBrush"] = "#162131",
-        ["NavSelectedBrush"] = "#172344"
+        ["NavSelectedBrush"] = "#172344",
+        ["ControlHoverBrush"] = "#1A2638",
+        ["ControlPressedBrush"] = "#202E43"
     };
 
     private static readonly IReadOnlyDictionary<string, string> LightPalette = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -66,7 +68,9 @@ public static class ThemeManager
         ["SidebarMutedBrush"] = "#778095",
         ["CalendarOutsideBrush"] = "#F1F3F7",
         ["SubtleBrush"] = "#F1F3F8",
-        ["NavSelectedBrush"] = "#EEF0FF"
+        ["NavSelectedBrush"] = "#EEF0FF",
+        ["ControlHoverBrush"] = "#F0F2F8",
+        ["ControlPressedBrush"] = "#E5E8F0"
     };
 
     public static string Normalize(string? theme) =>
@@ -120,4 +124,3 @@ public static class ThemeManager
         return Brushes.Transparent;
     }
 }
-

@@ -11,18 +11,62 @@
     <Window.Resources>
         <Style x:Key="BareButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="11"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource ControlHoverBrush}" />
+                                <Setter TargetName="Root" Property="Opacity" Value="0.94" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource ControlPressedBrush}" />
+                                <Setter TargetName="Root" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+                                <Setter TargetName="Root" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.42" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style x:Key="SidebarNavigationButton" TargetType="Button" BasedOn="{StaticResource BareButton}">
+            <Setter Property="MinHeight" Value="50" />
+            <Setter Property="Margin" Value="0,0,0,5" />
+        </Style>
+
+        <Style x:Key="ThemeOptionButton" TargetType="Button" BasedOn="{StaticResource BareButton}">
+            <Setter Property="MinHeight" Value="44" />
+        </Style>
+
+        <Style x:Key="SidebarIconContainer" TargetType="Border">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Background" Value="{DynamicResource SubtleBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
         <DataTemplate x:Key="CompactSessionTemplate">
@@ -34,18 +78,17 @@
                     Padding="14,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="44" />
+                        <ColumnDefinition Width="52" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="34" Height="34" CornerRadius="10"
+                    <Border Width="42" Height="42" CornerRadius="12"
                             Background="{Binding BadgeBackground}"
                             VerticalAlignment="Top">
                         <TextBlock Text="{Binding IconGlyph}"
                                    Foreground="{Binding AccentBrush}"
-                                   FontSize="17" FontWeight="SemiBold"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                                   Style="{StaticResource SymbolGlyphText}"
+                                   FontSize="20" Width="28" Height="28" />
                     </Border>
                     <StackPanel Grid.Column="1" Margin="10,0,10,0">
                         <StackPanel Orientation="Horizontal">
@@ -80,14 +123,26 @@
                                 Click="CompleteSession_Click"
                                 Visibility="{Binding CompleteButtonVisibility}"
                                 Style="{StaticResource SecondaryButton}"
-                                Padding="10,6"
-                                ToolTip="Marcar este bloco como concluído">Concluir</Button>
+                                MinWidth="104" Padding="11,7"
+                                ToolTip="Marcar este bloco como concluído">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyphText}"
+                                           FontSize="14" Width="18" Height="18" LineHeight="18" />
+                                <TextBlock Text="Concluir" Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Border Visibility="{Binding CompletedVisibility}"
                                 Background="{DynamicResource SuccessSoftBrush}"
                                 CornerRadius="9" Padding="9,5">
-                            <TextBlock Text="✓ Concluído"
-                                       Foreground="{DynamicResource SuccessBrush}"
-                                       FontSize="9.5" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="✓" Style="{StaticResource SymbolGlyphText}"
+                                           Foreground="{DynamicResource SuccessBrush}"
+                                           FontSize="13" Width="17" Height="17" LineHeight="17" />
+                                <TextBlock Text="Concluído"
+                                           Foreground="{DynamicResource SuccessBrush}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Margin="5,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
                         </Border>
                     </StackPanel>
                 </Grid>
@@ -137,64 +192,82 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="2">
-                    <Button Style="{StaticResource BareButton}"
-                            Click="TodayNav_Click" Margin="0,0,0,5"
+                    <Button x:Name="TodayNavigationButton"
+                            Style="{StaticResource SidebarNavigationButton}"
+                            Click="TodayNav_Click"
                             ToolTip="Ir para hoje (Ctrl+T)">
-                        <Border CornerRadius="11" Padding="12,10">
+                        <Border CornerRadius="11" Padding="8,6">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⌂" Foreground="{DynamicResource SidebarMutedBrush}"
-                                           FontSize="16" Width="28" />
+                                <Border Style="{StaticResource SidebarIconContainer}">
+                                    <TextBlock Text="&#xE80F;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource SidebarMutedBrush}"
+                                               FontSize="19" />
+                                </Border>
                                 <TextBlock Text="Hoje" Foreground="{DynamicResource SidebarTextBrush}"
-                                           FontSize="12" VerticalAlignment="Center" />
+                                           FontSize="12.5" Margin="11,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
                     </Button>
-                    <Button Style="{StaticResource BareButton}"
-                            Click="CalendarNav_Click" Margin="0,0,0,5">
-                        <Border CornerRadius="11" Padding="12,10"
+                    <Button Style="{StaticResource SidebarNavigationButton}"
+                            Click="CalendarNav_Click">
+                        <Border CornerRadius="11" Padding="8,6"
                                 Background="{DynamicResource NavSelectedBrush}"
                                 BorderBrush="{DynamicResource PrimaryBrush}" BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="▦" Foreground="{DynamicResource PrimaryBrush}"
-                                           FontSize="16" Width="28" />
+                                <Border Style="{StaticResource SidebarIconContainer}"
+                                        Background="{DynamicResource PrimarySoftBrush}">
+                                    <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource PrimaryBrush}"
+                                               FontSize="19" />
+                                </Border>
                                 <TextBlock Text="Calendário" Foreground="{DynamicResource SidebarTextBrush}"
-                                           FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                           FontSize="12.5" FontWeight="SemiBold"
+                                           Margin="11,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
                     </Button>
-                    <Button Style="{StaticResource BareButton}"
-                            Click="AiNav_Click" Margin="0,0,0,5"
+                    <Button Style="{StaticResource SidebarNavigationButton}"
+                            Click="AiNav_Click"
                             ToolTip="Criar ou atualizar plano com IA (Ctrl+G)">
-                        <Border CornerRadius="11" Padding="12,10">
+                        <Border CornerRadius="11" Padding="8,6">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="✦" Foreground="{DynamicResource SidebarMutedBrush}"
-                                           FontSize="16" Width="28" />
+                                <Border Style="{StaticResource SidebarIconContainer}">
+                                    <TextBlock Text="&#xEA80;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource SidebarMutedBrush}"
+                                               FontSize="19" />
+                                </Border>
                                 <TextBlock Text="Plano / IA" Foreground="{DynamicResource SidebarTextBrush}"
-                                           FontSize="12" VerticalAlignment="Center" />
+                                           FontSize="12.5" Margin="11,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
                     </Button>
-                    <Button Style="{StaticResource BareButton}"
-                            Click="ImportNav_Click" Margin="0,0,0,5"
+                    <Button Style="{StaticResource SidebarNavigationButton}"
+                            Click="ImportNav_Click"
                             ToolTip="Importar StudyPlan JSON (Ctrl+I)">
-                        <Border CornerRadius="11" Padding="12,10">
+                        <Border CornerRadius="11" Padding="8,6">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⇧" Foreground="{DynamicResource SidebarMutedBrush}"
-                                           FontSize="16" Width="28" />
+                                <Border Style="{StaticResource SidebarIconContainer}">
+                                    <TextBlock Text="&#xE898;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource SidebarMutedBrush}"
+                                               FontSize="19" />
+                                </Border>
                                 <TextBlock Text="Importar JSON" Foreground="{DynamicResource SidebarTextBrush}"
-                                           FontSize="12" VerticalAlignment="Center" />
+                                           FontSize="12.5" Margin="11,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
                     </Button>
-                    <Button Style="{StaticResource BareButton}"
+                    <Button Style="{StaticResource SidebarNavigationButton}"
                             Click="SettingsNav_Click"
                             ToolTip="Abrir configurações (Ctrl+,)">
-                        <Border CornerRadius="11" Padding="12,10">
+                        <Border CornerRadius="11" Padding="8,6">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⚙" Foreground="{DynamicResource SidebarMutedBrush}"
-                                           FontSize="15" Width="28" />
+                                <Border Style="{StaticResource SidebarIconContainer}">
+                                    <TextBlock Text="&#xE713;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource SidebarMutedBrush}"
+                                               FontSize="19" />
+                                </Border>
                                 <TextBlock Text="Configurações" Foreground="{DynamicResource SidebarTextBrush}"
-                                           FontSize="12" VerticalAlignment="Center" />
+                                           FontSize="12.5" Margin="11,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
                     </Button>
@@ -234,41 +307,47 @@
                                    Foreground="{DynamicResource SidebarMutedBrush}"
                                    FontSize="9.5" FontWeight="SemiBold"
                                    Margin="2,0,0,5" />
-                        <Button Style="{StaticResource BareButton}"
+                        <Button Style="{StaticResource ThemeOptionButton}"
                                 Tag="dark" Click="ThemeChoice_Click">
-                            <Border CornerRadius="10" Padding="9,8">
+                            <Border CornerRadius="10" Padding="7,5">
                                 <Grid>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="☾" Foreground="{DynamicResource SidebarMutedBrush}"
-                                                   FontSize="16" Width="28" />
+                                        <Border Style="{StaticResource SidebarIconContainer}" Width="32" Height="32">
+                                            <TextBlock Text="☾" Style="{StaticResource SymbolGlyphText}"
+                                                       Foreground="{DynamicResource SidebarMutedBrush}"
+                                                       FontSize="18" Width="24" Height="24" />
+                                        </Border>
                                         <TextBlock Text="Escuro"
                                                    Foreground="{DynamicResource SidebarTextBrush}"
-                                                   FontSize="11.5" VerticalAlignment="Center" />
+                                                   FontSize="11.5" Margin="10,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <TextBlock Text="●"
-                                               Foreground="{DynamicResource PrimaryBrush}"
-                                               Visibility="{Binding DarkThemeSelectedVisibility}"
-                                               HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" />
+                                    <Border Width="9" Height="9" CornerRadius="5"
+                                            Background="{DynamicResource PrimaryBrush}"
+                                            Visibility="{Binding DarkThemeSelectedVisibility}"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center" />
                                 </Grid>
                             </Border>
                         </Button>
-                        <Button Style="{StaticResource BareButton}"
+                        <Button Style="{StaticResource ThemeOptionButton}"
                                 Tag="light" Click="ThemeChoice_Click">
-                            <Border CornerRadius="10" Padding="9,8">
+                            <Border CornerRadius="10" Padding="7,5">
                                 <Grid>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="☀" Foreground="{DynamicResource SidebarMutedBrush}"
-                                                   FontSize="15" Width="28" />
+                                        <Border Style="{StaticResource SidebarIconContainer}" Width="32" Height="32">
+                                            <TextBlock Text="☀" Style="{StaticResource SymbolGlyphText}"
+                                                       Foreground="{DynamicResource SidebarMutedBrush}"
+                                                       FontSize="18" Width="24" Height="24" />
+                                        </Border>
                                         <TextBlock Text="Claro"
                                                    Foreground="{DynamicResource SidebarTextBrush}"
-                                                   FontSize="11.5" VerticalAlignment="Center" />
+                                                   FontSize="11.5" Margin="10,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <TextBlock Text="●"
-                                               Foreground="{DynamicResource PrimaryBrush}"
-                                               Visibility="{Binding LightThemeSelectedVisibility}"
-                                               HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" />
+                                    <Border Width="9" Height="9" CornerRadius="5"
+                                            Background="{DynamicResource PrimaryBrush}"
+                                            Visibility="{Binding LightThemeSelectedVisibility}"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center" />
                                 </Grid>
                             </Border>
                         </Button>
@@ -326,6 +405,10 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
+                    <ScrollViewer Grid.Column="0"
+                                  HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  Margin="0,0,12,0">
                     <ItemsControl ItemsSource="{Binding MonthTabs}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -342,7 +425,7 @@
                                             BorderBrush="{Binding Border}"
                                             BorderThickness="1"
                                             CornerRadius="11"
-                                            Padding="20,9">
+                                            Padding="16,9">
                                         <TextBlock Text="{Binding Label}"
                                                    Foreground="{Binding Foreground}"
                                                    FontSize="11.5"
@@ -352,17 +435,28 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    </ScrollViewer>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
                         <Button Style="{StaticResource SecondaryButton}"
                                 Click="TodayNav_Click" Padding="13,8"
-                                Margin="0,0,7,0">Hoje</Button>
-                        <Button Style="{StaticResource SecondaryButton}"
-                                Click="PreviousMonth_Click" Padding="11,8"
-                                Margin="0,0,5,0" ToolTip="Mês anterior">‹</Button>
-                        <Button Style="{StaticResource SecondaryButton}"
-                                Click="NextMonth_Click" Padding="11,8"
-                                Margin="0,0,7,0" ToolTip="Próximo mês">›</Button>
+                                Margin="0,0,7,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyphText}"
+                                           FontSize="14" Width="18" Height="18" LineHeight="18" />
+                                <TextBlock Text="Hoje" Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="PreviousMonthButton"
+                                Style="{StaticResource IconButton}"
+                                Click="PreviousMonth_Click"
+                                Margin="0,0,5,0" ToolTip="Mês anterior"
+                                AutomationProperties.Name="Mês anterior">&#xE76B;</Button>
+                        <Button x:Name="NextMonthButton"
+                                Style="{StaticResource IconButton}"
+                                Click="NextMonth_Click"
+                                Margin="0,0,7,0" ToolTip="Próximo mês"
+                                AutomationProperties.Name="Próximo mês">&#xE76C;</Button>
                         <Border Background="{DynamicResource SurfaceRaisedBrush}"
                                 BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1" CornerRadius="11"
@@ -376,9 +470,14 @@
                                 Padding="11,8"
                                 ToolTip="Alternar tema claro/escuro">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding ThemeGlyph}" FontSize="14" />
+                                <Border Width="26" Height="26" CornerRadius="8"
+                                        Background="{DynamicResource SubtleBrush}">
+                                    <TextBlock Text="{Binding ThemeGlyph}"
+                                               Style="{StaticResource SymbolGlyphText}"
+                                               FontSize="17" Width="22" Height="22" />
+                                </Border>
                                 <TextBlock Text="{Binding ThemeLabel}" Margin="6,0,0,0"
-                                           FontSize="10.5" />
+                                           FontSize="10.5" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -409,9 +508,9 @@
                         <DataTemplate>
                             <Button Style="{StaticResource BareButton}"
                                     Tag="{Binding IsoDate}"
-                                    Click="MonthDay_Click"
-                                    Margin="0,0,6,6"
-                                    Height="78">
+                             Click="MonthDay_Click"
+                             Margin="0,0,6,6"
+                                     Height="80">
                                 <Border Background="{Binding Background}"
                                         BorderBrush="{Binding Border}"
                                         BorderThickness="1"
@@ -428,11 +527,12 @@
                                                        Foreground="{Binding Foreground}"
                                                        FontSize="12"
                                                        FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding StatusSymbol}"
-                                                       Foreground="{Binding AccentBrush}"
-                                                       FontSize="11"
-                                                       FontWeight="SemiBold"
-                                                       HorizontalAlignment="Right" />
+                                             <TextBlock Text="{Binding StatusSymbol}"
+                                                        Foreground="{Binding AccentBrush}"
+                                                        Style="{StaticResource SymbolGlyphText}"
+                                                        FontSize="14" Width="20" Height="20" LineHeight="20"
+                                                        FontWeight="SemiBold"
+                                                        HorizontalAlignment="Right" />
                                         </Grid>
                                         <TextBlock Grid.Row="1"
                                                    Text="{Binding Summary}"
@@ -449,11 +549,35 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <StackPanel Orientation="Horizontal" Margin="3,1,0,11">
-                    <TextBlock Text="✓ concluído" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,0,18,0" />
-                    <TextBlock Text="• conteúdo" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,0,18,0" />
-                    <TextBlock Text="↻ revisão" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,0,18,0" />
-                    <TextBlock Text="★ simulado/prova" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" />
+                <StackPanel Orientation="Horizontal" Margin="3,2,0,12">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                        <TextBlock Text="✓" Style="{StaticResource SymbolGlyphText}"
+                                   Foreground="{DynamicResource SuccessBrush}"
+                                   FontSize="13" Width="18" Height="18" LineHeight="18" />
+                        <TextBlock Text="concluído" Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                        <TextBlock Text="•" Style="{StaticResource SymbolGlyphText}"
+                                   Foreground="{DynamicResource PrimaryBrush}"
+                                   FontSize="16" Width="18" Height="18" LineHeight="18" />
+                        <TextBlock Text="conteúdo" Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                        <TextBlock Text="↻" Style="{StaticResource SymbolGlyphText}"
+                                   Foreground="{DynamicResource ReviewBrush}"
+                                   FontSize="14" Width="18" Height="18" LineHeight="18" />
+                        <TextBlock Text="revisão" Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="★" Style="{StaticResource SymbolGlyphText}"
+                                   Foreground="{DynamicResource AssessmentBrush}"
+                                   FontSize="13" Width="18" Height="18" LineHeight="18" />
+                        <TextBlock Text="simulado/prova" Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Selected day agenda -->
@@ -506,13 +630,12 @@
                                 CornerRadius="12"
                                 Padding="24" Margin="0,0,4,4">
                             <StackPanel HorizontalAlignment="Center" Margin="0,14">
-                                <Border Width="42" Height="42" CornerRadius="13"
+                                <Border Width="48" Height="48" CornerRadius="14"
                                         Background="{DynamicResource PrimarySoftBrush}">
                                     <TextBlock Text="✓"
                                                Foreground="{DynamicResource PrimaryBrush}"
-                                               FontSize="20" FontWeight="Bold"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center" />
+                                               Style="{StaticResource SymbolGlyphText}"
+                                               FontSize="22" Width="30" Height="30" />
                                 </Border>
                                 <TextBlock Text="Nenhum bloco neste dia"
                                            Foreground="{DynamicResource TextBrush}"

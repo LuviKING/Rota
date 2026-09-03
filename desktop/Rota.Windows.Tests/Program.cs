@@ -395,6 +395,23 @@ static void DesktopWindowsLoad()
                 window.ShowInTaskbar = false;
                 window.Show();
                 window.UpdateLayout();
+                if (window is MainWindow mainWindow)
+                {
+                    var previousMonth = mainWindow.FindName("PreviousMonthButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("previous-month icon button was not created");
+                    var nextMonth = mainWindow.FindName("NextMonthButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("next-month icon button was not created");
+                    var todayNavigation = mainWindow.FindName("TodayNavigationButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("today sidebar button was not created");
+                    True(previousMonth.MinWidth >= 40 && previousMonth.MinHeight >= 40, "previous-month click target is too small");
+                    True(nextMonth.MinWidth >= 40 && nextMonth.MinHeight >= 40, "next-month click target is too small");
+                    True(todayNavigation.MinHeight >= 44, "sidebar click target is too small");
+
+                    var iconStyle = app.FindResource("IconGlyphText") as Style
+                        ?? throw new InvalidOperationException("shared icon style was not loaded");
+                    True(iconStyle.Setters.OfType<Setter>().Any(setter => setter.Property == System.Windows.Controls.TextBlock.FontFamilyProperty),
+                        "shared icon style does not define a stable icon font");
+                }
                 window.Close();
             }
         }
@@ -519,4 +536,3 @@ sealed class MutableClock
     public MutableClock(DateTime value) => Value = value;
     public DateTime Value { get; set; }
 }
-

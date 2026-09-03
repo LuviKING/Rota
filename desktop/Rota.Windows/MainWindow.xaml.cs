@@ -559,16 +559,17 @@ public sealed class SessionCardView
         if (session.Kind == "assessment") return "★";
 
         var subject = session.Subject.ToLowerInvariant();
-        if (subject.Contains("matem")) return "▦";
-        if (subject.Contains("fís") || subject.Contains("fis")) return "∿";
-        if (subject.Contains("port") || subject.Contains("liter")) return "▤";
+        if (subject.Contains("matem") || subject.Contains("álgebra") || subject.Contains("algebra") ||
+            subject.Contains("geometr") || subject.Contains("trigonom") || subject.Contains("cálculo") ||
+            subject.Contains("calculo")) return "∑";
+        if (subject.Contains("fís") || subject.Contains("fis")) return "⚡";
+        if (subject.Contains("port") || subject.Contains("liter")) return "¶";
         if (subject.Contains("geo")) return "◎";
         if (subject.Contains("ingl") || subject.Contains("english")) return "A";
         if (subject.Contains("quím") || subject.Contains("quim")) return "◇";
-        if (subject.Contains("bio")) return "✣";
-        if (subject.Contains("hist")) return "⌛";
+        if (subject.Contains("bio")) return "✤";
+        if (subject.Contains("hist")) return "◷";
         if (subject.Contains("erro")) return "!";
-        return "•";
+        return "◆";
     }
 }
-
