@@ -1,0 +1,63 @@
+<Window x:Class="Rota.Desktop.ImportPlanWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Importar StudyPlan · Rota" Width="1040" Height="720" MinWidth="820" MinHeight="460"
+        WindowStartupLocation="CenterOwner" Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        Background="{DynamicResource BackgroundBrush}">
+    <Grid Margin="22">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="18"/><RowDefinition Height="*"/><RowDefinition Height="18"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,18,0">
+                <TextBlock Text="Importar StudyPlan Code" FontSize="24" FontWeight="Bold" />
+                <TextBlock Text="O Rota valida primeiro e só altera o calendário depois da sua confirmação."
+                           Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+            <Border Grid.Column="1" HorizontalAlignment="Right" Background="{DynamicResource PrimarySoftBrush}" CornerRadius="10" Padding="10,6" VerticalAlignment="Center">
+                <TextBlock Text="JSON declarativo · sem execução de código" Foreground="{DynamicResource PrimaryBrush}" FontSize="10" FontWeight="SemiBold" />
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="1.25*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="0.75*"/></Grid.ColumnDefinitions>
+            <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="18" Padding="15">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="10"/><RowDefinition Height="*"/><RowDefinition Height="12"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid>
+                        <TextBlock Text="StudyPlan JSON" FontWeight="SemiBold" FontSize="13" />
+                        <Button Style="{StaticResource SecondaryButton}" Click="LoadFile_Click" HorizontalAlignment="Right" Padding="11,6">Carregar arquivo</Button>
+                    </Grid>
+                    <TextBox x:Name="CodeBox" Grid.Row="2" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                             Foreground="{DynamicResource TextBrush}" Background="{DynamicResource BackgroundBrush}" CaretBrush="{DynamicResource TextBrush}"
+                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="12" TextChanged="CodeBox_TextChanged" />
+                    <Button Grid.Row="4" Style="{StaticResource PrimaryButton}" Click="Validate_Click" IsDefault="True">Validar e visualizar impacto</Button>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="18" Padding="17">
+                <StackPanel>
+                    <TextBlock Text="Prévia segura" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Text="Nada é removido durante esta etapa." Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="0,4,0,14" />
+                    <Border x:Name="StatusCard" Background="{DynamicResource SubtleBrush}" CornerRadius="12" Padding="12" Margin="0,0,0,14">
+                        <TextBlock x:Name="StatusText" Text="Cole ou carregue um StudyPlan e valide." TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
+                    </Border>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="Plano" Style="{StaticResource SectionLabel}"/><TextBlock x:Name="PlanText" HorizontalAlignment="Right" FontSize="11" FontWeight="SemiBold"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="Revisão" Style="{StaticResource SectionLabel}"/><TextBlock x:Name="RevisionText" HorizontalAlignment="Right" FontSize="11"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="Sessões no JSON" Style="{StaticResource SectionLabel}"/><TextBlock x:Name="SessionsText" HorizontalAlignment="Right" FontSize="11"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="Período" Style="{StaticResource SectionLabel}"/><TextBlock x:Name="PeriodText" HorizontalAlignment="Right" FontSize="11"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="Carga total" Style="{StaticResource SectionLabel}"/><TextBlock x:Name="MinutesText" HorizontalAlignment="Right" FontSize="11"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="Aplicáveis agora" Style="{StaticResource SectionLabel}"/><TextBlock x:Name="AppliedText" HorizontalAlignment="Right" FontSize="11"/></Grid>
+                    <Grid Margin="0,0,0,8"><TextBlock Text="Futuro substituído" Style="{StaticResource SectionLabel}"/><TextBlock x:Name="RemovedText" HorizontalAlignment="Right" FontSize="11"/></Grid>
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,8,0,12"/>
+                    <TextBlock Text="Histórico concluído e revisões automáticas já existentes são preservados. Sessões passadas do JSON não são aplicadas." Foreground="{DynamicResource MutedBrush}" FontSize="10" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="4">
+            <Button Style="{StaticResource SecondaryButton}" Click="Cancel_Click" Width="110" HorizontalAlignment="Left" IsCancel="True">Cancelar</Button>
+            <Button x:Name="ApplyButton" Style="{StaticResource PrimaryButton}" Click="Apply_Click" Width="170" HorizontalAlignment="Right" IsEnabled="False">Aplicar ao calendário</Button>
+        </Grid>
+    </Grid>
+</Window>
+

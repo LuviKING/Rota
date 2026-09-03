@@ -1,0 +1,122 @@
+name: Windows Desktop CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/windows.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+          cache: true
+          cache-dependency-path: 'desktop/**/*.csproj'
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore .\desktop\Rota.Windows.Tests\Rota.Windows.Tests.csproj
+
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build .\desktop\Rota.Windows.Tests\Rota.Windows.Tests.csproj -c Release --no-restore
+
+      - name: Desktop core and WPF window tests
+        shell: pwsh
+        run: dotnet run --project .\desktop\Rota.Windows.Tests\Rota.Windows.Tests.csproj -c Release --no-build
+
+      - name: Publish self-contained x64
+        shell: pwsh
+        run: >-
+          dotnet publish .\desktop\Rota.Windows\Rota.Windows.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          /p:PublishSingleFile=true
+          /p:IncludeNativeLibrariesForSelfExtract=true
+          /p:DebugType=None
+          /p:DebugSymbols=false
+          -o .\artifacts\win-x64
+
+      - name: Verify Windows package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Resolve-Path '.\artifacts\win-x64\Rota.exe'
+          $item = Get-Item $exe
+          if ($item.Length -lt 1MB) { throw "Rota.exe is unexpectedly small: $($item.Length) bytes" }
+
+          $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
+          if ($info.ProductName -ne 'Rota') { throw "Unexpected product name: $($info.ProductName)" }
+          if ($info.FileVersion -notlike '0.2.0*') { throw "Unexpected file version: $($info.FileVersion)" }
+
+          $sig = Get-AuthenticodeSignature $exe
+          Write-Host "Authenticode status: $($sig.Status) (development artifact; commercial signing is intentionally not configured yet)"
+          Get-FileHash $exe -Algorithm SHA256 | Format-List
+
+      - name: Launch smoke test in dark and light themes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path '.\artifacts\win-x64\Rota.exe').Path
+          $themePath = Join-Path $env:RUNNER_TEMP 'theme.txt'
+          $utf8 = [Text.UTF8Encoding]::new($false)
+
+          function Invoke-RotaSmoke([string]$theme, [string]$stateName) {
+            [IO.File]::WriteAllText($themePath, $theme + [Environment]::NewLine, $utf8)
+            $env:ROTA_SMOKE_DATA_PATH = Join-Path $env:RUNNER_TEMP $stateName
+            Remove-Item -LiteralPath $env:ROTA_SMOKE_DATA_PATH -Force -ErrorAction SilentlyContinue
+
+            $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
+            if (-not $process.WaitForExit(15000)) {
+              Stop-Process -Id $process.Id -Force
+              throw "Rota $theme theme startup smoke test timed out."
+            }
+            if ($process.ExitCode -ne 0) { throw "Rota $theme theme startup smoke test failed with code $($process.ExitCode)" }
+            if (-not (Test-Path -LiteralPath $env:ROTA_SMOKE_DATA_PATH)) { throw "Rota $theme theme smoke test did not persist its state." }
+
+            $savedTheme = [IO.File]::ReadAllText($themePath, $utf8).Trim()
+            if ($savedTheme -ne $theme) { throw "Theme preference changed unexpectedly: expected $theme, got $savedTheme" }
+            Write-Host "Rota loaded the $theme theme and exited cleanly."
+          }
+
+          Invoke-RotaSmoke 'dark' 'rota-desktop-smoke-dark.json'
+          Invoke-RotaSmoke 'light' 'rota-desktop-smoke-light.json'
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force '.\artifacts\stage' | Out-Null
+          Copy-Item '.\artifacts\win-x64\Rota.exe' '.\artifacts\stage\Rota-Windows-0.2.0-x64.exe'
+          Copy-Item '.\desktop\Rota.Windows\README-WINDOWS.md' '.\artifacts\stage\LEIA-ME.txt'
+          (Get-FileHash '.\artifacts\stage\Rota-Windows-0.2.0-x64.exe' -Algorithm SHA256).Hash.ToLowerInvariant() + '  Rota-Windows-0.2.0-x64.exe' | Set-Content -Encoding ascii '.\artifacts\stage\Rota-Windows-0.2.0-x64.sha256.txt'
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rota-Windows-v0.2.0-x64
+          path: artifacts/stage/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+

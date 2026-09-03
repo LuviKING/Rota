@@ -1,0 +1,522 @@
+using Rota.Desktop;
+using System.Text.Json;
+using System.Windows;
+
+var tests = new (string Name, Action Body)[]
+{
+    ("Importer accepts valid StudyPlan 0.2", ImporterAcceptsValid),
+    ("Importer rejects malformed JSON", ImporterRejectsMalformedJson),
+    ("Importer rejects unknown keys", ImporterRejectsUnknown),
+    ("Importer rejects integer strings", ImporterRejectsIntegerString),
+    ("Importer rejects fractional integer lexemes", ImporterRejectsFractionalInteger),
+    ("Importer rejects duplicate properties", ImporterRejectsDuplicateProperties),
+    ("Importer rejects duplicate session IDs", ImporterRejectsDuplicateSessionIds),
+    ("Importer rejects invalid calendar dates", ImporterRejectsInvalidDate),
+    ("Importer requires target in StudyPlan 0.2", ImporterRequiresTarget),
+    ("Importer restricts review_label to reviews", ImporterRestrictsReviewLabel),
+    ("Importer protects runtime review namespace", ImporterProtectsReviewNamespace),
+    ("Importer enforces objective deadline", ImporterEnforcesDeadline),
+    ("Repository applies and persists a plan", RepositoryAppliesAndPersists),
+    ("Repository keeps revision monotonic across plan switching", RepositoryKeepsRevisionMonotonic),
+    ("Repository rejects past-only imports before removal", RepositoryRejectsPastOnly),
+    ("Completion creates reviews from actual completion date", CompletionUsesActualDate),
+    ("Review completion does not recurse", ReviewDoesNotRecurse),
+    ("Assessment completion does not create reviews", AssessmentDoesNotCreateReviews),
+    ("New plan replaces pending future but preserves completed/runtime", NewPlanPreservesProtectedState),
+    ("Session identity remains scoped to plan id", IdentityIsScopedToPlan),
+    ("Daily capacity includes runtime reviews", CapacityIncludesRuntime),
+    ("Preview does not mutate memory or disk", PreviewDoesNotMutate),
+    ("Failed persistence leaves memory and disk unchanged", FailedPersistenceIsTransactional),
+    ("Repository recovers the last valid atomic backup", RepositoryRecoversAtomicBackup),
+    ("Repository preserves corrupt state without a backup", RepositoryPreservesCorruptState),
+    ("Preferences reject unsafe text without mutation", PreferencesRejectUnsafeText),
+    ("Preferences persist and reload", PreferencesPersistAndReload),
+    ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
+    ("Exported backup can be loaded independently", ExportedBackupReloads),
+    ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
+    ("AI prompt explains Rota execution model", PromptExplainsExecutionModel)
+};
+
+var failed = 0;
+foreach (var test in tests)
+{
+    try
+    {
+        test.Body();
+        Console.WriteLine($"PASS  {test.Name}");
+    }
+    catch (Exception ex)
+    {
+        failed++;
+        Console.Error.WriteLine($"FAIL  {test.Name}\n      {ex.Message}");
+    }
+}
+
+Console.WriteLine($"\n{tests.Length - failed}/{tests.Length} desktop core tests passed.");
+return failed == 0 ? 0 : 1;
+
+static void ImporterAcceptsValid()
+{
+    var plan = StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 60)));
+    Eq("plan-a", plan.PlanId);
+    Eq(1, plan.Revision);
+    Eq(1, plan.Sessions.Count);
+    Eq("study", plan.Sessions[0].Kind);
+}
+
+static void ImporterRejectsMalformedJson() =>
+    Throws(() => StudyPlanImporter.Parse("{\"format\":"), "JSON inválido");
+
+static void ImporterRejectsUnknown()
+{
+    var json = PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 60));
+    json = json.Replace("\"format\":", "\"extra\":true,\"format\":", StringComparison.Ordinal);
+    Throws(() => StudyPlanImporter.Parse(json), "Campo não suportado");
+}
+
+static void ImporterRejectsIntegerString()
+{
+    var json = PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 60));
+    json = json.Replace("\"minutes\":60", "\"minutes\":\"60\"", StringComparison.Ordinal);
+    Throws(() => StudyPlanImporter.Parse(json), "número inteiro");
+}
+
+static void ImporterRejectsFractionalInteger()
+{
+    var json = PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 60));
+    json = json.Replace("\"revision\":1", "\"revision\":1.0", StringComparison.Ordinal);
+    Throws(() => StudyPlanImporter.Parse(json), "número inteiro");
+}
+
+static void ImporterRejectsDuplicateProperties()
+{
+    var json = PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 60));
+    json = json.Replace("\"format\":\"studyplan\"", "\"format\":\"studyplan\",\"format\":\"studyplan\"", StringComparison.Ordinal);
+    Throws(() => StudyPlanImporter.Parse(json), "duplicado");
+}
+
+static void ImporterRejectsDuplicateSessionIds()
+{
+    Throws(() => StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30",
+        SessionJson("same", "2026-09-01", 60),
+        SessionJson("same", "2026-09-02", 60))), "duplicado");
+}
+
+static void ImporterRejectsInvalidDate()
+{
+    Throws(() => StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-02-30", 60))), "AAAA-MM-DD");
+}
+
+static void ImporterRequiresTarget()
+{
+    var session = SessionJson("s1", "2026-09-01", 60)
+        .Replace(",\"target\":\"Resolver 10 questões e corrigir os erros\"", "", StringComparison.Ordinal);
+    Throws(() => StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", session)), "target");
+}
+
+static void ImporterRestrictsReviewLabel()
+{
+    var session = SessionJson("s1", "2026-09-01", 60)
+        .Replace("\"kind\":\"study\"", "\"kind\":\"study\",\"review_label\":\"D+1\"", StringComparison.Ordinal);
+    Throws(() => StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", session)), "só pode");
+}
+
+static void ImporterProtectsReviewNamespace()
+{
+    Throws(() => StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1::review::1", "2026-09-01", 60))), "marcador reservado");
+}
+
+static void ImporterEnforcesDeadline()
+{
+    Throws(() => StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-05", SessionJson("s1", "2026-09-06", 60))), "depois da data do objetivo");
+}
+
+static void RepositoryAppliesAndPersists()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        var result = repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 60))));
+        True(result.Success, result.Message);
+        Eq(1, repo.SessionsForDate(new DateOnly(2026, 9, 1)).Count);
+
+        var reloaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq(1, reloaded.SessionsForDate(new DateOnly(2026, 9, 1)).Count);
+        Eq("plan-a", reloaded.Settings.ActivePlanId);
+    });
+}
+
+static void RepositoryKeepsRevisionMonotonic()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("a1", "2026-09-01", 60)))).Success);
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-b", 1, "2026-09-30", SessionJson("b1", "2026-09-02", 60)))).Success);
+        var stale = repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("a2", "2026-09-03", 60))));
+        True(!stale.Success, "stale revision unexpectedly accepted");
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 2, "2026-09-30", SessionJson("a2", "2026-09-03", 60)))).Success);
+    });
+}
+
+static void RepositoryRejectsPastOnly()
+{
+    WithRepository(new DateTime(2026, 9, 2, 9, 0, 0), (repo, _, _) =>
+    {
+        var result = repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("past", 1, "2026-09-30", SessionJson("p1", "2026-09-01", 60))));
+        True(!result.Success, "past-only plan unexpectedly accepted");
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 1)).Count);
+    });
+}
+
+static void CompletionUsesActualDate()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, clock) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 90)))).Success);
+        clock.Value = new DateTime(2026, 9, 2, 18, 30, 0);
+        True(repo.MarkCompleted("plan-a", "s1"));
+        Eq(1, repo.SessionsForDate(new DateOnly(2026, 9, 3)).Count);
+        Eq(1, repo.SessionsForDate(new DateOnly(2026, 9, 5)).Count);
+        Eq(1, repo.SessionsForDate(new DateOnly(2026, 9, 9)).Count);
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 2)).Count(s => s.Kind == "review"));
+        Eq(30, repo.SessionsForDate(new DateOnly(2026, 9, 3)).Single().Minutes);
+    });
+}
+
+static void ReviewDoesNotRecurse()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, clock) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("s1", "2026-09-01", 60)))).Success);
+        True(repo.MarkCompleted("plan-a", "s1"));
+        var review = repo.SessionsForDate(new DateOnly(2026, 9, 2)).Single(s => s.Kind == "review");
+        clock.Value = new DateTime(2026, 9, 2, 10, 0, 0);
+        True(repo.MarkCompleted(review.PlanId, review.Id));
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 3)).Count);
+    });
+}
+
+static void AssessmentDoesNotCreateReviews()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("exam", "2026-09-01", 60, "assessment")))).Success);
+        True(repo.MarkCompleted("plan-a", "exam"));
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 4)).Count);
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 8)).Count);
+    });
+}
+
+static void NewPlanPreservesProtectedState()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        var a = PlanJson("plan-a", 1, "2026-09-30",
+            SessionJson("done", "2026-09-01", 60),
+            SessionJson("pending", "2026-09-03", 60));
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(a)).Success);
+        True(repo.MarkCompleted("plan-a", "done"));
+
+        var b = PlanJson("plan-b", 1, "2026-09-30", SessionJson("new", "2026-09-02", 60));
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(b)).Success);
+
+        True(repo.SessionsForDate(new DateOnly(2026, 9, 1)).Single().IsCompleted, "completed history was not preserved");
+        True(repo.SessionsForDate(new DateOnly(2026, 9, 2)).Any(s => s.Origin == "runtime"), "runtime review was not preserved");
+        True(repo.SessionsForDate(new DateOnly(2026, 9, 2)).Any(s => s.PlanId == "plan-b"), "new plan was not applied");
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 3)).Count);
+    });
+}
+
+static void IdentityIsScopedToPlan()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("shared", "2026-09-01", 60)))).Success);
+        True(repo.MarkCompleted("plan-a", "shared"));
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-b", 1, "2026-09-30", SessionJson("shared", "2026-09-02", 60)))).Success);
+        True(repo.SessionsForDate(new DateOnly(2026, 9, 1)).Single(s => s.PlanId == "plan-a").IsCompleted);
+        True(repo.SessionsForDate(new DateOnly(2026, 9, 2)).Any(s => s.PlanId == "plan-b" && s.Id == "shared"));
+        True(repo.MarkCompleted("plan-b", "shared"));
+        True(repo.SessionsForDate(new DateOnly(2026, 9, 1)).Single(s => s.PlanId == "plan-a").IsCompleted);
+    });
+}
+
+static void CapacityIncludesRuntime()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("long", "2026-09-01", 300)))).Success);
+        True(repo.MarkCompleted("plan-a", "long"));
+        var result = repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-b", 1, "2026-09-30", SessionJson("heavy", "2026-09-02", 280))));
+        True(!result.Success, "capacity check ignored the runtime review");
+        True(result.Message.Contains("ultrapassa", StringComparison.OrdinalIgnoreCase));
+    });
+}
+
+static void PreviewDoesNotMutate()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("a1", "2026-09-01", 60)))).Success);
+        var before = File.ReadAllText(path);
+        var preview = repo.PreviewPlan(StudyPlanImporter.Parse(PlanJson("plan-b", 1, "2026-09-30", SessionJson("b1", "2026-09-02", 60))));
+        True(preview.Success, preview.Message);
+        Eq(before, File.ReadAllText(path));
+        Eq("plan-a", repo.Settings.ActivePlanId);
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+    });
+}
+
+static void FailedPersistenceIsTransactional()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("a1", "2026-09-01", 60)))).Success);
+        var before = File.ReadAllText(path);
+        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            ThrowsType<IOException>(() => repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-b", 1, "2026-09-30", SessionJson("b1", "2026-09-02", 60)))));
+        }
+        Eq("plan-a", repo.Settings.ActivePlanId);
+        Eq(1, repo.SessionsForDate(new DateOnly(2026, 9, 1)).Count);
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+        Eq(before, File.ReadAllText(path));
+        Eq(0, Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp").Length);
+    });
+}
+
+static void RepositoryRecoversAtomicBackup()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("a1", "2026-09-01", 60)))).Success);
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-b", 1, "2026-09-30", SessionJson("b1", "2026-09-02", 60)))).Success);
+        True(File.Exists(path + ".bak"), "atomic recovery backup was not created");
+        File.WriteAllText(path, "{invalid");
+
+        var recovered = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq("plan-a", recovered.Settings.ActivePlanId);
+        Eq(1, recovered.SessionsForDate(new DateOnly(2026, 9, 1)).Count);
+        Eq(0, recovered.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+        Contains(recovered.LastLoadWarning, "recuperou");
+        True(Directory.GetFiles(Path.GetDirectoryName(path)!, "desktop-state.corrupt-*.json").Length == 1, "corrupt state was not preserved");
+    });
+}
+
+static void RepositoryPreservesCorruptState()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(!File.Exists(path + ".bak"), "fresh state unexpectedly has a backup");
+        File.WriteAllText(path, "{invalid");
+        var recovered = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq(0, recovered.SessionsForDate(new DateOnly(2026, 9, 1)).Count);
+        Contains(recovered.LastLoadWarning, "estado novo");
+        True(Directory.GetFiles(Path.GetDirectoryName(path)!, "desktop-state.corrupt-*.json").Length == 1, "corrupt state was not preserved");
+    });
+}
+
+static void PreferencesRejectUnsafeText()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        var before = repo.Settings.ObjectiveName;
+        Throws(() => repo.SavePreferences(new string('x', 121), "", 5, 60, true, true, true), "no máximo");
+        Throws(() => repo.SavePreferences("Objetivo\nquebrado", "", 5, 60, true, true, true), "controle");
+        Eq(before, repo.Settings.ObjectiveName);
+    });
+}
+
+static void PreferencesPersistAndReload()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        repo.SavePreferences("Vestibular", "2026-12-15", 8, 75, false, true, false);
+        var loaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq("Vestibular", loaded.Settings.ObjectiveName);
+        Eq("2026-12-15", loaded.Settings.ObjectiveDate);
+        Eq(8, loaded.Settings.DailyHours);
+        Eq(75, loaded.Settings.BlockMinutes);
+        True(!loaded.Settings.ReviewD1 && loaded.Settings.ReviewD3 && !loaded.Settings.ReviewD7);
+    });
+}
+
+static void StoredStateRejectsUnknownProperties()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        var original = File.ReadAllText(path);
+        var json = "{\"Unexpected\":true," + original[1..];
+        File.WriteAllText(path, json);
+        var recovered = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Contains(recovered.LastLoadWarning, "estado novo");
+        True(Directory.GetFiles(Path.GetDirectoryName(path)!, "desktop-state.corrupt-*.json").Length == 1);
+    });
+}
+
+static void ExportedBackupReloads()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson("plan-a", 1, "2026-09-30", SessionJson("a1", "2026-09-01", 60)))).Success);
+        var backup = Path.Combine(Path.GetDirectoryName(path)!, "export.json");
+        repo.ExportBackup(backup);
+        var loaded = new StudyRepository(backup, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq("plan-a", loaded.Settings.ActivePlanId);
+        Eq(1, loaded.SessionsForDate(new DateOnly(2026, 9, 1)).Count);
+    });
+}
+
+static void DesktopWindowsLoad()
+{
+    var dir = Path.Combine(Path.GetTempPath(), "RotaDesktopUiTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        App? app = null;
+        try
+        {
+            app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            app.InitializeComponent();
+            var repo = new StudyRepository(Path.Combine(dir, "state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
+            var windows = new Window[]
+            {
+                new MainWindow(repo),
+                new AiPromptWindow(repo),
+                new ImportPlanWindow(repo),
+                new SettingsWindow(repo)
+            };
+            foreach (var window in windows)
+            {
+                window.WindowStartupLocation = WindowStartupLocation.Manual;
+                window.Left = -20_000;
+                window.Top = -20_000;
+                window.ShowInTaskbar = false;
+                window.Show();
+                window.UpdateLayout();
+                window.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+        finally
+        {
+            app?.Shutdown();
+        }
+    });
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    if (!thread.Join(TimeSpan.FromSeconds(15)))
+        throw new TimeoutException("desktop window smoke test timed out");
+    try
+    {
+        if (failure is not null) throw new InvalidOperationException("desktop window smoke failed", failure);
+    }
+    finally
+    {
+        try { Directory.Delete(dir, recursive: true); } catch { }
+    }
+}
+
+static void PromptExplainsExecutionModel()
+{
+    var settings = new AppSettings { ObjectiveName = "IFF", ObjectiveDate = "2026-11-22", DailyHours = 5, BlockMinutes = 60, ActivePlanId = "iff-2026", ActivePlanRevision = 3 };
+    var prompt = AiPromptBuilder.Build("Tenho dificuldade em frações.", new DateOnly(2026, 9, 1), settings);
+    Contains(prompt, "CADA objeto de sessions em uma sessão literal");
+    Contains(prompt, "não completa, adivinha nem cria sessões");
+    Contains(prompt, "DATA REAL da conclusão");
+    Contains(prompt, "::review::");
+    Contains(prompt, "histórico protegido");
+    Contains(prompt, "Tenho dificuldade em frações.");
+    Contains(prompt, "AUDITORIA OBRIGATÓRIA");
+}
+
+static void WithRepository(DateTime initialNow, Action<StudyRepository, string, MutableClock> action)
+{
+    var dir = Path.Combine(Path.GetTempPath(), "RotaDesktopTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    var path = Path.Combine(dir, "state.json");
+    var clock = new MutableClock(initialNow);
+    try
+    {
+        var repo = new StudyRepository(path, () => clock.Value);
+        action(repo, path, clock);
+    }
+    finally
+    {
+        try { Directory.Delete(dir, recursive: true); } catch { }
+    }
+}
+
+static string PlanJson(string planId, int revision, string objectiveDate, params string[] sessions)
+{
+    return "{" +
+        "\"format\":\"studyplan\"," +
+        "\"format_version\":\"0.2\"," +
+        "\"plan\":{" +
+            "\"id\":" + JsonSerializer.Serialize(planId) + "," +
+            "\"revision\":" + revision + "," +
+            "\"title\":\"Plano de teste\"}," +
+        "\"objective\":{" +
+            "\"name\":\"Objetivo de teste\"," +
+            "\"date\":" + JsonSerializer.Serialize(objectiveDate) + "}," +
+        "\"sessions\":[" + string.Join(",", sessions) + "]}";
+}
+
+static string SessionJson(string id, string date, int minutes, string kind = "study")
+{
+    return "{" +
+        "\"id\":" + JsonSerializer.Serialize(id) + "," +
+        "\"date\":" + JsonSerializer.Serialize(date) + "," +
+        "\"subject\":\"Matemática\"," +
+        "\"topic\":\"Frações e proporções\"," +
+        "\"minutes\":" + minutes + "," +
+        "\"target\":\"Resolver 10 questões e corrigir os erros\"," +
+        "\"kind\":" + JsonSerializer.Serialize(kind) + "}";
+}
+
+static void True(bool condition, string message = "assertion failed")
+{
+    if (!condition) throw new InvalidOperationException(message);
+}
+
+static void Eq<T>(T expected, T actual)
+{
+    if (!EqualityComparer<T>.Default.Equals(expected, actual))
+        throw new InvalidOperationException($"expected [{expected}] but got [{actual}]");
+}
+
+static void Contains(string text, string fragment)
+{
+    if (!text.Contains(fragment, StringComparison.Ordinal))
+        throw new InvalidOperationException($"missing fragment: {fragment}");
+}
+
+static void Throws(Action action, string fragment)
+{
+    try { action(); }
+    catch (Exception ex)
+    {
+        if (ex.Message.Contains(fragment, StringComparison.OrdinalIgnoreCase)) return;
+        throw new InvalidOperationException($"wrong exception: {ex.Message}");
+    }
+    throw new InvalidOperationException("expected exception was not thrown");
+}
+
+static void ThrowsType<T>(Action action) where T : Exception
+{
+    try { action(); }
+    catch (T) { return; }
+    catch (Exception ex) { throw new InvalidOperationException($"wrong exception type: {ex.GetType().Name}: {ex.Message}"); }
+    throw new InvalidOperationException($"expected {typeof(T).Name} was not thrown");
+}
+
+sealed class MutableClock
+{
+    public MutableClock(DateTime value) => Value = value;
+    public DateTime Value { get; set; }
+}
+

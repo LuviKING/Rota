@@ -1,0 +1,91 @@
+using System.Windows;
+using System.Windows.Threading;
+
+namespace Rota.Desktop;
+
+public partial class App : Application
+{
+    private Mutex? _singleInstanceMutex;
+    private bool _ownsSingleInstanceMutex;
+    private bool _isSmokeTest;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        _isSmokeTest = e.Args.Any(argument => string.Equals(argument, "--smoke-test", StringComparison.Ordinal));
+
+        var mutexName = _isSmokeTest ? @"Local\Rota.Desktop.SmokeTest" : @"Local\Rota.Desktop.SingleInstance";
+        _singleInstanceMutex = new Mutex(initiallyOwned: true, mutexName, out _ownsSingleInstanceMutex);
+        if (!_ownsSingleInstanceMutex)
+        {
+            if (!_isSmokeTest)
+            {
+                MessageBox.Show(
+                    "O Rota já está aberto. Use a janela existente para evitar alterações concorrentes no calendário.",
+                    "Rota",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            Shutdown(_isSmokeTest ? 1 : 0);
+            return;
+        }
+
+        try
+        {
+            var smokeDataPath = _isSmokeTest ? Environment.GetEnvironmentVariable("ROTA_SMOKE_DATA_PATH") : null;
+            var repository = new StudyRepository(string.IsNullOrWhiteSpace(smokeDataPath) ? null : smokeDataPath);
+            var window = new MainWindow(repository);
+            MainWindow = window;
+            window.Show();
+            if (_isSmokeTest)
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+                {
+                    window.UpdateLayout();
+                    Shutdown(0);
+                });
+            }
+        }
+        catch (Exception) when (_isSmokeTest)
+        {
+            Shutdown(1);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(
+                "O Rota não conseguiu acessar o arquivo local de dados. Verifique as permissões e se outro processo está usando a pasta.\n\n" + ex.Message,
+                "Rota",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown();
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        if (_ownsSingleInstanceMutex)
+        {
+            try { _singleInstanceMutex?.ReleaseMutex(); } catch (ApplicationException) { }
+        }
+        _singleInstanceMutex?.Dispose();
+        base.OnExit(e);
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        if (_isSmokeTest)
+        {
+            e.Handled = true;
+            Shutdown(1);
+            return;
+        }
+        MessageBox.Show(
+            "O Rota encontrou um erro inesperado. Nenhuma alteração incompleta foi aplicada aos dados locais.\n\n" + e.Exception.Message,
+            "Rota",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        e.Handled = true;
+    }
+}
+

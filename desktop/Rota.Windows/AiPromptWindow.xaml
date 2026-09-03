@@ -1,0 +1,69 @@
+<Window x:Class="Rota.Desktop.AiPromptWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Plano / IA · Rota" Width="1120" Height="760" MinWidth="880" MinHeight="460"
+        WindowStartupLocation="CenterOwner" Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        Background="{DynamicResource BackgroundBrush}">
+    <Grid Margin="22">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="18"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,18,0">
+                <TextBlock Text="Criar ou atualizar seu plano com IA" FontSize="24" FontWeight="Bold" />
+                <TextBlock Text="O Rota explica à outra IA como o aplicativo funciona antes de pedir o StudyPlan JSON."
+                           Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+            <Border Grid.Column="1" HorizontalAlignment="Right" Background="{DynamicResource PrimarySoftBrush}" CornerRadius="10" Padding="10,6" VerticalAlignment="Center">
+                <TextBlock Text="Prompt com contrato completo do aplicativo" Foreground="{DynamicResource PrimaryBrush}" FontSize="10" FontWeight="SemiBold" />
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="0.72*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.28*"/></Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <Border Background="{DynamicResource SidebarCardBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="18" Padding="17" Margin="0,0,0,14">
+                    <StackPanel>
+                        <TextBlock Text="Como usar" Foreground="{DynamicResource TextBrush}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="Descreva normalmente o que quer aprender, prazo, rotina, dificuldades, dias livres e qualquer regra. O botão monta um prompt que ensina à IA o funcionamento do Rota e exige um calendário completo." Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,7,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="O que você quer estudar ou mudar?" FontWeight="SemiBold" FontSize="13" Margin="2,0,0,6" />
+                <TextBox x:Name="RequestBox" Height="245" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Style="{StaticResource InputTextBox}" VerticalContentAlignment="Top"
+                         ToolTip="Ex.: Quero aprender pré-cálculo até 30/09. Posso estudar de segunda a sábado, 2h por dia. Comece pelos pré-requisitos e faça simulados semanais." />
+                <Button Style="{StaticResource PrimaryButton}" Click="Generate_Click" Margin="0,10,0,0">Gerar prompt completo</Button>
+
+                <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="15" Padding="13" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Contexto que será enviado" FontWeight="SemiBold" FontSize="11" />
+                        <TextBlock x:Name="ContextText" Foreground="{DynamicResource MutedBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <Border Grid.Column="2" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="18" Padding="15">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="10"/><RowDefinition Height="*"/><RowDefinition Height="12"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="Prompt pronto para outra IA" FontWeight="SemiBold" FontSize="13" />
+                            <TextBlock Text="Copie inteiro. Ele já contém schema, comportamento, segurança e auditoria." Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="0,3,0,0" />
+                        </StackPanel>
+                        <Border x:Name="LengthBadge" HorizontalAlignment="Right" VerticalAlignment="Center" Background="{DynamicResource SubtleBrush}" CornerRadius="9" Padding="9,5">
+                            <TextBlock x:Name="LengthText" Text="0 caracteres" Foreground="{DynamicResource MutedBrush}" FontSize="9" />
+                        </Border>
+                    </Grid>
+                    <TextBox x:Name="PromptBox" Grid.Row="2" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontFamily="Cascadia Mono, Consolas" FontSize="10.5"
+                             Foreground="{DynamicResource TextBrush}" Background="{DynamicResource BackgroundBrush}" CaretBrush="{DynamicResource TextBrush}"
+                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="12" />
+                    <Grid Grid.Row="4">
+                        <Button Style="{StaticResource SecondaryButton}" Click="Close_Click" Width="100" HorizontalAlignment="Left" IsCancel="True">Fechar</Button>
+                        <Button Style="{StaticResource PrimaryButton}" Click="Copy_Click" Width="190" HorizontalAlignment="Right">Copiar prompt completo</Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
+

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Rota</AssemblyName>
+    <RootNamespace>Rota.Desktop</RootNamespace>
+    <ApplicationIcon>Assets\Rota.ico</ApplicationIcon>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <Product>Rota</Product>
+    <Description>Rota para Windows - calendário de estudos orientado por StudyPlan Code.</Description>
+    <Company>Rota</Company>
+    <Copyright>Rota</Copyright>
+    <Platforms>AnyCPU;x64</Platforms>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\Rota.ico" />
+    <Resource Include="Assets\Rota.ico" />
+    <None Include="README-WINDOWS.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
+
