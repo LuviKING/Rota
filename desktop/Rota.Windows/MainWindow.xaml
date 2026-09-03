@@ -508,9 +508,9 @@
                         <DataTemplate>
                             <Button Style="{StaticResource BareButton}"
                                     Tag="{Binding IsoDate}"
-                             Click="MonthDay_Click"
-                             Margin="0,0,6,6"
-                                     Height="80">
+                                    Click="MonthDay_Click"
+                                    Margin="0,0,6,6"
+                                    Height="80">
                                 <Border Background="{Binding Background}"
                                         BorderBrush="{Binding Border}"
                                         BorderThickness="1"
@@ -527,12 +527,12 @@
                                                        Foreground="{Binding Foreground}"
                                                        FontSize="12"
                                                        FontWeight="SemiBold" />
-                                             <TextBlock Text="{Binding StatusSymbol}"
-                                                        Foreground="{Binding AccentBrush}"
-                                                        Style="{StaticResource SymbolGlyphText}"
-                                                        FontSize="14" Width="20" Height="20" LineHeight="20"
-                                                        FontWeight="SemiBold"
-                                                        HorizontalAlignment="Right" />
+                                            <TextBlock Text="{Binding StatusSymbol}"
+                                                       Foreground="{Binding AccentBrush}"
+                                                       Style="{StaticResource SymbolGlyphText}"
+                                                       FontSize="14" Width="20" Height="20" LineHeight="20"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Right" />
                                         </Grid>
                                         <TextBlock Grid.Row="1"
                                                    Text="{Binding Summary}"
