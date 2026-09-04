@@ -15,7 +15,7 @@ Há dois formatos de proposta independentes:
 
 `AiConfigurationStore` mantém a configuração separada em `%LOCALAPPDATA%\Rota\AI\config.json`. A escrita é atômica, cria uma cópia `.bak` e preserva arquivos inválidos antes de recuperar uma configuração íntegra ou criar os valores seguros padrão.
 
-Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. A instalação local é preparada por um serviço separado e nunca acontece automaticamente ao abrir o Rota. A execução do `llama.cpp` e a inferência ainda não são implementadas.
+Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. A instalação local é preparada por um serviço separado e nunca acontece automaticamente ao abrir o Rota. O ciclo de vida do `llama.cpp` existe como serviço isolado, mas ainda não é acionado pela interface; a inferência e o chat ainda não são implementados.
 
 ## Perfis de hardware
 
@@ -52,18 +52,29 @@ O catálogo não contém URL, credencial ou código de download. IDs e nomes de 
 2. confere tamanho e SHA-256 antes de usar qualquer arquivo;
 3. extrai o ZIP do runtime com proteção contra travessia de diretório, links simbólicos, nomes especiais, duplicidade e expansão excessiva;
 4. move o payload completo para uma instalação versionada;
-5. grava um recibo local com versão do manifesto e hashes usados;
+5. conserva uma cópia do ZIP verificado do runtime e grava um recibo local com versão do manifesto e hashes usados;
 6. ativa os caminhos somente por meio da escrita atômica de `config.json`.
 
 Falha, corrupção ou cancelamento anteriores à ativação preservam a configuração ativa. A limpeza do staging é de melhor esforço; arquivos bloqueados ou uma interrupção abrupta podem deixar resíduos inativos. Uma instalação anterior válida é conservada, inclusive após uma atualização bem-sucedida.
 
 Chamadas na mesma instância são serializadas; um arquivo de lock exclusivo rejeita outra instância/processo enquanto a instalação estiver em andamento. O instalador verifica espaço livre e rejeita links nos diretórios usados. O downloader limita os bytes recebidos ao tamanho do manifesto, usa espera máxima de 60 segundos para cabeçalhos/leitura ociosa e preserva arquivos preexistentes. Depois da escrita atômica da configuração, uma falha no observador de progresso não muda o resultado de sucesso.
 
-O recibo registra os hashes dos artefatos baixados, mas não substitui uma futura verificação antes de executar o runtime. `Ready` indica arquivos presentes; não é um health check, uma garantia de compatibilidade Vulkan nem um teste de inferência. Nenhum download é iniciado pela interface nesta etapa.
+Antes de qualquer execução, `AiInstallationIntegrityVerifier` confere novamente o recibo, o modelo, o ZIP fixado do runtime e todos os arquivos extraídos. Arquivo ausente, modificado, adicional ou redirecionado bloqueia a inicialização. Instalações criadas pelo formato anterior, que não conservavam o ZIP, precisam ser reinstaladas antes de executar. `Ready` no gerenciador continua significando apenas arquivos presentes; a confirmação operacional é o estado separado do runtime. Nenhum download é iniciado pela interface nesta etapa.
+
+## Ciclo de vida do llama-server
+
+`LocalAiRuntimeHost` controla uma única instância pertencente ao Rota. Ele monta os argumentos sem usar shell, remove variáveis ambientes `LLAMA_ARG_*`, escolhe CPU ou Vulkan conforme o pacote realmente instalado e inicia o processo oculto no diretório isolado da instalação.
+
+O servidor recebe explicitamente `--host 127.0.0.1`, uma porta local livre, o modelo validado, o contexto configurado, paralelismo 1 e `--n-gpu-layers 0` para CPU ou `all` para Vulkan. Cada execução cria uma chave de API aleatória mantida somente em memória e restringe CORS a `localhost`, reduzindo acesso indevido por outros programas ou páginas locais. O endpoint nunca usa a rede externa. A porta pode sofrer uma corrida entre sua escolha e o bind do processo; nesse caso o processo falha, é encerrado e o erro fica controlado para uma nova tentativa.
+
+O estado percorre `Stopped`, `Starting`, `Ready`, `Stopping` ou `Faulted`. A inicialização somente retorna sucesso depois de `GET /health` responder HTTP 200 com `{"status":"ok"}`. Respostas de carregamento, redirecionamentos, conteúdo inválido, processo encerrado e excesso de tempo não são tratados como prontos. Cancelamento, timeout, parada e descarte encerram toda a árvore do processo pertencente ao Rota. A saída nativa capturada é limitada para não crescer indefinidamente.
+
+O health check segue a interface documentada do `llama-server` b10795. O serviço ainda não envia prompts, não ativa ferramentas internas do servidor e não tem qualquer referência ao `StudyRepository`.
 
 ### Fontes fixadas e verificadas em 04/09/2026
 
-- [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos e passaram pela extração do instalador. Nenhum executável do runtime foi iniciado.
+- [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos, passaram pela extração do instalador e iniciaram com `--version` pelo controlador real do Rota. Nenhum modelo completo ou inferência foi executado.
+- [documentação do llama-server b10795](https://github.com/ggml-org/llama.cpp/blob/b10795/tools/server/README.md): fonte dos argumentos de host, porta, camadas de GPU e do contrato `GET /health`.
 - [Qwen3 1.7B](https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/tree/90862c4b9d2787eaed51d12237eafdfe7c5f6077): Q8_0, 1.834.426.016 bytes.
 - [Qwen3 4B](https://huggingface.co/Qwen/Qwen3-4B-GGUF/tree/bc640142c66e1fdd12af0bd68f40445458f3869b): Q4_K_M, 2.497.280.256 bytes.
 - [Qwen3 8B](https://huggingface.co/Qwen/Qwen3-8B-GGUF/tree/7c41481f57cb95916b40956ab2f0b139b296d974): Q4_K_M, 5.027.783.488 bytes.
@@ -74,10 +85,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 83 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização e exclusão mútua entre instaladores. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 84º teste, que verifica todos os arquivos extraídos byte a byte por hash. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 95 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento e verificação pré-execução. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 96º teste, que verifica todos os arquivos extraídos byte a byte por hash. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Implementar o ciclo de vida isolado do `llama-server`: iniciar/parar, escolher CPU/Vulkan, usar somente a porta local, aguardar health check, limitar tempo, cancelar e encerrar o processo com segurança. A interface e a aplicação de propostas no calendário devem continuar fora desse bloco.
+Implementar o cliente de inferência local sobre o endpoint compatível de chat do `llama-server`: prompt de sistema limitado, entrada estruturada, saída JSON restrita aos contratos do Rota, limite de resposta, cancelamento e validação completa antes de criar uma `AiProposal`. A interface e a aplicação de propostas no calendário devem continuar fora desse bloco.

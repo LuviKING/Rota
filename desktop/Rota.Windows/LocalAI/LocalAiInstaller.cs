@@ -63,9 +63,11 @@ public sealed class LocalAiInstaller : IAiInstaller, IDisposable
             var payloadDirectory = Path.Combine(stagingRoot, "payload");
             var runtimeDirectory = Path.Combine(payloadDirectory, "runtime");
             var modelsDirectory = Path.Combine(payloadDirectory, "models");
+            var integrityDirectory = Path.Combine(payloadDirectory, ".integrity");
             Directory.CreateDirectory(downloadsDirectory);
             Directory.CreateDirectory(runtimeDirectory);
             Directory.CreateDirectory(modelsDirectory);
+            Directory.CreateDirectory(integrityDirectory);
 
             var runtimeArchivePath = Path.Combine(downloadsDirectory, runtimePackage.Archive.FileName);
             await DownloadAsync(
@@ -80,9 +82,13 @@ public sealed class LocalAiInstaller : IAiInstaller, IDisposable
                 runtimeArchivePath,
                 cancellationToken).ConfigureAwait(false);
 
+            // Keep the verified archive so every runtime file can be checked again before execution.
+            var retainedRuntimeArchivePath = Path.Combine(integrityDirectory, "runtime-package.zip");
+            File.Move(runtimeArchivePath, retainedRuntimeArchivePath);
+
             Report(progress, AiInstallationStage.ExtractingRuntime, runtimePackage.Archive.Id, 0, null);
             await AiInstallationFileSafety.ExtractRuntimeSafelyAsync(
-                runtimeArchivePath,
+                retainedRuntimeArchivePath,
                 runtimeDirectory,
                 cancellationToken).ConfigureAwait(false);
             var stagedRuntimePath = AiInstallationFileSafety.ResolveContainedPath(

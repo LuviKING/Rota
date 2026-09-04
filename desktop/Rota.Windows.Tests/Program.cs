@@ -85,6 +85,7 @@ var tests = new (string Name, Action Body)[]
 };
 
 tests = tests.Concat(Rota.Desktop.Tests.InstallationRegressionTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.RuntimeLifecycleTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 
@@ -1251,7 +1252,8 @@ static void AiInstallerPreservesActiveInstallation()
             new FakeAiArtifactDownloader(fixture.Artifacts), fixture.Manifest);
         var original = firstInstaller.InstallAsync(new AiConfiguration
         {
-            Profile = AiProfile.Balanced, ComputePreference = AiComputePreference.Cpu
+            Profile = AiProfile.Balanced,
+            ComputePreference = AiComputePreference.Cpu
         }).GetAwaiter().GetResult();
         var before = File.ReadAllBytes(store.ConfigurationPath);
 
@@ -1283,7 +1285,8 @@ static void OfficialRuntimeArchivesStage()
                 new FakeAiArtifactDownloader(fixture.Artifacts), fixture.Manifest);
             var result = installer.InstallAsync(new AiConfiguration
             {
-                Profile = AiProfile.Balanced, ComputePreference = package.ComputePreference
+                Profile = AiProfile.Balanced,
+                ComputePreference = package.ComputePreference
             }).GetAwaiter().GetResult();
             using var archiveStream = new MemoryStream(bytes, writable: false);
             using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
@@ -1297,6 +1300,23 @@ static void OfficialRuntimeArchivesStage()
             }
             True(Directory.GetFiles(Path.GetDirectoryName(result.Configuration.RuntimePath)!, "*.dll").Length > 0);
             Eq(AiInstallationState.Ready, result.InstallationInfo.State);
+
+            var process = new SystemAiRuntimeProcessFactory().Start(new AiRuntimeLaunchCommand(
+                result.Configuration.RuntimePath,
+                Path.GetDirectoryName(result.Configuration.RuntimePath)!,
+                Array.AsReadOnly(new[] { "--version" })));
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
+                Eq(0, process.ExitCode);
+                Contains(process.RecentOutput, "build 10795");
+            }
+            finally
+            {
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                process.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
         });
     }
 }

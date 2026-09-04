@@ -45,7 +45,7 @@ public sealed record AiInstallationResult(
 
 public sealed record AiInstallationReceipt
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public int ManifestVersion { get; init; }
