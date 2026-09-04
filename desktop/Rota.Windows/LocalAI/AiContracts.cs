@@ -75,6 +75,37 @@ public sealed record AiAssistantInput
     public string FreeText { get; init; } = "";
 }
 
+public sealed record AiPlanningContext
+{
+    public const int CurrentSchemaVersion = 1;
+
+    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
+    public string SnapshotDate { get; init; } = "";
+    public string ObjectiveName { get; init; } = "";
+    public string ObjectiveDate { get; init; } = "";
+    public string ActivePlanId { get; init; } = "";
+    public int ActivePlanRevision { get; init; }
+    public string ActivePlanTitle { get; init; } = "";
+    public int DailyMinutesLimit { get; init; }
+    public int BlockMinutes { get; init; }
+    public List<AiPlanningSessionContext> FutureSessions { get; init; } = new();
+    public bool HasMoreFutureSessions { get; init; }
+}
+
+public sealed record AiPlanningSessionContext
+{
+    public string SessionId { get; init; } = "";
+    public string PlanId { get; init; } = "";
+    public int PlanRevision { get; init; }
+    public string Date { get; init; } = "";
+    public string Subject { get; init; } = "";
+    public string Topic { get; init; } = "";
+    public int Minutes { get; init; }
+    public string Kind { get; init; } = "";
+    public string Origin { get; init; } = "";
+    public bool ProtectedFromDirectRemoval { get; init; }
+}
+
 public sealed record AiStudyPlanDraft
 {
     public string StudyPlanJson { get; init; } = "";
@@ -146,7 +177,13 @@ public interface ILocalAiBackend
         AiAssistantInput input,
         AiProposalKind kind,
         AiConfiguration configuration,
+        AiPlanningContext? planningContext = null,
         CancellationToken cancellationToken = default);
+}
+
+public interface IAiPlanningContextProvider
+{
+    AiPlanningContext Capture();
 }
 
 public interface IAiConfigurationStore

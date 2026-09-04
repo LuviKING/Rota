@@ -4,11 +4,16 @@ public sealed class AiPlanningService : IAiPlanningService
 {
     private readonly ILocalAiBackend _backend;
     private readonly IAiConfigurationStore _configurationStore;
+    private readonly IAiPlanningContextProvider? _contextProvider;
 
-    public AiPlanningService(ILocalAiBackend backend, IAiConfigurationStore configurationStore)
+    public AiPlanningService(
+        ILocalAiBackend backend,
+        IAiConfigurationStore configurationStore,
+        IAiPlanningContextProvider? contextProvider = null)
     {
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
         _configurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
+        _contextProvider = contextProvider;
     }
 
     public async Task<AiProposal> CreateProposalAsync(
@@ -27,8 +32,11 @@ public sealed class AiPlanningService : IAiPlanningService
         AiProposal proposal;
         try
         {
+            var planningContext = kind == AiProposalKind.PlanChanges
+                ? _contextProvider?.Capture()
+                : null;
             proposal = await _backend
-                .CreateProposalAsync(input, kind, configuration, cancellationToken)
+                .CreateProposalAsync(input, kind, configuration, planningContext, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

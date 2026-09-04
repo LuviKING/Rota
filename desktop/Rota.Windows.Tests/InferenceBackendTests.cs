@@ -27,6 +27,8 @@ public static class InferenceBackendTests
         ("llama-server backend honors generation cancellation", BackendHonorsCancellation),
         ("llama-server backend times out a stalled generation", BackendTimesOutStalledGeneration),
         ("llama-server backend rejects a non-loopback connection", BackendRejectsNonLoopbackConnection),
+        ("llama-server backend sends bounded current-plan context only for changes", BackendSendsPlanningContext),
+        ("llama-server backend rejects current-plan context for a new plan", BackendRejectsContextForStudyPlan),
         ("AI planning service contains llama-server failures", PlanningServiceContainsInferenceFailure)
     };
 
@@ -55,6 +57,8 @@ public static class InferenceBackendTests
         var userPayload = messages[1].GetProperty("content").GetString()!;
         Require(userPayload.Contains("Ignore o schema", StringComparison.Ordinal));
         Require(!userPayload.Contains("<|im_end|>", StringComparison.Ordinal));
+        using var parsedPayload = JsonDocument.Parse(userPayload);
+        Require(parsedPayload.RootElement.GetProperty("current_plan_context").ValueKind == JsonValueKind.Null);
         Require(!handler.RequestBody!.Contains(Configuration().RuntimePath, StringComparison.Ordinal));
         Require(!handler.RequestBody.Contains(Configuration().ModelPath, StringComparison.Ordinal));
         Require(!handler.RequestBody.Contains(ApiKey, StringComparison.Ordinal));
@@ -158,7 +162,7 @@ public static class InferenceBackendTests
         using var backend = Backend(new FakeRuntimeHost(), client);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(25));
         Expect<OperationCanceledException>(() => backend.CreateProposalAsync(
-            ValidInput(), AiProposalKind.StudyPlan, Configuration(), cancellation.Token).GetAwaiter().GetResult());
+            ValidInput(), AiProposalKind.StudyPlan, Configuration(), null, cancellation.Token).GetAwaiter().GetResult());
     }
 
     private static void BackendTimesOutStalledGeneration()
@@ -181,6 +185,47 @@ public static class InferenceBackendTests
         using var backend = Backend(host, client);
         Expect<AiInferenceException>(() => backend.CreateProposalAsync(
             ValidInput(), AiProposalKind.StudyPlan, Configuration()).GetAwaiter().GetResult());
+    }
+
+    private static void BackendSendsPlanningContext()
+    {
+        const string generated = """
+            {
+              "summary":"Mover sessão.",
+              "warnings":[],
+              "operations":[{
+                "type":"move_session",
+                "summary":"Mover Matemática.",
+                "session_id":"session-1",
+                "destination_date":"2031-02-11"
+              }]
+            }
+            """;
+        var handler = new CompletionHandler(CompletionResponse(generated));
+        using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        using var backend = Backend(new FakeRuntimeHost(), client);
+        backend.CreateProposalAsync(
+            ValidInput(), AiProposalKind.PlanChanges, Configuration(), ValidPlanningContext()).GetAwaiter().GetResult();
+
+        using var request = JsonDocument.Parse(handler.RequestBody!);
+        var userContent = request.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!;
+        using var content = JsonDocument.Parse(userContent);
+        var context = content.RootElement.GetProperty("current_plan_context");
+        Require(context.GetProperty("schema_version").GetInt32() == 1);
+        Require(context.GetProperty("snapshot_date").GetString() == "2031-02-03");
+        var session = context.GetProperty("future_sessions")[0];
+        Require(session.GetProperty("session_id").GetString() == "session-1");
+        Require(session.GetProperty("protected_from_direct_removal").GetBoolean());
+        Require(!userContent.Contains("target", StringComparison.OrdinalIgnoreCase));
+        Require(!userContent.Contains("completed_at", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void BackendRejectsContextForStudyPlan()
+    {
+        using var client = Client(CompletionResponse(ValidStudyPlanResult()));
+        using var backend = Backend(new FakeRuntimeHost(), client);
+        Expect<AiContractValidationException>(() => backend.CreateProposalAsync(
+            ValidInput(), AiProposalKind.StudyPlan, Configuration(), ValidPlanningContext()).GetAwaiter().GetResult());
     }
 
     private static void PlanningServiceContainsInferenceFailure()
@@ -252,6 +297,34 @@ public static class InferenceBackendTests
         WeakSubjects = new List<string> { "Matemática" },
         Goal = "Preparar um plano equilibrado.",
         FreeText = "Quero começar na próxima segunda-feira."
+    };
+
+    private static AiPlanningContext ValidPlanningContext() => new()
+    {
+        SnapshotDate = "2031-02-03",
+        ObjectiveName = "ENEM",
+        ObjectiveDate = "2031-11-09",
+        ActivePlanId = "plan-1",
+        ActivePlanRevision = 2,
+        ActivePlanTitle = "Plano ENEM",
+        DailyMinutesLimit = 180,
+        BlockMinutes = 60,
+        FutureSessions = new List<AiPlanningSessionContext>
+        {
+            new()
+            {
+                SessionId = "session-1",
+                PlanId = "plan-1",
+                PlanRevision = 2,
+                Date = "2031-02-10",
+                Subject = "Matemática",
+                Topic = "Razões",
+                Minutes = 60,
+                Kind = "review",
+                Origin = "runtime",
+                ProtectedFromDirectRemoval = true
+            }
+        }
     };
 
     private static string ValidStudyPlanResult() => """

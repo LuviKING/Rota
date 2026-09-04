@@ -79,6 +79,12 @@ O modelo recebe apenas a entrada estruturada e a regra de que sua saída é uma 
 
 Uma resposta de plano ainda passa pelo `StudyPlanImporter` 0.2. Uma resposta de alterações só pode usar os sete tipos enumerados e depois passa pelo `AiContractValidator`. Nada nesta camada chama `StudyRepository`, aplica calendário ou altera histórico. Cancelar a chamada interrompe a requisição de geração, mantendo o servidor disponível para uma futura solicitação.
 
+## Contexto do plano atual
+
+`StudyPlanningContextProvider` cria uma fotografia somente leitura para propostas de alteração. Ela contém preferências de duração, identidade do plano ativo e no máximo 200 sessões pendentes a partir do dia atual. Sessões passadas ou concluídas, marca de conclusão, alvo detalhado de estudo e rótulo interno de revisão ficam de fora. Quando há mais sessões futuras, o contexto informa que a lista foi truncada em vez de crescer sem limite.
+
+O contexto é copiado para contratos próprios antes de chegar ao backend. O modelo não recebe `StudyRepository`, caminho do arquivo de estado ou qualquer função de escrita. Revisões automáticas futuras continuam visíveis apenas com os dados necessários para calcular carga e são marcadas como protegidas contra remoção direta. A validação rejeita datas passadas, identidades duplicadas, limites inválidos e inconsistência nessa proteção. Pedidos de plano novo não recebem a fotografia do plano existente.
+
 ### Fontes fixadas e verificadas em 04/09/2026
 
 - [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos, passaram pela extração do instalador e iniciaram com `--version` pelo controlador real do Rota. Nenhum modelo completo ou inferência foi executado.
@@ -93,10 +99,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 109 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência e rejeição de respostas inválidas. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 110º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 114 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas e isolamento do contexto atual. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 115º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Criar um snapshot de contexto do plano atual, somente leitura e com limites explícitos, para que propostas de alteração conheçam sessões futuras sem dar ao backend acesso ao repositório. O snapshot deve preservar privacidade, excluir detalhes desnecessários e continuar sem aplicar nenhuma alteração. Depois disso, o bloco seguinte poderá construir preview determinístico das propostas.
+Construir um preview determinístico das propostas sobre uma cópia isolada do estado, mostrando o impacto antes de qualquer aplicação. Operações inválidas, sessões protegidas e conflitos de capacidade devem ser recusados sem escrever no calendário ou no histórico.

@@ -6,6 +6,7 @@ public static class AiContractValidator
 {
     private const int MaxSubjectCount = 100;
     private const int MaxOperationCount = 500;
+    private const int MaxPlanningSessions = 200;
 
     public static void ValidateConfiguration(AiConfiguration configuration)
     {
@@ -106,6 +107,65 @@ public static class AiContractValidator
                 break;
             default:
                 throw new AiContractValidationException("O tipo de proposta da IA é inválido.");
+        }
+    }
+
+    public static void ValidatePlanningContext(AiPlanningContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.SchemaVersion != AiPlanningContext.CurrentSchemaVersion)
+            throw new AiContractValidationException($"Versão de contexto da IA não suportada: {context.SchemaVersion}.");
+        ValidateText(context.SnapshotDate, "Data do contexto", 10, allowEmpty: false);
+        if (!DateOnly.TryParseExact(context.SnapshotDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            throw new AiContractValidationException("A data do contexto da IA é inválida.");
+        ValidateText(context.ObjectiveName, "Objetivo do contexto", 120, allowEmpty: false);
+        ValidateText(context.ObjectiveDate, "Data do objetivo do contexto", 10, allowEmpty: true);
+        if (context.ObjectiveDate.Length > 0 &&
+            !DateOnly.TryParseExact(context.ObjectiveDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new AiContractValidationException("A data do objetivo no contexto da IA é inválida.");
+        }
+        ValidateText(context.ActivePlanId, "ID do plano ativo", 80, allowEmpty: true);
+        ValidateText(context.ActivePlanTitle, "Título do plano ativo", 120, allowEmpty: true);
+        if (context.ActivePlanRevision < 0 ||
+            (context.ActivePlanId.Length == 0 && context.ActivePlanRevision != 0) ||
+            (context.ActivePlanId.Length > 0 && context.ActivePlanRevision < 1))
+        {
+            throw new AiContractValidationException("A revisão do plano ativo no contexto da IA é inválida.");
+        }
+        if (context.DailyMinutesLimit is < 60 or > 720 || context.BlockMinutes is < 30 or > 180)
+            throw new AiContractValidationException("Os limites de tempo do contexto da IA são inválidos.");
+        if (context.FutureSessions is null || context.FutureSessions.Count > MaxPlanningSessions)
+            throw new AiContractValidationException("O contexto da IA contém sessões futuras demais ou ausentes.");
+
+        var identities = new HashSet<(string PlanId, string SessionId)>();
+        foreach (var session in context.FutureSessions)
+        {
+            if (session is null)
+                throw new AiContractValidationException("O contexto da IA contém uma sessão nula.");
+            ValidateText(session.SessionId, "ID da sessão do contexto", 100, allowEmpty: false);
+            ValidateText(session.PlanId, "ID do plano da sessão do contexto", 80, allowEmpty: false);
+            if (!identities.Add((session.PlanId, session.SessionId)))
+                throw new AiContractValidationException("O contexto da IA contém identidades de sessão duplicadas.");
+            if (session.PlanRevision < 1)
+                throw new AiContractValidationException("O contexto da IA contém uma revisão de sessão inválida.");
+            ValidateText(session.Date, "Data da sessão do contexto", 10, allowEmpty: false);
+            if (!DateOnly.TryParseExact(session.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ||
+                string.CompareOrdinal(session.Date, context.SnapshotDate) < 0)
+            {
+                throw new AiContractValidationException("O contexto da IA contém uma sessão que não é futura.");
+            }
+            ValidateText(session.Subject, "Matéria da sessão do contexto", 80, allowEmpty: false);
+            ValidateText(session.Topic, "Tópico da sessão do contexto", 160, allowEmpty: false);
+            if (session.Minutes is < 10 or > 360)
+                throw new AiContractValidationException("O contexto da IA contém uma duração inválida.");
+            if (session.Kind is not "study" and not "review" and not "assessment")
+                throw new AiContractValidationException("O contexto da IA contém um tipo de sessão inválido.");
+            if (session.Origin is not "plan" and not "runtime" ||
+                session.ProtectedFromDirectRemoval != (session.Origin == "runtime"))
+            {
+                throw new AiContractValidationException("O contexto da IA contém uma origem de sessão inválida.");
+            }
         }
     }
 

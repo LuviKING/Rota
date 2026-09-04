@@ -36,15 +36,18 @@ internal sealed class FakeLocalAiBackend : ILocalAiBackend
 
     public bool SimulateFailure { get; set; }
     public int CallCount { get; private set; }
+    public AiPlanningContext? LastPlanningContext { get; private set; }
 
     public Task<AiProposal> CreateProposalAsync(
         AiAssistantInput input,
         AiProposalKind kind,
         AiConfiguration configuration,
+        AiPlanningContext? planningContext = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         CallCount++;
+        LastPlanningContext = planningContext;
 
         if (SimulateFailure)
             throw new InvalidOperationException("Falha simulada do backend local.");
