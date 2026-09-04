@@ -1,0 +1,149 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: sdkmanager "platforms;android-36" "platforms;android-29" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Unit tests
+        run: gradle --no-daemon testDebugUnitTest
+
+      - name: Android lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon lintDebug
+          echo "--- lint reports ---"
+          find app/build/reports -maxdepth 1 -type f -name 'lint-results-debug*' -print || true
+          if [ -f app/build/reports/lint-results-debug.txt ]; then
+            echo "--- lint text ---"
+            cat app/build/reports/lint-results-debug.txt
+          fi
+
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+
+      - name: Verify APK structure and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
+          grep -q "package: name='app.rota.estudos'" "$RUNNER_TEMP/badging.txt"
+          grep -q "versionCode='4'" "$RUNNER_TEMP/badging.txt"
+          grep -q "versionName='0.3.1'" "$RUNNER_TEMP/badging.txt"
+          grep -q "sdkVersion:'23'" "$RUNNER_TEMP/badging.txt"
+          grep -q "targetSdkVersion:'36'" "$RUNNER_TEMP/badging.txt"
+          grep -q "application-label:'Rota'" "$RUNNER_TEMP/badging.txt"
+          grep -q "launchable-activity: name='app.rota.estudos.CalendarActivity'" "$RUNNER_TEMP/badging.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions "$APK" | tee "$RUNNER_TEMP/permissions.txt"
+          if grep -Fq "android.permission.INTERNET" "$RUNNER_TEMP/permissions.txt"; then
+            echo "Unexpected INTERNET permission in Rota APK." >&2
+            exit 1
+          fi
+
+      - name: Enable KVM for Android emulators
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            sudo chmod 666 /dev/kvm
+            test -r /dev/kvm
+            test -w /dev/kvm
+            ls -l /dev/kvm
+          else
+            echo "/dev/kvm is unavailable on this runner"
+            exit 1
+          fi
+
+      - name: Android 10 install and launch smoke test
+        timeout-minutes: 12
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          target: default
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          script: /bin/sh .github/scripts/android10-smoke.sh
+
+      - name: Reclaim Android 10 emulator storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$HOME/.android/avd/test.avd" "$HOME/.android/avd/test.ini"
+          sdkmanager --uninstall "system-images;android-29;default;x86_64" || true
+          df -h "$HOME"
+
+      - name: Android 16 home and settings smoke test
+        timeout-minutes: 12
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: default
+          cores: 2
+          disk-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          script: /bin/sh .github/scripts/android16-smoke.sh
+
+      - name: Stage APK
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/apk/Rota-0.3.1.apk"
+          cp "$RUNNER_TEMP/Rota-v0.3.1-android10.png" "$RUNNER_TEMP/apk/Rota-v0.3.1-android10.png"
+          cp "$RUNNER_TEMP/Rota-v0.3.1-android16.png" "$RUNNER_TEMP/apk/Rota-v0.3.1-android16.png"
+          cp "$RUNNER_TEMP/Rota-v0.3.1-settings-android16.png" "$RUNNER_TEMP/apk/Rota-v0.3.1-settings-android16.png"
+          sha256sum "$RUNNER_TEMP/apk/Rota-0.3.1.apk" > "$RUNNER_TEMP/apk/Rota-0.3.1.sha256.txt"
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rota-Estudos-v0.3.1-APK
+          path: ${{ runner.temp }}/apk/*
+          if-no-files-found: error
+          retention-days: 7
