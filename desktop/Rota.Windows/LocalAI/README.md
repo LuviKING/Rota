@@ -85,6 +85,12 @@ Uma resposta de plano ainda passa pelo `StudyPlanImporter` 0.2. Uma resposta de 
 
 O contexto é copiado para contratos próprios antes de chegar ao backend. O modelo não recebe `StudyRepository`, caminho do arquivo de estado ou qualquer função de escrita. Revisões automáticas futuras continuam visíveis apenas com os dados necessários para calcular carga e são marcadas como protegidas contra remoção direta. A validação rejeita datas passadas, identidades duplicadas, limites inválidos e inconsistência nessa proteção. Pedidos de plano novo não recebem a fotografia do plano existente.
 
+## Prévia isolada
+
+`AiProposalPreviewService` transforma uma proposta pendente em uma prévia `Ready` ou `Blocked`, sem aplicar a proposta. Planos novos reutilizam a validação já existente do repositório. Alterações trabalham sobre uma cópia do contexto: mover, adicionar e remover sessões, mudar disponibilidade e redistribuir carga produzem contagens e itens de comparação determinísticos.
+
+A prévia bloqueia IDs ausentes ou ambíguos, datas passadas ou posteriores ao objetivo, sessões maiores que os limites do aplicativo, excesso de minutos no dia, alteração direta de revisão automática e qualquer simulação baseada num contexto truncado. A redistribuição preserva revisões automáticas em suas datas e só movimenta sessões comuns. Uma solicitação genérica de reconstrução é recusada até que a IA produza um `StudyPlan` detalhado. O estado no disco é comparado nos testes antes e depois da prévia e permanece idêntico.
+
 ### Fontes fixadas e verificadas em 04/09/2026
 
 - [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos, passaram pela extração do instalador e iniciaram com `--version` pelo controlador real do Rota. Nenhum modelo completo ou inferência foi executado.
@@ -99,10 +105,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 114 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas e isolamento do contexto atual. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 115º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 120 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual e prévias sem escrita. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 121º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Construir um preview determinístico das propostas sobre uma cópia isolada do estado, mostrando o impacto antes de qualquer aplicação. Operações inválidas, sessões protegidas e conflitos de capacidade devem ser recusados sem escrever no calendário ou no histórico.
+Persistir propostas e prévias em um arquivo separado do calendário, com escrita atômica, limite de tamanho, estados monotônicos e registro local de aceite ou rejeição. A aplicação continuará desabilitada até existir confirmação explícita na interface.

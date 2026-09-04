@@ -75,6 +75,12 @@ public sealed record AiAssistantInput
     public string FreeText { get; init; } = "";
 }
 
+public enum AiProposalPreviewState
+{
+    Ready,
+    Blocked
+}
+
 public sealed record AiPlanningContext
 {
     public const int CurrentSchemaVersion = 1;
@@ -140,6 +146,35 @@ public sealed record AiProposal
     public AiPlanChangeDraft? Changes { get; init; }
     public List<string> Warnings { get; init; } = new();
     public AiProposalStatus Status { get; init; } = AiProposalStatus.Pending;
+}
+
+public sealed record AiProposalPreview
+{
+    public Guid ProposalId { get; init; }
+    public AiProposalKind Kind { get; init; }
+    public AiProposalPreviewState State { get; init; }
+    public string Message { get; init; } = "";
+    public int BeforeSessionCount { get; init; }
+    public int AfterSessionCount { get; init; }
+    public int BeforeMinutes { get; init; }
+    public int AfterMinutes { get; init; }
+    public int AddedSessionCount { get; init; }
+    public int RemovedSessionCount { get; init; }
+    public int MovedSessionCount { get; init; }
+    public List<AiPreviewOperation> Operations { get; init; } = new();
+    public List<string> Warnings { get; init; } = new();
+
+    public bool CanProceed => State == AiProposalPreviewState.Ready;
+}
+
+public sealed record AiPreviewOperation
+{
+    public Guid OperationId { get; init; }
+    public AiPlanOperationType Type { get; init; }
+    public string Summary { get; init; } = "";
+    public string SessionId { get; init; } = "";
+    public string OriginalDate { get; init; } = "";
+    public string ProposedDate { get; init; } = "";
 }
 
 public sealed record AiModelDescriptor(
@@ -222,6 +257,11 @@ public interface IAiPlanningService
         AiAssistantInput input,
         AiProposalKind kind,
         CancellationToken cancellationToken = default);
+}
+
+public interface IAiProposalPreviewService
+{
+    AiProposalPreview Preview(AiProposal proposal, AiPlanningContext? planningContext = null);
 }
 
 public sealed class AiContractValidationException : ArgumentException
