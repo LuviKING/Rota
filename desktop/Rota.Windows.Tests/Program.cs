@@ -449,7 +449,9 @@ static void DesktopWindowsLoad()
     });
     thread.SetApartmentState(ApartmentState.STA);
     thread.Start();
-    if (!thread.Join(TimeSpan.FromSeconds(15)))
+    // Hosted Windows runners can take noticeably longer than a warm local machine
+    // to initialize the first WPF window and load its font resources.
+    if (!thread.Join(TimeSpan.FromSeconds(45)))
         throw new TimeoutException("desktop window smoke test timed out");
     try
     {
