@@ -22,6 +22,7 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
     private IAiRuntimeProcess? _process;
     private AiRuntimeStatus _status = StoppedStatus;
     private AiRuntimeConnection? _connection;
+    private RuntimeIdentity? _activeIdentity;
     private bool _disposed;
 
     public LocalAiRuntimeHost(
@@ -90,13 +91,30 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_process is not null && !ProcessHasExited(_process))
-                return Status;
+            {
+                if (Status.State == AiRuntimeState.Ready && _activeIdentity?.Matches(configuration) == true)
+                    return Status;
+                try
+                {
+                    await TerminateProcessAsync(_process).ConfigureAwait(false);
+                    _process = null;
+                    ClearActiveSession();
+                    SetStatus(StoppedStatus);
+                }
+                catch (Exception ex)
+                {
+                    ClearConnection();
+                    const string failure = "O runtime ativo não pôde ser substituído com segurança.";
+                    SetFaulted(failure);
+                    throw new AiRuntimeException(failure, ex);
+                }
+            }
 
             if (_process is not null)
             {
                 await _process.DisposeAsync().ConfigureAwait(false);
                 _process = null;
-                ClearConnection();
+                ClearActiveSession();
             }
 
             var installation = await _modelManager.GetInstallationInfoAsync(configuration, cancellationToken)
@@ -136,6 +154,7 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
             }
             _process = process;
             ClearConnection();
+            _activeIdentity = RuntimeIdentity.From(configuration);
             SetStatus(new AiRuntimeStatus(
                 AiRuntimeState.Starting,
                 endpoint,
@@ -211,7 +230,7 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
             var process = _process;
             if (process is null)
             {
-                ClearConnection();
+                ClearActiveSession();
                 SetStatus(StoppedStatus);
                 return;
             }
@@ -221,7 +240,7 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
             {
                 await TerminateProcessAsync(process).ConfigureAwait(false);
                 _process = null;
-                ClearConnection();
+                ClearActiveSession();
                 SetStatus(StoppedStatus);
             }
             catch (Exception ex)
@@ -289,7 +308,7 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
         {
             await TerminateProcessAsync(process).ConfigureAwait(false);
             _process = null;
-            ClearConnection();
+            ClearActiveSession();
         }
         catch (Exception ex)
         {
@@ -331,6 +350,12 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
         lock (_statusSync) _connection = null;
     }
 
+    private void ClearActiveSession()
+    {
+        ClearConnection();
+        _activeIdentity = null;
+    }
+
     private static void ValidateTimeout(TimeSpan value, string parameterName)
     {
         if (value <= TimeSpan.Zero || value > TimeSpan.FromMinutes(10))
@@ -350,7 +375,7 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
                 await TerminateProcessAsync(process).ConfigureAwait(false);
                 _process = null;
             }
-            ClearConnection();
+            ClearActiveSession();
             SetStatus(StoppedStatus);
             _disposed = true;
             if (_ownsHealthClient && _healthClient is IDisposable disposable) disposable.Dispose();
@@ -359,5 +384,33 @@ public sealed class LocalAiRuntimeHost : ILocalAiRuntimeHost
         {
             _gate.Release();
         }
+    }
+
+    private sealed record RuntimeIdentity(
+        string RuntimePath,
+        string ModelPath,
+        string ModelId,
+        int ContextSize,
+        AiProfile Profile,
+        AiComputePreference ComputePreference,
+        AiInstallationState InstallationState)
+    {
+        public static RuntimeIdentity From(AiConfiguration configuration) => new(
+            Path.GetFullPath(configuration.RuntimePath),
+            Path.GetFullPath(configuration.ModelPath),
+            configuration.ModelId,
+            configuration.ContextSize,
+            configuration.Profile,
+            configuration.ComputePreference,
+            configuration.InstallationState);
+
+        public bool Matches(AiConfiguration configuration) =>
+            ContextSize == configuration.ContextSize &&
+            Profile == configuration.Profile &&
+            ComputePreference == configuration.ComputePreference &&
+            InstallationState == configuration.InstallationState &&
+            string.Equals(ModelId, configuration.ModelId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(RuntimePath, Path.GetFullPath(configuration.RuntimePath), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(ModelPath, Path.GetFullPath(configuration.ModelPath), StringComparison.OrdinalIgnoreCase);
     }
 }

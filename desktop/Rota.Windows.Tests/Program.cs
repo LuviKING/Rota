@@ -86,6 +86,7 @@ var tests = new (string Name, Action Body)[]
 
 tests = tests.Concat(Rota.Desktop.Tests.InstallationRegressionTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.RuntimeLifecycleTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.InferenceBackendTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 

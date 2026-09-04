@@ -15,7 +15,7 @@ Há dois formatos de proposta independentes:
 
 `AiConfigurationStore` mantém a configuração separada em `%LOCALAPPDATA%\Rota\AI\config.json`. A escrita é atômica, cria uma cópia `.bak` e preserva arquivos inválidos antes de recuperar uma configuração íntegra ou criar os valores seguros padrão.
 
-Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. A instalação local é preparada por um serviço separado e nunca acontece automaticamente ao abrir o Rota. O ciclo de vida do `llama.cpp` existe como serviço isolado, mas ainda não é acionado pela interface; a inferência e o chat ainda não são implementados.
+Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. A instalação local é preparada por um serviço separado e nunca acontece automaticamente ao abrir o Rota. O ciclo de vida e o backend de inferência do `llama.cpp` existem como serviços isolados, mas ainda não são acionados pela interface e não há chat visível ao usuário.
 
 ## Perfis de hardware
 
@@ -69,7 +69,15 @@ O servidor recebe explicitamente `--host 127.0.0.1`, uma porta local livre, o mo
 
 O estado percorre `Stopped`, `Starting`, `Ready`, `Stopping` ou `Faulted`. A inicialização somente retorna sucesso depois de `GET /health` responder HTTP 200 com `{"status":"ok"}`. Respostas de carregamento, redirecionamentos, conteúdo inválido, processo encerrado e excesso de tempo não são tratados como prontos. Cancelamento, timeout, parada e descarte encerram toda a árvore do processo pertencente ao Rota. A saída nativa capturada é limitada para não crescer indefinidamente.
 
-O health check segue a interface documentada do `llama-server` b10795. O serviço ainda não envia prompts, não ativa ferramentas internas do servidor e não tem qualquer referência ao `StudyRepository`.
+O health check segue a interface documentada do `llama-server` b10795. O serviço de ciclo de vida não ativa ferramentas internas do servidor e não tem qualquer referência ao `StudyRepository`.
+
+## Inferência estruturada
+
+`LlamaServerBackend` implementa `ILocalAiBackend` sobre `POST /v1/chat/completions`. Ele só aceita a conexão `127.0.0.1` autenticada criada pelo controlador, nunca envia caminhos locais e serializa uma geração por vez. A requisição usa temperatura baixa, semente fixa, máximo de 4.096 tokens, limite total de cinco minutos e um JSON Schema diferente para criação de plano ou operações. Sequências de controle do template Qwen presentes no texto do usuário são neutralizadas antes do envio.
+
+O modelo recebe apenas a entrada estruturada e a regra de que sua saída é uma proposta, nunca uma alteração aplicada. A resposta HTTP é limitada a 2 MiB, precisa terminar normalmente e conter exatamente uma escolha. JSON duplicado, desconhecido, truncado, grande demais ou fora do contrato é rejeitado. O backend cria IDs e timestamp confiáveis localmente; o modelo não controla `Pending`, identidade ou hora da proposta.
+
+Uma resposta de plano ainda passa pelo `StudyPlanImporter` 0.2. Uma resposta de alterações só pode usar os sete tipos enumerados e depois passa pelo `AiContractValidator`. Nada nesta camada chama `StudyRepository`, aplica calendário ou altera histórico. Cancelar a chamada interrompe a requisição de geração, mantendo o servidor disponível para uma futura solicitação.
 
 ### Fontes fixadas e verificadas em 04/09/2026
 
@@ -85,10 +93,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 95 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento e verificação pré-execução. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 96º teste, que verifica todos os arquivos extraídos byte a byte por hash. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 109 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência e rejeição de respostas inválidas. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 110º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Implementar o cliente de inferência local sobre o endpoint compatível de chat do `llama-server`: prompt de sistema limitado, entrada estruturada, saída JSON restrita aos contratos do Rota, limite de resposta, cancelamento e validação completa antes de criar uma `AiProposal`. A interface e a aplicação de propostas no calendário devem continuar fora desse bloco.
+Criar um snapshot de contexto do plano atual, somente leitura e com limites explícitos, para que propostas de alteração conheçam sessões futuras sem dar ao backend acesso ao repositório. O snapshot deve preservar privacidade, excluir detalhes desnecessários e continuar sem aplicar nenhuma alteração. Depois disso, o bloco seguinte poderá construir preview determinístico das propostas.

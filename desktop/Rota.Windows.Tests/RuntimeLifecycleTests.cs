@@ -16,6 +16,7 @@ public static class RuntimeLifecycleTests
         ("Local AI runtime forces zero GPU layers for a CPU installation", RuntimeUsesCpuCommand),
         ("Local AI runtime waits for the health endpoint before becoming ready", RuntimeWaitsForHealth),
         ("Local AI runtime start is idempotent while the owned process is ready", RuntimeStartIsIdempotent),
+        ("Local AI runtime restarts when the active configuration changes", RuntimeRestartsForChangedConfiguration),
         ("Local AI runtime cancellation terminates its process tree", RuntimeCancellationTerminatesProcess),
         ("Local AI runtime timeout terminates its process tree", RuntimeTimeoutTerminatesProcess),
         ("Local AI runtime reports an early process exit without leaving it active", RuntimeReportsEarlyExit),
@@ -71,6 +72,17 @@ public static class RuntimeLifecycleTests
         var second = fixture.Host.StartAsync(ReadyConfiguration()).GetAwaiter().GetResult();
         Require(first == second);
         Require(fixture.Factory.Commands.Count == 1);
+    }
+
+    private static void RuntimeRestartsForChangedConfiguration()
+    {
+        using var fixture = RuntimeFixture(AiComputePreference.Cpu, true, true);
+        fixture.Host.StartAsync(ReadyConfiguration()).GetAwaiter().GetResult();
+        var firstProcess = fixture.Factory.LastProcess!;
+        fixture.Host.StartAsync(ReadyConfiguration() with { ContextSize = 8192 }).GetAwaiter().GetResult();
+        Require(firstProcess.KilledWithTree);
+        Require(fixture.Factory.Commands.Count == 2);
+        Require(ArgumentValue(fixture.Factory.Commands[1].Arguments, "--ctx-size") == "8192");
     }
 
     private static void RuntimeCancellationTerminatesProcess()
