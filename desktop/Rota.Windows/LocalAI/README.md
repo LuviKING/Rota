@@ -15,7 +15,20 @@ Há dois formatos de proposta independentes:
 
 `AiConfigurationStore` mantém a configuração separada em `%LOCALAPPDATA%\Rota\AI\config.json`. A escrita é atômica, cria uma cópia `.bak` e preserva arquivos inválidos antes de recuperar uma configuração íntegra ou criar os valores seguros padrão.
 
-Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. Downloads, `llama.cpp`, detecção real de hardware e inferência ainda não são implementados.
+Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. Downloads, `llama.cpp` e inferência ainda não são implementados.
+
+## Perfis de hardware
+
+`WindowsAiHardwareProfileDetector` lê CPU, processadores lógicos, RAM física e adaptadores de vídeo diretamente das APIs locais do Windows. A GPU com mais memória dedicada é usada, adaptadores de software são ignorados e uma falha de enumeração de GPU produz aviso e fallback seguro para CPU/RAM.
+
+`AiProfileRecommendationPolicy` mantém os critérios determinísticos e separados da detecção:
+
+- `Lightweight`: fallback seguro para computadores com menos recursos;
+- `Balanced`: pelo menos 12 GiB de RAM e CPU com 6 processadores lógicos ou GPU com 4 GiB;
+- `Performance`: pelo menos 15 GiB de RAM, 8 processadores lógicos e 7,5 GiB de VRAM;
+- `Automatic`: resolve para uma das três opções acima; a política nunca recomenda algo superior a `Performance`.
+
+A seleção manual continua sendo respeitada. Os limites identificam o PC-alvo Ryzen 7 5700X, RTX 3070 8 GB e 16 GB de RAM como `Performance`, sem criar perfil para modelos acima de 7B–8B Q4.
 
 ## Testes
 
@@ -23,4 +36,4 @@ Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. D
 
 ## Próximo bloco
 
-Implementar a detecção de CPU, RAM, GPU e VRAM por trás de `IAiHardwareProfileDetector`, mapear o resultado para os quatro perfis e testar os limites do modo automático sem instalar runtime ou modelos.
+Definir o catálogo local de modelos compatíveis por perfil e implementar o estado do `IAiModelManager`, ainda sem download ou execução do runtime.

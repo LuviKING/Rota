@@ -47,7 +47,17 @@ var tests = new (string Name, Action Body)[]
     ("Fake local AI backend is deterministic", FakeAiIsDeterministic),
     ("Local AI proposal creation honors cancellation", AiPlanningHonorsCancellation),
     ("Local AI backend failures are controlled", AiBackendFailureIsControlled),
-    ("Local AI proposals cannot mutate study state", AiProposalDoesNotMutateStudyState)
+    ("Local AI proposals cannot mutate study state", AiProposalDoesNotMutateStudyState),
+    ("Hardware policy selects Lightweight for an 8 GB CPU-only PC", HardwarePolicySelectsLightweight),
+    ("Hardware policy supports Balanced CPU fallback", HardwarePolicySelectsBalancedCpuFallback),
+    ("Hardware policy selects Performance for the target PC", HardwarePolicySelectsPerformanceForTargetPc),
+    ("Hardware policy never recommends above Performance", HardwarePolicyCapsAtPerformance),
+    ("Hardware policy honors exact profile boundaries", HardwarePolicyHonorsBoundaries),
+    ("Hardware policy rejects impossible snapshots", HardwarePolicyRejectsImpossibleSnapshots),
+    ("Hardware policy resolves automatic and manual profiles", HardwarePolicyResolvesAutomaticAndManual),
+    ("Windows hardware detector maps an injected snapshot", HardwareDetectorMapsSnapshot),
+    ("Windows hardware detector honors cancellation", HardwareDetectorHonorsCancellation),
+    ("Windows hardware detector reads a safe real snapshot", HardwareDetectorReadsRealSnapshot)
 };
 
 var failed = 0;
@@ -669,6 +679,162 @@ static void AiProposalDoesNotMutateStudyState()
         Eq(1, repository.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
     });
 }
+
+static void HardwarePolicySelectsLightweight()
+{
+    var hardware = HardwareSnapshot(systemMemoryGiB: 8, logicalProcessors: 8, gpuMemoryGiB: null);
+    Eq(AiProfile.Lightweight, AiProfileRecommendationPolicy.Recommend(hardware));
+}
+
+static void HardwarePolicySelectsBalancedCpuFallback()
+{
+    var hardware = HardwareSnapshot(systemMemoryGiB: 16, logicalProcessors: 8, gpuMemoryGiB: null);
+    Eq(AiProfile.Balanced, AiProfileRecommendationPolicy.Recommend(hardware));
+}
+
+static void HardwarePolicySelectsPerformanceForTargetPc()
+{
+    var hardware = HardwareSnapshot(
+        systemMemoryGiB: 16,
+        logicalProcessors: 16,
+        gpuMemoryGiB: 8,
+        cpuName: "AMD Ryzen 7 5700X",
+        gpuName: "NVIDIA GeForce RTX 3070");
+    Eq(AiProfile.Performance, AiProfileRecommendationPolicy.Recommend(hardware));
+}
+
+static void HardwarePolicyCapsAtPerformance()
+{
+    var hardware = HardwareSnapshot(systemMemoryGiB: 64, logicalProcessors: 32, gpuMemoryGiB: 24);
+    Eq(AiProfile.Performance, AiProfileRecommendationPolicy.Recommend(hardware));
+    True(Enum.GetValues<AiProfile>().Max() == AiProfile.Performance, "a profile above Performance was introduced");
+}
+
+static void HardwarePolicyHonorsBoundaries()
+{
+    var exactBalanced = new WindowsHardwareSnapshot(
+        "CPU de teste",
+        AiProfileRecommendationPolicy.BalancedMinimumLogicalProcessors,
+        AiProfileRecommendationPolicy.BalancedMinimumSystemMemoryBytes,
+        "",
+        null,
+        Array.Empty<string>());
+    Eq(AiProfile.Balanced, AiProfileRecommendationPolicy.Recommend(exactBalanced));
+
+    var belowBalancedMemory = exactBalanced with
+    {
+        LogicalProcessorCount = 64,
+        SystemMemoryBytes = AiProfileRecommendationPolicy.BalancedMinimumSystemMemoryBytes - 1,
+        GpuName = "GPU de teste",
+        DedicatedGpuMemoryBytes = 24 * AiProfileRecommendationPolicy.Gibibyte
+    };
+    Eq(AiProfile.Lightweight, AiProfileRecommendationPolicy.Recommend(belowBalancedMemory));
+
+    var exactPerformance = new WindowsHardwareSnapshot(
+        "CPU de teste",
+        AiProfileRecommendationPolicy.PerformanceMinimumLogicalProcessors,
+        AiProfileRecommendationPolicy.PerformanceMinimumSystemMemoryBytes,
+        "GPU de teste",
+        AiProfileRecommendationPolicy.PerformanceMinimumGpuMemoryBytes,
+        Array.Empty<string>());
+    Eq(AiProfile.Performance, AiProfileRecommendationPolicy.Recommend(exactPerformance));
+
+    var belowPerformanceGpu = exactPerformance with
+    {
+        DedicatedGpuMemoryBytes = AiProfileRecommendationPolicy.PerformanceMinimumGpuMemoryBytes - 1
+    };
+    Eq(AiProfile.Balanced, AiProfileRecommendationPolicy.Recommend(belowPerformanceGpu));
+}
+
+static void HardwarePolicyRejectsImpossibleSnapshots()
+{
+    Throws(() => AiProfileRecommendationPolicy.Recommend(new WindowsHardwareSnapshot(
+        "CPU inválida", 0, 8 * AiProfileRecommendationPolicy.Gibibyte, "", null, Array.Empty<string>())),
+        "processadores lógicos");
+    Throws(() => AiProfileRecommendationPolicy.Recommend(new WindowsHardwareSnapshot(
+        "CPU inválida", 4, 0, "", null, Array.Empty<string>())),
+        "memória física");
+    Throws(() => AiProfileRecommendationPolicy.Recommend(new WindowsHardwareSnapshot(
+        "CPU inválida", 4, 8 * AiProfileRecommendationPolicy.Gibibyte, "GPU inválida", -1, Array.Empty<string>())),
+        "não pode ser negativa");
+}
+
+static void HardwarePolicyResolvesAutomaticAndManual()
+{
+    var detected = new AiHardwareProfile(
+        "CPU de teste",
+        16,
+        16 * AiProfileRecommendationPolicy.Gibibyte,
+        "GPU de teste",
+        8 * AiProfileRecommendationPolicy.Gibibyte,
+        AiProfile.Performance,
+        Array.Empty<string>());
+
+    Eq(AiProfile.Performance, AiProfileRecommendationPolicy.Resolve(AiProfile.Automatic, detected));
+    Eq(AiProfile.Lightweight, AiProfileRecommendationPolicy.Resolve(AiProfile.Lightweight, detected));
+    Eq(AiProfile.Balanced, AiProfileRecommendationPolicy.Resolve(AiProfile.Balanced, detected));
+    Eq(AiProfile.Performance, AiProfileRecommendationPolicy.Resolve(AiProfile.Performance, detected));
+}
+
+static void HardwareDetectorMapsSnapshot()
+{
+    var snapshot = HardwareSnapshot(
+        systemMemoryGiB: 16,
+        logicalProcessors: 12,
+        gpuMemoryGiB: 6,
+        cpuName: "CPU intermediária",
+        gpuName: "GPU intermediária",
+        warnings: new[] { "Aviso controlado." });
+    var probe = new FakeWindowsHardwareProbe(snapshot);
+    var detector = new WindowsAiHardwareProfileDetector(probe);
+
+    var detected = detector.DetectAsync().GetAwaiter().GetResult();
+    Eq(1, probe.CallCount);
+    Eq(snapshot.CpuName, detected.CpuName);
+    Eq(snapshot.LogicalProcessorCount, detected.LogicalProcessorCount);
+    Eq(snapshot.SystemMemoryBytes, detected.SystemMemoryBytes);
+    Eq(snapshot.GpuName, detected.GpuName);
+    Eq(snapshot.DedicatedGpuMemoryBytes, detected.DedicatedGpuMemoryBytes);
+    Eq(AiProfile.Balanced, detected.RecommendedProfile);
+    Eq("Aviso controlado.", detected.Warnings.Single());
+}
+
+static void HardwareDetectorHonorsCancellation()
+{
+    var probe = new FakeWindowsHardwareProbe(HardwareSnapshot(16, 16, 8));
+    var detector = new WindowsAiHardwareProfileDetector(probe);
+    using var cancellation = new CancellationTokenSource();
+    cancellation.Cancel();
+
+    ThrowsType<OperationCanceledException>(() =>
+        detector.DetectAsync(cancellation.Token).GetAwaiter().GetResult());
+    Eq(0, probe.CallCount);
+}
+
+static void HardwareDetectorReadsRealSnapshot()
+{
+    var detected = new WindowsAiHardwareProfileDetector().DetectAsync().GetAwaiter().GetResult();
+    True(!string.IsNullOrWhiteSpace(detected.CpuName), "CPU name was not detected");
+    True(detected.LogicalProcessorCount > 0, "logical processor count was not detected");
+    True(detected.SystemMemoryBytes > 0, "physical memory was not detected");
+    True(detected.DedicatedGpuMemoryBytes is null or >= 0, "GPU memory is invalid");
+    True(detected.RecommendedProfile is AiProfile.Lightweight or AiProfile.Balanced or AiProfile.Performance,
+        "automatic hardware recommendation is invalid");
+}
+
+static WindowsHardwareSnapshot HardwareSnapshot(
+    int systemMemoryGiB,
+    int logicalProcessors,
+    int? gpuMemoryGiB,
+    string cpuName = "CPU de teste",
+    string gpuName = "",
+    IReadOnlyList<string>? warnings = null) => new(
+        cpuName,
+        logicalProcessors,
+        systemMemoryGiB * AiProfileRecommendationPolicy.Gibibyte,
+        gpuName,
+        gpuMemoryGiB.HasValue ? gpuMemoryGiB.Value * AiProfileRecommendationPolicy.Gibibyte : null,
+        warnings ?? Array.Empty<string>());
 
 static AiAssistantInput ValidAiInput() => new()
 {

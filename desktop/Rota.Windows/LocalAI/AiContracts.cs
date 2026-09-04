@@ -118,10 +118,12 @@ public sealed record AiModelInstallationInfo(
 
 public sealed record AiHardwareProfile(
     string CpuName,
+    int LogicalProcessorCount,
     long SystemMemoryBytes,
     string GpuName,
     long? DedicatedGpuMemoryBytes,
-    AiProfile RecommendedProfile);
+    AiProfile RecommendedProfile,
+    IReadOnlyList<string> Warnings);
 
 public interface ILocalAiBackend
 {
