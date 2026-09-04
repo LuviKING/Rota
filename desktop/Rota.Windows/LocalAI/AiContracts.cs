@@ -111,10 +111,25 @@ public sealed record AiProposal
     public AiProposalStatus Status { get; init; } = AiProposalStatus.Pending;
 }
 
+public sealed record AiModelDescriptor(
+    string Id,
+    string DisplayName,
+    AiProfile Profile,
+    string ParameterClass,
+    string Quantization,
+    string FileName,
+    int DefaultContextSize,
+    bool IsRecommended);
+
 public sealed record AiModelInstallationInfo(
     AiInstallationState State,
+    AiProfile EffectiveProfile,
+    AiModelDescriptor Model,
     string RuntimePath,
-    string ModelPath);
+    string ModelPath,
+    bool RuntimeAvailable,
+    bool ModelAvailable,
+    IReadOnlyList<string> Warnings);
 
 public sealed record AiHardwareProfile(
     string CpuName,
@@ -148,6 +163,15 @@ public interface IAiModelManager
     Task<AiModelInstallationInfo> GetInstallationInfoAsync(
         AiConfiguration configuration,
         CancellationToken cancellationToken = default);
+}
+
+public interface IAiModelCatalog
+{
+    IReadOnlyList<AiModelDescriptor> Models { get; }
+
+    IReadOnlyList<AiModelDescriptor> GetCompatibleModels(AiProfile profile);
+    AiModelDescriptor GetRecommendedModel(AiProfile profile);
+    AiModelDescriptor GetById(string modelId);
 }
 
 public interface IAiHardwareProfileDetector

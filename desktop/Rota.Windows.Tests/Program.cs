@@ -57,7 +57,15 @@ var tests = new (string Name, Action Body)[]
     ("Hardware policy resolves automatic and manual profiles", HardwarePolicyResolvesAutomaticAndManual),
     ("Windows hardware detector maps an injected snapshot", HardwareDetectorMapsSnapshot),
     ("Windows hardware detector honors cancellation", HardwareDetectorHonorsCancellation),
-    ("Windows hardware detector reads a safe real snapshot", HardwareDetectorReadsRealSnapshot)
+    ("Windows hardware detector reads a safe real snapshot", HardwareDetectorReadsRealSnapshot),
+    ("Local AI model catalog exposes one recommendation per profile", AiModelCatalogExposesRecommendations),
+    ("Local AI model catalog rejects unsafe artifact names", AiModelCatalogRejectsUnsafeArtifactNames),
+    ("Model manager resolves Automatic from detected hardware", AiModelManagerResolvesAutomaticProfile),
+    ("Model manager respects a manual profile without probing hardware", AiModelManagerRespectsManualProfile),
+    ("Model manager derives installation state from local files", AiModelManagerDerivesInstallationState),
+    ("Model manager rejects an unsafe relative root", AiModelManagerRejectsRelativeRoot),
+    ("Model manager rejects a model incompatible with the effective profile", AiModelManagerRejectsIncompatibleModel),
+    ("Model manager honors cancellation before hardware detection", AiModelManagerHonorsCancellation)
 };
 
 var failed = 0;
@@ -824,6 +832,158 @@ static void HardwareDetectorReadsRealSnapshot()
         "automatic hardware recommendation is invalid");
 }
 
+static void AiModelCatalogExposesRecommendations()
+{
+    var catalog = AiModelCatalog.Default;
+    Eq(1, catalog.Version);
+    Eq(3, catalog.Models.Count);
+    Eq(3, catalog.Models.Select(model => model.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    Eq(3, catalog.Models.Select(model => model.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+    foreach (var profile in new[] { AiProfile.Lightweight, AiProfile.Balanced, AiProfile.Performance })
+    {
+        var compatible = catalog.GetCompatibleModels(profile);
+        Eq(1, compatible.Count);
+        Eq(profile, compatible[0].Profile);
+        Eq(compatible[0], catalog.GetRecommendedModel(profile));
+        True(compatible[0].IsRecommended, $"{profile} does not have a recommended model");
+        Eq("Q4_K_M", compatible[0].Quantization);
+    }
+
+    Eq("qwen3-8b-q4-k-m", catalog.GetRecommendedModel(AiProfile.Performance).Id);
+    Throws(() => catalog.GetRecommendedModel(AiProfile.Automatic), "perfil");
+    Throws(() => catalog.GetById("unknown-model"), "não pertence");
+}
+
+static void AiModelCatalogRejectsUnsafeArtifactNames()
+{
+    var models = AiModelCatalog.Default.Models.ToArray();
+    models[0] = models[0] with { FileName = @"..\outside.gguf" };
+    Throws(() => _ = new AiModelCatalog(models), "inseguro");
+}
+
+static void AiModelManagerResolvesAutomaticProfile()
+{
+    WithAiModelRoot(root =>
+    {
+        var probe = new FakeWindowsHardwareProbe(HardwareSnapshot(
+            systemMemoryGiB: 16,
+            logicalProcessors: 16,
+            gpuMemoryGiB: 8,
+            cpuName: "AMD Ryzen 7 5700X",
+            gpuName: "NVIDIA GeForce RTX 3070"));
+        var manager = new LocalAiModelManager(
+            root,
+            hardwareDetector: new WindowsAiHardwareProfileDetector(probe));
+
+        var info = manager.GetInstallationInfoAsync(new AiConfiguration()).GetAwaiter().GetResult();
+        Eq(1, probe.CallCount);
+        Eq(AiProfile.Performance, info.EffectiveProfile);
+        Eq("qwen3-8b-q4-k-m", info.Model.Id);
+        Eq(AiInstallationState.NotInstalled, info.State);
+        True(!info.RuntimeAvailable && !info.ModelAvailable);
+        Eq(Path.Combine(root, "runtime", LocalAiModelManager.RuntimeFileName), info.RuntimePath);
+        Eq(Path.Combine(root, "models", info.Model.FileName), info.ModelPath);
+        True(!Directory.Exists(root), "inspection unexpectedly created the AI directory");
+    });
+}
+
+static void AiModelManagerRespectsManualProfile()
+{
+    WithAiModelRoot(root =>
+    {
+        var probe = new FakeWindowsHardwareProbe(HardwareSnapshot(16, 16, 8));
+        var manager = new LocalAiModelManager(
+            root,
+            hardwareDetector: new WindowsAiHardwareProfileDetector(probe));
+
+        var info = manager.GetInstallationInfoAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Lightweight
+        }).GetAwaiter().GetResult();
+
+        Eq(0, probe.CallCount);
+        Eq(AiProfile.Lightweight, info.EffectiveProfile);
+        Eq("qwen3-1.7b-q4-k-m", info.Model.Id);
+    });
+}
+
+static void AiModelManagerDerivesInstallationState()
+{
+    WithAiModelRoot(root =>
+    {
+        var manager = new LocalAiModelManager(root);
+        var configuration = new AiConfiguration { Profile = AiProfile.Balanced };
+
+        var missing = manager.GetInstallationInfoAsync(configuration).GetAwaiter().GetResult();
+        Eq(AiInstallationState.NotInstalled, missing.State);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(missing.RuntimePath)!);
+        File.WriteAllBytes(missing.RuntimePath, new byte[] { 1 });
+        var runtimeOnly = manager.GetInstallationInfoAsync(configuration).GetAwaiter().GetResult();
+        Eq(AiInstallationState.RuntimeInstalled, runtimeOnly.State);
+        True(runtimeOnly.RuntimeAvailable && !runtimeOnly.ModelAvailable);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(missing.ModelPath)!);
+        File.WriteAllBytes(missing.ModelPath, new byte[] { 2 });
+        var ready = manager.GetInstallationInfoAsync(configuration).GetAwaiter().GetResult();
+        Eq(AiInstallationState.Ready, ready.State);
+        True(ready.RuntimeAvailable && ready.ModelAvailable);
+        True(ready.Warnings.Any(warning => warning.Contains("desatualizado", StringComparison.Ordinal)),
+            "stale persisted state was not reported");
+
+        File.Delete(missing.RuntimePath);
+        var modelOnly = manager.GetInstallationInfoAsync(configuration).GetAwaiter().GetResult();
+        Eq(AiInstallationState.NotInstalled, modelOnly.State);
+        True(!modelOnly.RuntimeAvailable && modelOnly.ModelAvailable);
+        True(modelOnly.Warnings.Any(warning => warning.Contains("modelo existe", StringComparison.Ordinal)),
+            "model-only installation was not explained");
+
+        File.WriteAllBytes(missing.RuntimePath, Array.Empty<byte>());
+        var emptyRuntime = manager.GetInstallationInfoAsync(configuration).GetAwaiter().GetResult();
+        Eq(AiInstallationState.NotInstalled, emptyRuntime.State);
+        True(emptyRuntime.Warnings.Any(warning => warning.Contains("runtime está vazio", StringComparison.Ordinal)),
+            "empty runtime was not rejected");
+    });
+}
+
+static void AiModelManagerRejectsRelativeRoot()
+{
+    Throws(() => _ = new LocalAiModelManager("relative-ai-root"), "caminho absoluto");
+}
+
+static void AiModelManagerRejectsIncompatibleModel()
+{
+    WithAiModelRoot(root =>
+    {
+        var manager = new LocalAiModelManager(root);
+        Throws(() => manager.GetInstallationInfoAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Lightweight,
+            ModelId = "qwen3-4b-q4-k-m"
+        }).GetAwaiter().GetResult(), "não é compatível");
+    });
+}
+
+static void AiModelManagerHonorsCancellation()
+{
+    WithAiModelRoot(root =>
+    {
+        var probe = new FakeWindowsHardwareProbe(HardwareSnapshot(16, 16, 8));
+        var manager = new LocalAiModelManager(
+            root,
+            hardwareDetector: new WindowsAiHardwareProfileDetector(probe));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        ThrowsType<OperationCanceledException>(() => manager.GetInstallationInfoAsync(
+            new AiConfiguration(),
+            cancellation.Token).GetAwaiter().GetResult());
+        Eq(0, probe.CallCount);
+        True(!Directory.Exists(root), "cancelled inspection unexpectedly created the AI directory");
+    });
+}
+
 static WindowsHardwareSnapshot HardwareSnapshot(
     int systemMemoryGiB,
     int logicalProcessors,
@@ -870,6 +1030,21 @@ static void WithAiStore(Action<AiConfigurationStore, string> action)
     finally
     {
         try { Directory.Delete(directory, recursive: true); } catch { }
+    }
+}
+
+static void WithAiModelRoot(Action<string> action)
+{
+    var parent = Path.Combine(Path.GetTempPath(), "RotaDesktopAiModelTests", Guid.NewGuid().ToString("N"));
+    var root = Path.Combine(parent, "AI");
+    Directory.CreateDirectory(parent);
+    try
+    {
+        action(root);
+    }
+    finally
+    {
+        try { Directory.Delete(parent, recursive: true); } catch { }
     }
 }
 

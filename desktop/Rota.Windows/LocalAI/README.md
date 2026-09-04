@@ -30,10 +30,22 @@ Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. D
 
 A seleção manual continua sendo respeitada. Os limites identificam o PC-alvo Ryzen 7 5700X, RTX 3070 8 GB e 16 GB de RAM como `Performance`, sem criar perfil para modelos acima de 7B–8B Q4.
 
+## Catálogo e estado dos modelos
+
+`AiModelCatalog` é um catálogo local, imutável e versionado. Ele contém um modelo GGUF Q4_K_M recomendado para cada perfil concreto:
+
+- `Lightweight`: Qwen3 1.7B;
+- `Balanced`: Qwen3 4B;
+- `Performance`: Qwen3 8B.
+
+O catálogo não contém URL, credencial ou código de download. IDs e nomes de arquivo são validados para impedir duplicidade e caminhos relativos ou com travessia de diretório.
+
+`LocalAiModelManager` resolve o perfil automático usando o detector do bloco anterior, respeita uma escolha manual e calcula o estado real a partir dos arquivos locais. O resultado diferencia runtime e modelo disponíveis e só informa `Ready` quando ambos são arquivos não vazios. A inspeção não cria diretórios, não altera a configuração persistida e não executa nenhum binário.
+
 ## Testes
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
 ## Próximo bloco
 
-Definir o catálogo local de modelos compatíveis por perfil e implementar o estado do `IAiModelManager`, ainda sem download ou execução do runtime.
+Definir um manifesto verificável para os artefatos do runtime/modelo e preparar o fluxo de instalação com staging, integridade e cancelamento, ainda sem iniciar inferência nem conectar uma tela incompleta à interface principal.
