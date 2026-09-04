@@ -1,6 +1,10 @@
 using Rota.Desktop;
 using Rota.Desktop.LocalAI;
 using Rota.Desktop.Tests.Fakes;
+using System.IO.Compression;
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
 
@@ -65,8 +69,24 @@ var tests = new (string Name, Action Body)[]
     ("Model manager derives installation state from local files", AiModelManagerDerivesInstallationState),
     ("Model manager rejects an unsafe relative root", AiModelManagerRejectsRelativeRoot),
     ("Model manager rejects a model incompatible with the effective profile", AiModelManagerRejectsIncompatibleModel),
-    ("Model manager honors cancellation before hardware detection", AiModelManagerHonorsCancellation)
+    ("Model manager honors cancellation before hardware detection", AiModelManagerHonorsCancellation),
+    ("Installation manifest pins trusted runtime and model artifacts", AiInstallationManifestPinsArtifacts),
+    ("Installation manifest rejects mutable and untrusted sources", AiInstallationManifestRejectsUntrustedSources),
+    ("Local AI installer stages verifies and atomically activates files", AiInstallerActivatesVerifiedFiles),
+    ("Local AI installer selects Vulkan for Automatic Performance", AiInstallerSelectsVulkanForAutomaticPerformance),
+    ("Local AI installer rejects a corrupted artifact without activation", AiInstallerRejectsCorruptedArtifact),
+    ("Local AI installer cleans staging when download is cancelled", AiInstallerCleansCancelledStaging),
+    ("Local AI installer rejects runtime archive path traversal", AiInstallerRejectsArchiveTraversal),
+    ("Local AI installer rolls back when configuration activation fails", AiInstallerRollsBackFailedActivation),
+    ("Local AI installer preserves an active installation on failed update", AiInstallerPreservesActiveInstallation),
+    ("Local AI installer completes despite a broken completion observer", AiInstallerCompletionObserverCannotFailCommit),
+    ("Local AI installer prevents activation from competing instances", AiInstallerRejectsCompetingInstance),
+    ("HTTP AI downloader streams a response to disk", HttpAiDownloaderStreamsToDisk)
 };
+
+tests = tests.Concat(Rota.Desktop.Tests.InstallationRegressionTests.Cases).ToArray();
+if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
+    tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 
 var failed = 0;
 foreach (var test in tests)
@@ -835,7 +855,7 @@ static void HardwareDetectorReadsRealSnapshot()
 static void AiModelCatalogExposesRecommendations()
 {
     var catalog = AiModelCatalog.Default;
-    Eq(1, catalog.Version);
+    Eq(2, catalog.Version);
     Eq(3, catalog.Models.Count);
     Eq(3, catalog.Models.Select(model => model.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     Eq(3, catalog.Models.Select(model => model.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
@@ -847,7 +867,7 @@ static void AiModelCatalogExposesRecommendations()
         Eq(profile, compatible[0].Profile);
         Eq(compatible[0], catalog.GetRecommendedModel(profile));
         True(compatible[0].IsRecommended, $"{profile} does not have a recommended model");
-        Eq("Q4_K_M", compatible[0].Quantization);
+        Eq(profile == AiProfile.Lightweight ? "Q8_0" : "Q4_K_M", compatible[0].Quantization);
     }
 
     Eq("qwen3-8b-q4-k-m", catalog.GetRecommendedModel(AiProfile.Performance).Id);
@@ -904,7 +924,7 @@ static void AiModelManagerRespectsManualProfile()
 
         Eq(0, probe.CallCount);
         Eq(AiProfile.Lightweight, info.EffectiveProfile);
-        Eq("qwen3-1.7b-q4-k-m", info.Model.Id);
+        Eq("qwen3-1.7b-q8-0", info.Model.Id);
     });
 }
 
@@ -984,6 +1004,352 @@ static void AiModelManagerHonorsCancellation()
     });
 }
 
+static void AiInstallationManifestPinsArtifacts()
+{
+    var manifest = AiInstallationManifest.Default;
+    Eq(AiInstallationManifest.CurrentManifestVersion, manifest.Version);
+    Eq(2, manifest.RuntimePackages.Count);
+    Eq(3, manifest.ModelPackages.Count);
+    Eq("llama.cpp-b10795-win-cpu-x64", manifest.GetRuntimePackage(AiComputePreference.Cpu).Archive.Id);
+    Eq("llama.cpp-b10795-win-vulkan-x64", manifest.GetRuntimePackage(AiComputePreference.Gpu).Archive.Id);
+    Eq("d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+        manifest.GetModelPackage("qwen3-8b-q4-k-m").Artifact.Sha256);
+
+    var artifacts = manifest.RuntimePackages.Select(package => package.Archive)
+        .Concat(manifest.ModelPackages.Select(package => package.Artifact))
+        .ToArray();
+    Eq(5, artifacts.Select(artifact => artifact.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    foreach (var artifact in artifacts)
+    {
+        Eq(Uri.UriSchemeHttps, artifact.Source.Scheme);
+        True(artifact.ExpectedSizeBytes > 0, "manifest contains an empty artifact");
+        Eq(64, artifact.Sha256.Length);
+        True(!artifact.Source.AbsolutePath.Contains("/main/", StringComparison.OrdinalIgnoreCase),
+            "manifest contains an unpinned model URL");
+        True(!artifact.Source.AbsolutePath.Contains("/latest/", StringComparison.OrdinalIgnoreCase),
+            "manifest contains an unpinned runtime URL");
+    }
+}
+
+static void AiInstallationManifestRejectsUntrustedSources()
+{
+    var source = AiInstallationManifest.Default;
+    var insecureRuntimes = source.RuntimePackages.ToArray();
+    insecureRuntimes[0] = insecureRuntimes[0] with
+    {
+        Archive = insecureRuntimes[0].Archive with
+        {
+            Source = new Uri("http://github.com/ggml-org/llama.cpp/releases/download/b10795/runtime.zip")
+        }
+    };
+    Throws(() => _ = new AiInstallationManifest(
+        source.Version,
+        insecureRuntimes,
+        source.ModelPackages), "origem");
+
+    var mutableModels = source.ModelPackages.ToArray();
+    mutableModels[0] = mutableModels[0] with
+    {
+        Artifact = mutableModels[0].Artifact with
+        {
+            Source = new Uri("https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q8_0.gguf")
+        }
+    };
+    Throws(() => _ = new AiInstallationManifest(
+        source.Version,
+        source.RuntimePackages,
+        mutableModels), "origem");
+}
+
+static void AiInstallerActivatesVerifiedFiles()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        var downloader = new FakeAiArtifactDownloader(fixture.Artifacts);
+        using var store = new AiConfigurationStore(Path.Combine(root, "config.json"));
+        var manager = new LocalAiModelManager(root);
+        using var installer = new LocalAiInstaller(root, store, manager, downloader, fixture.Manifest);
+        var progress = new InlineProgress<AiInstallationProgress>();
+
+        var result = installer.InstallAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Balanced,
+            ComputePreference = AiComputePreference.Cpu
+        }, progress).GetAwaiter().GetResult();
+
+        Eq(AiInstallationState.Ready, result.Configuration.InstallationState);
+        Eq(AiInstallationState.Ready, result.InstallationInfo.State);
+        Eq("qwen3-4b-q4-k-m", result.Configuration.ModelId);
+        True(File.Exists(result.Configuration.RuntimePath), "installed runtime is missing");
+        True(File.Exists(result.Configuration.ModelPath), "installed model is missing");
+        True(result.Configuration.RuntimePath.StartsWith(result.InstallationDirectory, StringComparison.OrdinalIgnoreCase));
+        True(result.Configuration.ModelPath.StartsWith(result.InstallationDirectory, StringComparison.OrdinalIgnoreCase));
+        var receiptPath = Path.Combine(result.InstallationDirectory, "installation.json");
+        True(File.Exists(receiptPath), "installation receipt is missing");
+        var receipt = JsonSerializer.Deserialize<AiInstallationReceipt>(File.ReadAllText(receiptPath))
+            ?? throw new InvalidOperationException("installation receipt is empty");
+        Eq(AiInstallationReceipt.CurrentSchemaVersion, receipt.SchemaVersion);
+        Eq("test-runtime-cpu", receipt.RuntimeArtifactId);
+        Eq("qwen3-4b-q4-k-m", receipt.ModelId);
+        Eq("test-model-balanced", receipt.ModelArtifactId);
+        Eq(2, downloader.CallCount);
+        Eq(fixture.Manifest.GetRuntimePackage(AiComputePreference.Cpu).Archive.Source, downloader.RequestedSources[0]);
+        Eq(fixture.Manifest.GetModelPackage("qwen3-4b-q4-k-m").Artifact.Source, downloader.RequestedSources[1]);
+        Eq(AiInstallationStage.Completed, progress.Values[^1].Stage);
+        True(!Directory.EnumerateDirectories(installer.StagingDirectory).Any(), "staging was not cleaned after success");
+
+        var persisted = store.LoadAsync().GetAwaiter().GetResult();
+        Eq(result.Configuration, persisted);
+    });
+}
+
+static void AiInstallerSelectsVulkanForAutomaticPerformance()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        var downloader = new FakeAiArtifactDownloader(fixture.Artifacts);
+        var probe = new FakeWindowsHardwareProbe(HardwareSnapshot(16, 16, 8));
+        using var store = new AiConfigurationStore(Path.Combine(root, "config.json"));
+        var manager = new LocalAiModelManager(
+            root,
+            hardwareDetector: new WindowsAiHardwareProfileDetector(probe));
+        using var installer = new LocalAiInstaller(root, store, manager, downloader, fixture.Manifest);
+
+        var result = installer.InstallAsync(new AiConfiguration()).GetAwaiter().GetResult();
+        Eq(AiProfile.Performance, result.InstallationInfo.EffectiveProfile);
+        Eq("qwen3-8b-q4-k-m", result.Configuration.ModelId);
+        Eq(fixture.Manifest.GetRuntimePackage(AiComputePreference.Gpu).Archive.Source, downloader.RequestedSources[0]);
+    });
+}
+
+static void AiInstallerRejectsCorruptedArtifact()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        var corruptArtifacts = fixture.Artifacts.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
+        var modelSource = fixture.Manifest.GetModelPackage("qwen3-4b-q4-k-m").Artifact.Source;
+        corruptArtifacts[modelSource][0] ^= 0xFF;
+        var downloader = new FakeAiArtifactDownloader(corruptArtifacts);
+        var configurationPath = Path.Combine(root, "config.json");
+        using var store = new AiConfigurationStore(configurationPath);
+        var manager = new LocalAiModelManager(root);
+        using var installer = new LocalAiInstaller(root, store, manager, downloader, fixture.Manifest);
+
+        Throws(() => installer.InstallAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Balanced,
+            ComputePreference = AiComputePreference.Cpu
+        }).GetAwaiter().GetResult(), "SHA-256");
+        True(!File.Exists(configurationPath), "corrupt installation changed the active configuration");
+        True(!Directory.Exists(installer.InstallationsDirectory), "corrupt installation was activated");
+        True(!Directory.EnumerateDirectories(installer.StagingDirectory).Any(), "corrupt staging was not cleaned");
+    });
+}
+
+static void AiInstallerCleansCancelledStaging()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        using var cancellation = new CancellationTokenSource();
+        var downloader = new FakeAiArtifactDownloader(fixture.Artifacts)
+        {
+            CancelBeforeCall = 2,
+            CancelAction = cancellation.Cancel
+        };
+        var configurationPath = Path.Combine(root, "config.json");
+        using var store = new AiConfigurationStore(configurationPath);
+        var manager = new LocalAiModelManager(root);
+        using var installer = new LocalAiInstaller(root, store, manager, downloader, fixture.Manifest);
+
+        ThrowsType<OperationCanceledException>(() => installer.InstallAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Balanced,
+            ComputePreference = AiComputePreference.Cpu
+        }, cancellationToken: cancellation.Token).GetAwaiter().GetResult());
+        Eq(2, downloader.CallCount);
+        True(!File.Exists(configurationPath), "cancelled installation changed the active configuration");
+        True(!Directory.Exists(installer.InstallationsDirectory), "cancelled installation was activated");
+        True(!Directory.EnumerateDirectories(installer.StagingDirectory).Any(), "cancelled staging was not cleaned");
+    });
+}
+
+static void AiInstallerRejectsArchiveTraversal()
+{
+    WithAiModelRoot(root =>
+    {
+        var maliciousRuntime = CreateRuntimeArchive(("../outside.exe", new byte[] { 1, 2, 3 }));
+        var fixture = CreateInstallationFixture(maliciousRuntime);
+        var downloader = new FakeAiArtifactDownloader(fixture.Artifacts);
+        using var store = new AiConfigurationStore(Path.Combine(root, "config.json"));
+        var manager = new LocalAiModelManager(root);
+        using var installer = new LocalAiInstaller(root, store, manager, downloader, fixture.Manifest);
+
+        Throws(() => installer.InstallAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Balanced,
+            ComputePreference = AiComputePreference.Cpu
+        }).GetAwaiter().GetResult(), "inseguro");
+        True(!File.Exists(Path.Combine(Path.GetDirectoryName(root)!, "outside.exe")),
+            "runtime archive escaped the staging directory");
+        True(!Directory.Exists(installer.InstallationsDirectory), "unsafe runtime was activated");
+    });
+}
+
+static void AiInstallerRollsBackFailedActivation()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        var downloader = new FakeAiArtifactDownloader(fixture.Artifacts);
+        var manager = new LocalAiModelManager(root);
+        var store = new FailingAiConfigurationStore(Path.Combine(root, "config.json"));
+        using var installer = new LocalAiInstaller(root, store, manager, downloader, fixture.Manifest);
+
+        Throws(() => installer.InstallAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Balanced,
+            ComputePreference = AiComputePreference.Cpu
+        }).GetAwaiter().GetResult(), "sem alterar");
+        True(!Directory.EnumerateDirectories(installer.InstallationsDirectory).Any(),
+            "failed configuration activation left an active installation");
+        True(!Directory.EnumerateDirectories(installer.StagingDirectory).Any(),
+            "failed configuration activation left staging files");
+    });
+}
+
+static void HttpAiDownloaderStreamsToDisk()
+{
+    WithAiModelRoot(root =>
+    {
+        Directory.CreateDirectory(root);
+        var payload = Enumerable.Range(0, 300_000).Select(index => (byte)(index % 251)).ToArray();
+        using var client = new HttpClient(new StaticHttpMessageHandler(payload));
+        var downloader = new HttpAiArtifactDownloader(client);
+        var path = Path.Combine(root, "artifact.bin");
+        var progress = new InlineProgress<AiDownloadProgress>();
+
+        downloader.DownloadAsync(new Uri("https://github.com/Rota/test/artifact.bin"), path, payload.LongLength, progress)
+            .GetAwaiter().GetResult();
+        True(payload.SequenceEqual(File.ReadAllBytes(path)), "HTTP downloader changed the response bytes");
+        Eq(payload.LongLength, progress.Values[^1].BytesReceived);
+        Eq<long?>(payload.LongLength, progress.Values[^1].TotalBytes);
+    });
+}
+
+static void AiInstallerPreservesActiveInstallation()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        using var store = new AiConfigurationStore(Path.Combine(root, "config.json"));
+        var manager = new LocalAiModelManager(root);
+        using var firstInstaller = new LocalAiInstaller(root, store, manager,
+            new FakeAiArtifactDownloader(fixture.Artifacts), fixture.Manifest);
+        var original = firstInstaller.InstallAsync(new AiConfiguration
+        {
+            Profile = AiProfile.Balanced, ComputePreference = AiComputePreference.Cpu
+        }).GetAwaiter().GetResult();
+        var before = File.ReadAllBytes(store.ConfigurationPath);
+
+        var corrupted = fixture.Artifacts.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
+        corrupted[fixture.Manifest.GetModelPackage(original.Configuration.ModelId).Artifact.Source][0] ^= 0xFF;
+        using var failedInstaller = new LocalAiInstaller(root, store, manager,
+            new FakeAiArtifactDownloader(corrupted), fixture.Manifest);
+        Throws(() => failedInstaller.InstallAsync(original.Configuration).GetAwaiter().GetResult(), "SHA-256");
+        True(before.SequenceEqual(File.ReadAllBytes(store.ConfigurationPath)), "failed update changed config");
+        Eq(1, Directory.GetDirectories(firstInstaller.InstallationsDirectory).Length);
+        True(File.Exists(original.Configuration.RuntimePath) && File.Exists(original.Configuration.ModelPath));
+        True(!Directory.EnumerateDirectories(firstInstaller.StagingDirectory).Any());
+    });
+}
+
+static void OfficialRuntimeArchivesStage()
+{
+    var archiveRoot = Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")!;
+    foreach (var package in AiInstallationManifest.Default.RuntimePackages)
+    {
+        var bytes = File.ReadAllBytes(Path.Combine(archiveRoot, package.Archive.FileName));
+        Eq(package.Archive.ExpectedSizeBytes, bytes.LongLength);
+        Eq(package.Archive.Sha256, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+        WithAiModelRoot(root =>
+        {
+            var fixture = CreateInstallationFixture(bytes);
+            using var store = new AiConfigurationStore(Path.Combine(root, "config.json"));
+            using var installer = new LocalAiInstaller(root, store, new LocalAiModelManager(root),
+                new FakeAiArtifactDownloader(fixture.Artifacts), fixture.Manifest);
+            var result = installer.InstallAsync(new AiConfiguration
+            {
+                Profile = AiProfile.Balanced, ComputePreference = package.ComputePreference
+            }).GetAwaiter().GetResult();
+            using var archiveStream = new MemoryStream(bytes, writable: false);
+            using var archive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
+            foreach (var entry in archive.Entries.Where(entry => entry.Name.Length > 0))
+            {
+                using var expected = entry.Open();
+                using var actual = File.OpenRead(Path.Combine(
+                    Path.GetDirectoryName(result.Configuration.RuntimePath)!, entry.FullName));
+                True(SHA256.HashData(expected).SequenceEqual(SHA256.HashData(actual)),
+                    $"runtime extraction changed {entry.FullName}");
+            }
+            True(Directory.GetFiles(Path.GetDirectoryName(result.Configuration.RuntimePath)!, "*.dll").Length > 0);
+            Eq(AiInstallationState.Ready, result.InstallationInfo.State);
+        });
+    }
+}
+
+static void AiInstallerCompletionObserverCannotFailCommit()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        using var store = new AiConfigurationStore(Path.Combine(root, "config.json"));
+        using var installer = new LocalAiInstaller(root, store, new LocalAiModelManager(root),
+            new FakeAiArtifactDownloader(fixture.Artifacts), fixture.Manifest);
+        using var cancellation = new CancellationTokenSource();
+        var result = installer.InstallAsync(new AiConfiguration { Profile = AiProfile.Balanced },
+            new CallbackInstallationProgress(value =>
+            {
+                if (value.Stage != AiInstallationStage.Completed) return;
+                cancellation.Cancel();
+                throw new OperationCanceledException("observer disposed after commit");
+            }), cancellation.Token).GetAwaiter().GetResult();
+        Eq(result.Configuration, store.LoadAsync().GetAwaiter().GetResult());
+        True(File.Exists(result.Configuration.RuntimePath));
+        Eq(AiInstallationState.Ready, result.InstallationInfo.State);
+    });
+}
+
+static void AiInstallerRejectsCompetingInstance()
+{
+    WithAiModelRoot(root =>
+    {
+        var fixture = CreateInstallationFixture();
+        using var store = new AiConfigurationStore(Path.Combine(root, "config.json"));
+        var manager = new LocalAiModelManager(root);
+        var competitorDownloads = new FakeAiArtifactDownloader(fixture.Artifacts);
+        using var competitor = new LocalAiInstaller(root, store, manager, competitorDownloads, fixture.Manifest);
+        using var installer = new LocalAiInstaller(root, store, manager,
+            new FakeAiArtifactDownloader(fixture.Artifacts), fixture.Manifest);
+        var attempted = false;
+        var result = installer.InstallAsync(new AiConfiguration { Profile = AiProfile.Balanced },
+            new CallbackInstallationProgress(value =>
+            {
+                if (attempted || value.Stage != AiInstallationStage.DownloadingRuntime) return;
+                attempted = true;
+                ThrowsType<AiInstallationException>(() => competitor.InstallAsync(
+                    new AiConfiguration { Profile = AiProfile.Balanced }).GetAwaiter().GetResult());
+            })).GetAwaiter().GetResult();
+        True(attempted);
+        Eq(0, competitorDownloads.CallCount);
+        Eq(result.Configuration, store.LoadAsync().GetAwaiter().GetResult());
+        Eq(1, Directory.GetDirectories(installer.InstallationsDirectory).Length);
+    });
+}
+
 static WindowsHardwareSnapshot HardwareSnapshot(
     int systemMemoryGiB,
     int logicalProcessors,
@@ -1046,6 +1412,87 @@ static void WithAiModelRoot(Action<string> action)
     {
         try { Directory.Delete(parent, recursive: true); } catch { }
     }
+}
+
+static InstallationFixture CreateInstallationFixture(byte[]? runtimeArchive = null)
+{
+    runtimeArchive ??= CreateRuntimeArchive(
+        (LocalAiModelManager.RuntimeFileName, new byte[] { 1, 2, 3, 4 }),
+        ("ggml-test.dll", new byte[] { 5, 6, 7 }));
+    var lightweightModel = new byte[] { 11, 12, 13 };
+    var balancedModel = new byte[] { 21, 22, 23, 24 };
+    var performanceModel = new byte[] { 31, 32, 33, 34, 35 };
+
+    var cpu = TestArtifact(
+        "test-runtime-cpu",
+        "https://github.com/Rota/test/releases/download/v1/runtime-cpu.zip",
+        "runtime-cpu.zip",
+        runtimeArchive);
+    var gpu = TestArtifact(
+        "test-runtime-gpu",
+        "https://github.com/Rota/test/releases/download/v1/runtime-gpu.zip",
+        "runtime-gpu.zip",
+        runtimeArchive);
+    var lightweight = TestArtifact(
+        "test-model-lightweight",
+        "https://huggingface.co/Qwen/test/resolve/1111111111111111111111111111111111111111/Qwen3-1.7B-Q8_0.gguf",
+        "Qwen3-1.7B-Q8_0.gguf",
+        lightweightModel);
+    var balanced = TestArtifact(
+        "test-model-balanced",
+        "https://huggingface.co/Qwen/test/resolve/2222222222222222222222222222222222222222/Qwen3-4B-Q4_K_M.gguf",
+        "Qwen3-4B-Q4_K_M.gguf",
+        balancedModel);
+    var performance = TestArtifact(
+        "test-model-performance",
+        "https://huggingface.co/Qwen/test/resolve/3333333333333333333333333333333333333333/Qwen3-8B-Q4_K_M.gguf",
+        "Qwen3-8B-Q4_K_M.gguf",
+        performanceModel);
+
+    var manifest = new AiInstallationManifest(
+        AiInstallationManifest.CurrentManifestVersion,
+        new[]
+        {
+            new AiRuntimePackage(AiComputePreference.Cpu, cpu, LocalAiModelManager.RuntimeFileName),
+            new AiRuntimePackage(AiComputePreference.Gpu, gpu, LocalAiModelManager.RuntimeFileName)
+        },
+        new[]
+        {
+            new AiModelPackage("qwen3-1.7b-q8-0", lightweight),
+            new AiModelPackage("qwen3-4b-q4-k-m", balanced),
+            new AiModelPackage("qwen3-8b-q4-k-m", performance)
+        });
+    var artifacts = new Dictionary<Uri, byte[]>
+    {
+        [cpu.Source] = runtimeArchive,
+        [gpu.Source] = runtimeArchive,
+        [lightweight.Source] = lightweightModel,
+        [balanced.Source] = balancedModel,
+        [performance.Source] = performanceModel
+    };
+    return new InstallationFixture(manifest, artifacts);
+}
+
+static AiDownloadArtifact TestArtifact(string id, string source, string fileName, byte[] content) => new(
+    id,
+    new Uri(source),
+    fileName,
+    content.LongLength,
+    Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant());
+
+static byte[] CreateRuntimeArchive(params (string Path, byte[] Content)[] entries)
+{
+    using var output = new MemoryStream();
+    using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+    {
+        foreach (var item in entries)
+        {
+            var entry = archive.CreateEntry(item.Path, CompressionLevel.Fastest);
+            using var stream = entry.Open();
+            stream.Write(item.Content);
+        }
+    }
+    return output.ToArray();
 }
 
 static void WithRepository(DateTime initialNow, Action<StudyRepository, string, MutableClock> action)
@@ -1132,4 +1579,60 @@ sealed class MutableClock
 {
     public MutableClock(DateTime value) => Value = value;
     public DateTime Value { get; set; }
+}
+
+sealed record InstallationFixture(
+    AiInstallationManifest Manifest,
+    IReadOnlyDictionary<Uri, byte[]> Artifacts);
+
+sealed class InlineProgress<T> : IProgress<T>
+{
+    public List<T> Values { get; } = new();
+    public void Report(T value) => Values.Add(value);
+}
+
+sealed class CallbackInstallationProgress(Action<AiInstallationProgress> callback) : IProgress<AiInstallationProgress>
+{
+    public void Report(AiInstallationProgress value) => callback(value);
+}
+
+sealed class StaticHttpMessageHandler : HttpMessageHandler
+{
+    private readonly byte[] _content;
+
+    public StaticHttpMessageHandler(byte[] content)
+    {
+        _content = content;
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var content = new ByteArrayContent(_content);
+        content.Headers.ContentLength = _content.LongLength;
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = content,
+            RequestMessage = request
+        });
+    }
+}
+
+sealed class FailingAiConfigurationStore : IAiConfigurationStore
+{
+    public string ConfigurationPath { get; }
+    public string LastLoadWarning => "";
+
+    public FailingAiConfigurationStore(string configurationPath)
+    {
+        ConfigurationPath = configurationPath;
+    }
+
+    public Task<AiConfiguration> LoadAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(new AiConfiguration());
+
+    public Task SaveAsync(AiConfiguration configuration, CancellationToken cancellationToken = default) =>
+        Task.FromException(new IOException("simulated configuration activation failure"));
 }

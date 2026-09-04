@@ -7,7 +7,7 @@ on:
       - 'desktop/**'
       - '.github/workflows/windows.yml'
   push:
-    branches: [main]
+    branches: [main, feat/windows-local-ai]
     paths:
       - 'desktop/**'
       - '.github/workflows/windows.yml'

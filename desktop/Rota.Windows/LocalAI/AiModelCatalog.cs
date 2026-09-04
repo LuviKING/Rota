@@ -2,17 +2,17 @@ namespace Rota.Desktop.LocalAI;
 
 public sealed class AiModelCatalog : IAiModelCatalog
 {
-    public const int CurrentCatalogVersion = 1;
+    public const int CurrentCatalogVersion = 2;
 
     private static readonly IReadOnlyList<AiModelDescriptor> DefaultModels = Array.AsReadOnly(new[]
     {
         new AiModelDescriptor(
-            "qwen3-1.7b-q4-k-m",
-            "Qwen3 1.7B Q4_K_M",
+            "qwen3-1.7b-q8-0",
+            "Qwen3 1.7B Q8_0",
             AiProfile.Lightweight,
             "1.7B",
-            "Q4_K_M",
-            "qwen3-1.7b-q4-k-m.gguf",
+            "Q8_0",
+            "Qwen3-1.7B-Q8_0.gguf",
             4096,
             IsRecommended: true),
         new AiModelDescriptor(
@@ -21,7 +21,7 @@ public sealed class AiModelCatalog : IAiModelCatalog
             AiProfile.Balanced,
             "4B",
             "Q4_K_M",
-            "qwen3-4b-q4-k-m.gguf",
+            "Qwen3-4B-Q4_K_M.gguf",
             4096,
             IsRecommended: true),
         new AiModelDescriptor(
@@ -30,7 +30,7 @@ public sealed class AiModelCatalog : IAiModelCatalog
             AiProfile.Performance,
             "8B",
             "Q4_K_M",
-            "qwen3-8b-q4-k-m.gguf",
+            "Qwen3-8B-Q4_K_M.gguf",
             8192,
             IsRecommended: true)
     });
@@ -99,6 +99,8 @@ public sealed class AiModelCatalog : IAiModelCatalog
             }
             if (!fileNames.Add(model.FileName))
                 throw new AiContractValidationException("O catálogo local contém nomes de arquivo duplicados.");
+            if (model.FileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                throw new AiContractValidationException("O catálogo local contém um nome de arquivo de modelo inseguro.");
             if (model.DefaultContextSize is < 512 or > 131_072)
                 throw new AiContractValidationException("O catálogo local contém um contexto de modelo inválido.");
         }
