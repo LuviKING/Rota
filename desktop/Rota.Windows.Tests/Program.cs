@@ -1,4 +1,6 @@
 using Rota.Desktop;
+using Rota.Desktop.LocalAI;
+using Rota.Desktop.Tests.Fakes;
 using System.Text.Json;
 using System.Windows;
 
@@ -34,7 +36,18 @@ var tests = new (string Name, Action Body)[]
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
-    ("AI prompt explains Rota execution model", PromptExplainsExecutionModel)
+    ("AI prompt explains Rota execution model", PromptExplainsExecutionModel),
+    ("Local AI profiles expose the supported product tiers", AiProfilesAreStable),
+    ("Local AI configuration serializes and reloads", AiConfigurationSerializationRoundTrips),
+    ("Local AI configuration stays separate from study state", AiConfigurationUsesSeparateStorage),
+    ("Local AI configuration recovers its atomic backup", AiConfigurationRecoversAtomicBackup),
+    ("Local AI input and configuration validation reject invalid contracts", AiValidationRejectsInvalidContracts),
+    ("Fake local AI backend returns a valid StudyPlan proposal", FakeAiBuildsStudyPlanProposal),
+    ("Fake local AI backend returns structured change operations", FakeAiBuildsChangeProposal),
+    ("Fake local AI backend is deterministic", FakeAiIsDeterministic),
+    ("Local AI proposal creation honors cancellation", AiPlanningHonorsCancellation),
+    ("Local AI backend failures are controlled", AiBackendFailureIsControlled),
+    ("Local AI proposals cannot mutate study state", AiProposalDoesNotMutateStudyState)
 };
 
 var failed = 0;
@@ -449,6 +462,247 @@ static void PromptExplainsExecutionModel()
     Contains(prompt, "histórico protegido");
     Contains(prompt, "Tenho dificuldade em frações.");
     Contains(prompt, "AUDITORIA OBRIGATÓRIA");
+}
+
+static void AiProfilesAreStable()
+{
+    Eq("Automatic,Lightweight,Balanced,Performance", string.Join(',', Enum.GetNames<AiProfile>()));
+    var defaults = new AiConfiguration();
+    Eq(AiProfile.Automatic, defaults.Profile);
+    Eq(AiComputePreference.Automatic, defaults.ComputePreference);
+    Eq(AiInstallationState.NotInstalled, defaults.InstallationState);
+    Eq(4096, defaults.ContextSize);
+}
+
+static void AiConfigurationSerializationRoundTrips()
+{
+    WithAiStore((store, path) =>
+    {
+        var directory = Path.GetDirectoryName(path)!;
+        var expected = new AiConfiguration
+        {
+            Profile = AiProfile.Balanced,
+            ModelId = "qwen-balanced-q4",
+            ModelPath = Path.Combine(directory, "models", "qwen-balanced-q4.gguf"),
+            RuntimePath = Path.Combine(directory, "runtime", "llama-server.exe"),
+            ContextSize = 8192,
+            ComputePreference = AiComputePreference.Gpu,
+            InstallationState = AiInstallationState.Ready
+        };
+
+        store.SaveAsync(expected).GetAwaiter().GetResult();
+        var serialized = File.ReadAllText(path);
+        Contains(serialized, "\"Profile\": \"Balanced\"");
+        Contains(serialized, "\"ComputePreference\": \"Gpu\"");
+
+        var loaded = store.LoadAsync().GetAwaiter().GetResult();
+        Eq(expected, loaded);
+    });
+}
+
+static void AiConfigurationUsesSeparateStorage()
+{
+    using var store = new AiConfigurationStore();
+    Eq("config.json", Path.GetFileName(store.ConfigurationPath));
+    Eq("AI", new DirectoryInfo(Path.GetDirectoryName(store.ConfigurationPath)!).Name);
+    True(!store.ConfigurationPath.EndsWith("desktop-state.json", StringComparison.OrdinalIgnoreCase));
+}
+
+static void AiConfigurationRecoversAtomicBackup()
+{
+    WithAiStore((store, path) =>
+    {
+        var first = new AiConfiguration { Profile = AiProfile.Lightweight, ContextSize = 2048 };
+        var second = new AiConfiguration { Profile = AiProfile.Performance, ContextSize = 16384 };
+        store.SaveAsync(first).GetAwaiter().GetResult();
+        store.SaveAsync(second).GetAwaiter().GetResult();
+        True(File.Exists(path + ".bak"), "AI configuration backup was not created");
+        File.WriteAllText(path, "{invalid");
+
+        var recovered = store.LoadAsync().GetAwaiter().GetResult();
+        Eq(first, recovered);
+        Contains(store.LastLoadWarning, "recuperou");
+        True(Directory.GetFiles(Path.GetDirectoryName(path)!, "config.corrupt-*.json").Length == 1,
+            "invalid AI configuration was not preserved");
+    });
+}
+
+static void AiValidationRejectsInvalidContracts()
+{
+    Throws(() => AiContractValidator.ValidateInput(new AiAssistantInput()), "ao menos");
+    Throws(() => AiContractValidator.ValidateInput(new AiAssistantInput
+    {
+        FreeText = "Monte um plano.",
+        AvailableHoursPerDay = -1
+    }), "maiores que zero");
+    Throws(() => AiContractValidator.ValidateInput(new AiAssistantInput
+    {
+        FreeText = "Monte um plano.",
+        ExamDate = "2030-02-30"
+    }), "data válida");
+    Throws(() => AiContractValidator.ValidateConfiguration(new AiConfiguration
+    {
+        Profile = (AiProfile)999
+    }), "perfil");
+    Throws(() => AiContractValidator.ValidateConfiguration(new AiConfiguration
+    {
+        InstallationState = AiInstallationState.Ready
+    }), "runtime");
+}
+
+static void FakeAiBuildsStudyPlanProposal()
+{
+    WithAiStore((store, _) =>
+    {
+        var backend = new FakeLocalAiBackend();
+        var service = new AiPlanningService(backend, store);
+        var proposal = service.CreateProposalAsync(
+            ValidAiInput(),
+            AiProposalKind.StudyPlan).GetAwaiter().GetResult();
+
+        Eq(1, backend.CallCount);
+        Eq(AiProposalStatus.Pending, proposal.Status);
+        Eq(AiProposalKind.StudyPlan, proposal.Kind);
+        True(proposal.StudyPlan is not null && proposal.Changes is null);
+        var parsed = StudyPlanImporter.Parse(proposal.StudyPlan!.StudyPlanJson);
+        Eq("fake-local-ai-plan", parsed.PlanId);
+        Eq(1, parsed.Sessions.Count);
+    });
+}
+
+static void FakeAiBuildsChangeProposal()
+{
+    WithAiStore((store, _) =>
+    {
+        var backend = new FakeLocalAiBackend();
+        var service = new AiPlanningService(backend, store);
+        var proposal = service.CreateProposalAsync(
+            ValidAiInput(),
+            AiProposalKind.PlanChanges).GetAwaiter().GetResult();
+
+        Eq(AiProposalKind.PlanChanges, proposal.Kind);
+        True(proposal.Changes is not null && proposal.StudyPlan is null);
+        Eq(1, proposal.Changes!.Operations.Count);
+        Eq(AiPlanOperationType.RedistributeLoad, proposal.Changes.Operations[0].Type);
+        Eq(3d, proposal.Changes.Operations[0].MaxHoursPerDay);
+    });
+}
+
+static void FakeAiIsDeterministic()
+{
+    var backend = new FakeLocalAiBackend();
+    var first = backend.CreateProposalAsync(
+        ValidAiInput(),
+        AiProposalKind.StudyPlan,
+        new AiConfiguration()).GetAwaiter().GetResult();
+    var second = backend.CreateProposalAsync(
+        ValidAiInput(),
+        AiProposalKind.StudyPlan,
+        new AiConfiguration()).GetAwaiter().GetResult();
+
+    Eq(first.Id, second.Id);
+    Eq(first.CreatedAtUtc, second.CreatedAtUtc);
+    Eq(first.Summary, second.Summary);
+    Eq(first.StudyPlan!.StudyPlanJson, second.StudyPlan!.StudyPlanJson);
+}
+
+static void AiPlanningHonorsCancellation()
+{
+    WithAiStore((store, _) =>
+    {
+        var backend = new FakeLocalAiBackend();
+        var service = new AiPlanningService(backend, store);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        ThrowsType<OperationCanceledException>(() => service.CreateProposalAsync(
+            ValidAiInput(),
+            AiProposalKind.StudyPlan,
+            cancellation.Token).GetAwaiter().GetResult());
+        Eq(0, backend.CallCount);
+    });
+}
+
+static void AiBackendFailureIsControlled()
+{
+    WithAiStore((store, _) =>
+    {
+        var backend = new FakeLocalAiBackend { SimulateFailure = true };
+        var service = new AiPlanningService(backend, store);
+        try
+        {
+            service.CreateProposalAsync(ValidAiInput(), AiProposalKind.StudyPlan).GetAwaiter().GetResult();
+        }
+        catch (AiPlanningException ex)
+        {
+            Contains(ex.Message, "não conseguiu preparar");
+            True(ex.InnerException is InvalidOperationException, "controlled failure did not preserve its cause");
+            return;
+        }
+
+        throw new InvalidOperationException("expected controlled AI planning failure was not thrown");
+    });
+}
+
+static void AiProposalDoesNotMutateStudyState()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repository, statePath, _) =>
+    {
+        True(repository.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "protected-plan",
+            1,
+            "2026-09-30",
+            SessionJson("protected-session", "2026-09-02", 60)))).Success);
+        var before = File.ReadAllText(statePath);
+
+        WithAiStore((store, _) =>
+        {
+            var service = new AiPlanningService(new FakeLocalAiBackend(), store);
+            var proposal = service.CreateProposalAsync(
+                ValidAiInput(),
+                AiProposalKind.PlanChanges).GetAwaiter().GetResult();
+            Eq(AiProposalStatus.Pending, proposal.Status);
+        });
+
+        Eq(before, File.ReadAllText(statePath));
+        Eq("protected-plan", repository.Settings.ActivePlanId);
+        Eq(1, repository.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+    });
+}
+
+static AiAssistantInput ValidAiInput() => new()
+{
+    ObjectiveOrExam = "ENEM",
+    ExamDate = "2030-11-03",
+    AvailableHoursPerDay = 3,
+    AvailableDays = new List<DayOfWeek>
+    {
+        DayOfWeek.Monday,
+        DayOfWeek.Tuesday,
+        DayOfWeek.Wednesday,
+        DayOfWeek.Thursday,
+        DayOfWeek.Friday
+    },
+    StrongSubjects = new List<string> { "História" },
+    WeakSubjects = new List<string> { "Matemática", "Química" },
+    Goal = "Preparar um plano equilibrado.",
+    FreeText = "Tenho três horas por dia para estudar."
+};
+
+static void WithAiStore(Action<AiConfigurationStore, string> action)
+{
+    var directory = Path.Combine(Path.GetTempPath(), "RotaDesktopAiTests", Guid.NewGuid().ToString("N"));
+    var path = Path.Combine(directory, "AI", "config.json");
+    Directory.CreateDirectory(directory);
+    try
+    {
+        using var store = new AiConfigurationStore(path);
+        action(store, path);
+    }
+    finally
+    {
+        try { Directory.Delete(directory, recursive: true); } catch { }
+    }
 }
 
 static void WithRepository(DateTime initialNow, Action<StudyRepository, string, MutableClock> action)
