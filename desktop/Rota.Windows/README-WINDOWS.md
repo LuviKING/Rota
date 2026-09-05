@@ -12,6 +12,8 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;
 - os blocos do dia mostram matéria, duração, tipo, tópico, meta e ação de conclusão.
 - o menu **Assistente IA** abre a primeira tela da IA local com perfil, estado offline, ações rápidas e histórico de prévias;
+- a configuração da IA oferece perfis Automático, Leve, Equilibrado e Desempenho, mostrando modelo, download e espaço antes de pedir confirmação;
+- instalação e download podem ser cancelados e só ficam ativos depois da verificação de integridade;
 - propostas da IA aparecem apenas como prévia validada ou bloqueada e não alteram o calendário nesta etapa;
 - o gerador de prompt para usar com outra IA permanece disponível dentro do assistente.
 

@@ -59,7 +59,7 @@ Falha, corrupção ou cancelamento anteriores à ativação preservam a configur
 
 Chamadas na mesma instância são serializadas; um arquivo de lock exclusivo rejeita outra instância/processo enquanto a instalação estiver em andamento. O instalador verifica espaço livre e rejeita links nos diretórios usados. O downloader limita os bytes recebidos ao tamanho do manifesto, usa espera máxima de 60 segundos para cabeçalhos/leitura ociosa e preserva arquivos preexistentes. Depois da escrita atômica da configuração, uma falha no observador de progresso não muda o resultado de sucesso.
 
-Antes de qualquer execução, `AiInstallationIntegrityVerifier` confere novamente o recibo, o modelo, o ZIP fixado do runtime e todos os arquivos extraídos. Arquivo ausente, modificado, adicional ou redirecionado bloqueia a inicialização. Instalações criadas pelo formato anterior, que não conservavam o ZIP, precisam ser reinstaladas antes de executar. `Ready` no gerenciador continua significando apenas arquivos presentes; a confirmação operacional é o estado separado do runtime. Nenhum download é iniciado pela interface nesta etapa.
+Antes de qualquer execução, `AiInstallationIntegrityVerifier` confere novamente o recibo, o modelo, o ZIP fixado do runtime e todos os arquivos extraídos. Arquivo ausente, modificado, adicional ou redirecionado bloqueia a inicialização. Instalações criadas pelo formato anterior, que não conservavam o ZIP, precisam ser reinstaladas antes de executar. `Ready` no gerenciador continua significando apenas arquivos presentes; a confirmação operacional é o estado separado do runtime.
 
 ## Ciclo de vida do llama-server
 
@@ -119,7 +119,15 @@ O envio só é liberado quando runtime e modelo estão prontos. Durante a geraç
 
 `AiAssistantWindow` integra o controlador ao visual já existente do Rota. Ela mostra estado local/offline, perfil efetivo, disponibilidade da instalação, avisos, cinco ações rápidas, escolha entre plano novo e ajuste do plano atual, envio, cancelamento e o histórico de prévias validadas ou bloqueadas. O layout preserva os alvos de clique, ícones e estados visuais compartilhados e mantém as duas colunas utilizáveis na menor janela suportada.
 
-A tela não possui ação de aplicar, aceitar ou rejeitar. Toda resposta permanece como prévia, com a mensagem explícita de que o calendário não foi alterado. A instalação também não começa automaticamente e não há botão de instalação neste bloco. O gerador anterior de prompt para outra IA continua acessível como opção secundária, preservando a funcionalidade já existente.
+A tela não possui ação de aplicar, aceitar ou rejeitar. Toda resposta permanece como prévia, com a mensagem explícita de que o calendário não foi alterado. O gerador anterior de prompt para outra IA continua acessível como opção secundária, preservando a funcionalidade já existente.
+
+## Instalação guiada
+
+`AiInstallationController` transforma a instalação em duas etapas independentes. A análise carrega a configuração, resolve o perfil automático ou manual, escolhe o modelo e o runtime compatíveis e calcula download, espaço recomendado e pasta local sem criar arquivos ou iniciar rede. Ela emite um identificador de confirmação descartável; somente esse identificador permite iniciar uma tentativa, e qualquer confirmação incorreta ou reutilizada expira o plano.
+
+`AiInstallationWindow` mostra Automático, Leve, Equilibrado e Desempenho, além do modelo, processamento, tamanho e destino antes do download. O clique em instalar ainda abre uma confirmação final com esses mesmos dados. Durante a instalação, a tela apresenta etapa, bytes, porcentagem e cancelamento. Sucesso só é exibido depois da ativação atômica; cancelamento ou falha informam que nenhuma instalação incompleta foi ativada.
+
+Abrir o Rota ou o Assistente IA continua inerte. A detecção de hardware ocorre ao abrir a configuração da IA, mas o download só começa depois da confirmação final da pessoa. O controlador da instalação não tem acesso ao calendário ou ao histórico de estudos.
 
 ### Fontes fixadas e verificadas em 04/09/2026
 
@@ -135,10 +143,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 140 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados do controlador e carga real da nova janela WPF com seus bloqueios de envio e aplicação. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 141º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 146 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados dos controladores e carga real das janelas WPF. A instalação guiada testa análise sem download, perfis automático e manual, confirmação descartável, progresso, sucesso verificado, cancelamento e falha contida. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 147º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Construir o fluxo guiado de instalação da IA local sobre `LocalAiInstaller`, com consentimento explícito, tamanho do download, progresso, cancelamento, verificação e explicação clara do armazenamento. A instalação deve continuar separada da geração e nunca pode começar só porque o aplicativo ou o assistente foi aberto.
+Construir a confirmação e aplicação transacional das propostas validadas. A etapa deve comparar novamente o calendário atual, pedir confirmação explícita, aplicar somente pelo motor determinístico do Rota, registrar o resultado e criar um caminho seguro de desfazer, sem dar acesso de escrita à IA.

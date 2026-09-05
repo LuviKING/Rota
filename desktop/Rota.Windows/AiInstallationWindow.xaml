@@ -1,0 +1,210 @@
+<Window x:Class="Rota.Desktop.AiInstallationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configurar IA local · Rota"
+        Width="760" Height="700" MinWidth="680" MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Background="{DynamicResource BackgroundBrush}">
+    <Window.Resources>
+        <Style x:Key="InstallCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="15" />
+            <Setter Property="Padding" Value="15" />
+        </Style>
+        <Style x:Key="ProfileChoice" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,18,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Border Width="44" Height="44" CornerRadius="13"
+                        Background="{DynamicResource PrimarySoftBrush}" Margin="0,0,12,0">
+                    <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyphText}"
+                               Foreground="{DynamicResource PrimaryBrush}" FontSize="21"
+                               Width="28" Height="28" LineHeight="28" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Configurar IA local" FontSize="22" FontWeight="Bold" />
+                    <TextBlock Text="Escolha o tamanho adequado para este computador"
+                               Foreground="{DynamicResource MutedBrush}" FontSize="10.5" Margin="0,3,0,0" />
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Background="{DynamicResource SuccessSoftBrush}"
+                    CornerRadius="9" Padding="9,5" VerticalAlignment="Center">
+                <TextBlock Text="DOWNLOAD VERIFICADO" Foreground="{DynamicResource SuccessBrush}"
+                           FontSize="9" FontWeight="SemiBold" />
+            </Border>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
+            <StackPanel>
+                <Border Style="{StaticResource InstallCard}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="1. Escolha o perfil" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Automático analisa CPU, memória e placa de vídeo. Você também pode escolher um limite manual."
+                                   Foreground="{DynamicResource MutedBrush}" FontSize="10"
+                                   TextWrapping="Wrap" Margin="0,5,0,11" />
+                        <WrapPanel>
+                            <RadioButton x:Name="AutomaticChoice" Content="Automático" Tag="Automatic"
+                                         GroupName="AiProfile" IsChecked="True" Style="{StaticResource ProfileChoice}"
+                                         Checked="ProfileChoice_Checked" />
+                            <RadioButton x:Name="LightweightChoice" Content="Leve" Tag="Lightweight"
+                                         GroupName="AiProfile" Style="{StaticResource ProfileChoice}"
+                                         Checked="ProfileChoice_Checked" />
+                            <RadioButton x:Name="BalancedChoice" Content="Equilibrado" Tag="Balanced"
+                                         GroupName="AiProfile" Style="{StaticResource ProfileChoice}"
+                                         Checked="ProfileChoice_Checked" />
+                            <RadioButton x:Name="PerformanceChoice" Content="Desempenho" Tag="Performance"
+                                         GroupName="AiProfile" Style="{StaticResource ProfileChoice}"
+                                         Checked="ProfileChoice_Checked" />
+                        </WrapPanel>
+                        <Button x:Name="AnalyzeButton" Style="{StaticResource SecondaryButton}"
+                                Click="Analyze_Click" HorizontalAlignment="Left" MinHeight="36" Padding="11,6"
+                                AutomationProperties.Name="Analisar perfil da IA local">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyphText}"
+                                           FontSize="15" Width="20" Height="20" LineHeight="20" />
+                                <TextBlock Text="Analisar novamente" Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="PlanPanel" Style="{StaticResource InstallCard}" Visibility="Collapsed" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="2. Confira a instalação" FontSize="13" FontWeight="SemiBold" />
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.15*" />
+                                <ColumnDefinition Width="1*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,14,0">
+                                <TextBlock Text="PERFIL ESCOLHIDO" Style="{StaticResource SectionLabel}" />
+                                <TextBlock x:Name="EffectiveProfileText" Text="—" FontSize="12"
+                                           FontWeight="SemiBold" Margin="0,4,0,0" />
+                                <TextBlock x:Name="ComputeText" Text="—" Foreground="{DynamicResource MutedBrush}"
+                                           FontSize="9.5" Margin="0,3,0,0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="MODELO" Style="{StaticResource SectionLabel}" />
+                                <TextBlock x:Name="ModelText" Text="—" FontSize="12"
+                                           FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.15*" />
+                                <ColumnDefinition Width="1*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,14,0">
+                                <TextBlock Text="DOWNLOAD" Style="{StaticResource SectionLabel}" />
+                                <TextBlock x:Name="DownloadSizeText" Text="—" FontSize="12"
+                                           FontWeight="SemiBold" Margin="0,4,0,0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="ESPAÇO LIVRE RECOMENDADO" Style="{StaticResource SectionLabel}" />
+                                <TextBlock x:Name="StorageSizeText" Text="—" FontSize="12"
+                                           FontWeight="SemiBold" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="PASTA LOCAL" Style="{StaticResource SectionLabel}" Margin="0,14,0,0" />
+                        <TextBlock x:Name="InstallPathText" Text="—" Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="9.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource InstallCard}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE946;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource PrimaryBrush}" FontSize="17"
+                                       Width="22" Height="22" LineHeight="22" Margin="0,0,8,0" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="O download só começa após sua confirmação" FontSize="11"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="O Rota baixa arquivos com versão e SHA-256 fixados, verifica tudo antes de ativar e guarda a IA somente neste computador."
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                           TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="ProgressPanel" Style="{StaticResource InstallCard}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="StatusText" Text="Analisando o perfil…"
+                                       FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock x:Name="ProgressPercentText" Grid.Column="1" Text=""
+                                       Foreground="{DynamicResource PrimaryBrush}" FontSize="10"
+                                       FontWeight="SemiBold" Margin="12,0,0,0" />
+                        </Grid>
+                        <ProgressBar x:Name="InstallationProgressBar" Height="7" Minimum="0" Maximum="100"
+                                     Value="0" Margin="0,10,0,0" Foreground="{DynamicResource PrimaryBrush}"
+                                     Background="{DynamicResource SubtleBrush}" />
+                        <TextBlock x:Name="ProgressBytesText" Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="9.5" Margin="0,6,0,0" />
+                        <Border x:Name="WarningPanel" Visibility="Collapsed"
+                                Background="{DynamicResource ErrorSoftBrush}" CornerRadius="9"
+                                Padding="10,8" Margin="0,9,0,0">
+                            <TextBlock x:Name="WarningText" Foreground="{DynamicResource ErrorBrush}"
+                                       FontSize="9.5" TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="InstallButton" Style="{StaticResource PrimaryButton}"
+                    Click="Install_Click" IsEnabled="False" MinWidth="190"
+                    AutomationProperties.Name="Baixar e instalar IA local">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyphText}"
+                               Foreground="White" FontSize="16" Width="21" Height="21" LineHeight="21" />
+                    <TextBlock x:Name="InstallButtonText" Text="Baixar e instalar" Margin="7,0,0,0"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+            <Button x:Name="CancelButton" Grid.Column="2" Style="{StaticResource SecondaryButton}"
+                    Click="Cancel_Click" MinWidth="105" IsCancel="True">Fechar</Button>
+        </Grid>
+    </Grid>
+</Window>

@@ -10,15 +10,20 @@ namespace Rota.Desktop;
 public partial class AiAssistantWindow : Window
 {
     private readonly IAiAssistantController _controller;
+    private readonly IAiInstallationController _installationController;
     private readonly StudyRepository _repository;
     private AiProposalKind _proposalKind = AiProposalKind.StudyPlan;
     private bool _initializationStarted;
 
     public ObservableCollection<AiProposalCardView> HistoryItems { get; } = new();
 
-    public AiAssistantWindow(IAiAssistantController controller, StudyRepository repository)
+    public AiAssistantWindow(
+        IAiAssistantController controller,
+        IAiInstallationController installationController,
+        StudyRepository repository)
     {
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
+        _installationController = installationController ?? throw new ArgumentNullException(nameof(installationController));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
@@ -158,6 +163,13 @@ public partial class AiAssistantWindow : Window
     {
         var dialog = new AiPromptWindow(_repository) { Owner = this };
         dialog.ShowDialog();
+    }
+
+    private async void ConfigureLocalAi_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AiInstallationWindow(_installationController) { Owner = this };
+        if (dialog.ShowDialog() == true)
+            await _controller.InitializeAsync();
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();

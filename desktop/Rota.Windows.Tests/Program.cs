@@ -94,6 +94,7 @@ tests = tests.Concat(Rota.Desktop.Tests.ProposalWorkflowTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.LocalAiCompositionTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiAssistantControllerTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiAssistantPresentationTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.AiInstallationControllerTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 
@@ -441,12 +442,15 @@ static void DesktopWindowsLoad()
             app.InitializeComponent();
             var repo = new StudyRepository(Path.Combine(dir, "state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var assistant = new TestAiAssistantController();
-            var assistantWindow = new AiAssistantWindow(assistant, repo);
+            var installation = new TestAiInstallationController();
+            var assistantWindow = new AiAssistantWindow(assistant, installation, repo);
             Eq(0, assistant.InitializeCalls);
+            Eq(0, installation.PrepareCalls);
             var windows = new Window[]
             {
-                new MainWindow(repo, assistant),
+                new MainWindow(repo, assistant, installation),
                 assistantWindow,
+                new AiInstallationWindow(installation),
                 new AiPromptWindow(repo),
                 new ImportPlanWindow(repo),
                 new SettingsWindow(repo)
@@ -500,12 +504,24 @@ static void DesktopWindowsLoad()
                         .Any(button => (button.Content?.ToString() ?? "").Contains("Aplicar", StringComparison.OrdinalIgnoreCase)),
                         "AI preview screen must not expose an apply action");
                 }
+                if (window is AiInstallationWindow installationWindow)
+                {
+                    Eq(1, installation.PrepareCalls);
+                    Eq(0, installation.InstallCalls);
+                    var planPanel = installationWindow.FindName("PlanPanel") as System.Windows.Controls.Border
+                        ?? throw new InvalidOperationException("AI installation plan was not created");
+                    var installButton = installationWindow.FindName("InstallButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI install button was not created");
+                    Eq(Visibility.Visible, planPanel.Visibility);
+                    True(installButton.IsEnabled, "reviewed AI installation should be ready for explicit confirmation");
+                    True(installButton.MinHeight >= 40, "AI install click target is too small");
+                }
                 window.Close();
             }
 
             ThemeManager.Apply(ThemeManager.Light);
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
-            var unavailableWindow = new AiAssistantWindow(unavailable, repo)
+            var unavailableWindow = new AiAssistantWindow(unavailable, installation, repo)
             {
                 WindowStartupLocation = WindowStartupLocation.Manual,
                 Left = -20_000,
@@ -1768,4 +1784,50 @@ sealed class TestAiAssistantController : IAiAssistantController
         input with { FreeText = input.FreeText.TrimEnd() + Environment.NewLine + "Monte um plano de estudos completo." };
 
     public AiProposalKind SuggestedKind(AiAssistantQuickAction action) => AiProposalKind.StudyPlan;
+}
+
+sealed class TestAiInstallationController : IAiInstallationController
+{
+    public AiInstallationUiState State { get; private set; } = new();
+    public int PrepareCalls { get; private set; }
+    public int InstallCalls { get; private set; }
+    public event EventHandler? StateChanged;
+
+    public Task<AiPreparedInstallation?> PrepareAsync(
+        AiProfile profile,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        PrepareCalls++;
+        var plan = new AiPreparedInstallation
+        {
+            ConfirmationId = Guid.Parse("ffffffff-0000-0000-0000-000000000001"),
+            RequestedProfile = profile,
+            EffectiveProfile = AiProfile.Performance,
+            ComputePreference = AiComputePreference.Gpu,
+            ModelName = "Qwen3 8B Q4_K_M",
+            DownloadBytes = 5_062_991_684,
+            RecommendedFreeBytes = 7_294_967_296,
+            InstallationDirectory = Path.Combine(Path.GetTempPath(), "Rota", "AI")
+        };
+        State = new AiInstallationUiState
+        {
+            Activity = AiInstallationActivity.Idle,
+            StatusMessage = "Instalação analisada.",
+            Plan = plan,
+            TotalDownloadBytes = plan.DownloadBytes
+        };
+        StateChanged?.Invoke(this, EventArgs.Empty);
+        return Task.FromResult<AiPreparedInstallation?>(plan);
+    }
+
+    public Task<AiInstallationResult?> InstallAsync(
+        Guid confirmationId,
+        CancellationToken cancellationToken = default)
+    {
+        InstallCalls++;
+        return Task.FromResult<AiInstallationResult?>(null);
+    }
+
+    public void CancelCurrentOperation() { }
 }

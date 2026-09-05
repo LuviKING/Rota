@@ -19,6 +19,11 @@ public sealed class LocalAiServices : IAsyncDisposable
         ProposalStore = new AiProposalStore(Path.Combine(rootDirectory, "proposals.json"));
         Workflow = new AiProposalWorkflowService(PlanningService, PreviewService, ProposalStore);
         AssistantController = new AiAssistantController(ConfigurationStore, ModelManager, ProposalStore, Workflow);
+        InstallationController = new AiInstallationController(
+            rootDirectory,
+            ConfigurationStore,
+            ModelManager,
+            Installer);
     }
 
     public string RootDirectory { get; }
@@ -34,6 +39,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     public AiProposalStore ProposalStore { get; }
     public AiProposalWorkflowService Workflow { get; }
     public AiAssistantController AssistantController { get; }
+    public AiInstallationController InstallationController { get; }
 
     public static LocalAiServices Create(StudyRepository repository, string? rootDirectory = null)
     {
@@ -51,6 +57,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        await InstallationController.DisposeAsync().ConfigureAwait(false);
         await AssistantController.DisposeAsync().ConfigureAwait(false);
         Workflow.Dispose();
         Backend.Dispose();

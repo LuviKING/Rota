@@ -117,19 +117,31 @@
                                         <TextBlock x:Name="InstallationTitle" Text="IA local ainda não instalada"
                                                    Foreground="{DynamicResource AssessmentBrush}"
                                                    FontSize="10.5" FontWeight="SemiBold" />
-                                        <TextBlock Text="A instalação não começa sozinha. O fluxo guiado será liberado em uma próxima etapa."
+                                        <TextBlock Text="Escolha o perfil e confira o tamanho antes de iniciar o download verificado."
                                                    Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
                                                    TextWrapping="Wrap" Margin="0,3,0,0" />
-                                        <Button x:Name="OpenExternalPromptButton" Style="{StaticResource SecondaryButton}"
-                                                Click="OpenExternalPrompt_Click" HorizontalAlignment="Left"
-                                                MinHeight="36" Padding="10,6" Margin="0,9,0,0"
-                                                ToolTip="Usar o gerador de prompt que já existia no Rota">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="&#xE8C8;" Style="{StaticResource IconGlyphText}"
-                                                           FontSize="15" Width="20" Height="20" LineHeight="20" />
-                                                <TextBlock Text="Usar prompt com outra IA" Margin="6,0,0,0" VerticalAlignment="Center" />
-                                            </StackPanel>
-                                        </Button>
+                                        <WrapPanel Margin="0,9,0,0">
+                                            <Button x:Name="ConfigureLocalAiButton" Style="{StaticResource PrimaryButton}"
+                                                    Click="ConfigureLocalAi_Click" HorizontalAlignment="Left"
+                                                    MinHeight="36" Padding="10,6" Margin="0,0,8,7"
+                                                    ToolTip="Escolher perfil e instalar a IA local">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyphText}"
+                                                               Foreground="White" FontSize="15" Width="20" Height="20" LineHeight="20" />
+                                                    <TextBlock Text="Configurar IA local" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button x:Name="OpenExternalPromptButton" Style="{StaticResource SecondaryButton}"
+                                                    Click="OpenExternalPrompt_Click" HorizontalAlignment="Left"
+                                                    MinHeight="36" Padding="10,6" Margin="0,0,0,7"
+                                                    ToolTip="Usar o gerador de prompt que já existia no Rota">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE8C8;" Style="{StaticResource IconGlyphText}"
+                                                               FontSize="15" Width="20" Height="20" LineHeight="20" />
+                                                    <TextBlock Text="Usar outra IA" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                        </WrapPanel>
                                     </StackPanel>
                                 </Grid>
                             </Border>
