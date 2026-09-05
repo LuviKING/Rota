@@ -17,7 +17,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 
 ### Windows
 
-- Versão: **0.2.0**
+- Versão: **0.3.0**
 - Compatibilidade: **Windows 10 e Windows 11 x64**
 - Tecnologia: **WPF / .NET 8**
 - Distribuição CI: executável **self-contained**, sem exigir instalação separada do .NET
@@ -27,7 +27,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal
 - Contexto mensal: plano ativo, objetivo, carga e progresso calculados dos dados reais
 - Importação: editor, arquivo `.json` e arrastar/soltar StudyPlan na janela
-- IA: gerador de prompt completo que explica a outra IA como o Rota executa o calendário
+- IA: assistente local/offline com perfis Leve, Equilibrado e Desempenho, instalação verificada, conversa persistente, prévia, confirmação e desfazer seguro
 - Backup: exportação do estado local pelas Configurações e proteção contra duas instâncias simultâneas
 
 ### Comportamento compartilhado

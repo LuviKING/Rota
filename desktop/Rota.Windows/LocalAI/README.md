@@ -173,6 +173,6 @@ A suíte padrão contém 179 testes offline, incluindo falhas de rede simuladas,
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
-## Próximo bloco
+## Estado do ciclo
 
-Fechar a versão Windows 0.3.0: executar os gates finais, publicar o executável self-contained, integrar a branch homologada na `main` e criar o checkpoint de versão no GitHub.
+A fundação da IA local foi concluída para o Rota Windows 0.3.0. Os três perfis estão homologados, o fluxo de instalação até desfazer está integrado à interface e a versão final é publicada como executável self-contained. Evoluções posteriores devem começar em um novo ciclo, preservando os contratos e medições registrados aqui.
