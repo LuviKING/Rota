@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using Rota.Desktop.LocalAI;
 
 namespace Rota.Desktop;
 
@@ -8,6 +9,7 @@ public partial class App : Application
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
     private bool _isSmokeTest;
+    private LocalAiServices? _localAiServices;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -35,6 +37,7 @@ public partial class App : Application
         {
             var smokeDataPath = _isSmokeTest ? Environment.GetEnvironmentVariable("ROTA_SMOKE_DATA_PATH") : null;
             var repository = new StudyRepository(string.IsNullOrWhiteSpace(smokeDataPath) ? null : smokeDataPath);
+            _localAiServices = LocalAiServices.Create(repository);
             var window = new MainWindow(repository);
             MainWindow = window;
             window.Show();
@@ -64,6 +67,11 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        if (_localAiServices is not null)
+        {
+            try { _localAiServices.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { }
+            _localAiServices = null;
+        }
         if (_ownsSingleInstanceMutex)
         {
             try { _singleInstanceMutex?.ReleaseMutex(); } catch (ApplicationException) { }

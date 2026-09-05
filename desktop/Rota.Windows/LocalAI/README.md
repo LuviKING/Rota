@@ -103,6 +103,12 @@ Uma prévia pronta entra no histórico como `Validated`; uma prévia bloqueada e
 
 O histórico só é chamado depois que geração e prévia terminam e depois de uma última verificação de cancelamento. Falha em qualquer etapa vira erro controlado e não deixa proposta parcial. Prévia bloqueada é registrada de forma íntegra como `Failed`, para que a futura interface consiga explicar o motivo. O fluxo não possui método de aplicação e não escreve em `StudyRepository`.
 
+## Composição de produção
+
+`LocalAiServices` monta configuração, detecção de hardware, catálogo, instalador, runtime, backend, contexto, prévia, histórico e fluxo usando uma única raiz `%LOCALAPPDATA%\Rota\AI`. O aplicativo cria esse contêiner depois do repositório e o descarta ao sair, encerrando primeiro fluxo e backend e, em seguida, qualquer processo de runtime pertencente ao Rota.
+
+A composição é deliberadamente inerte: seus construtores não criam a pasta de IA, não leem hardware, não baixam arquivos, não iniciam `llama-server` e não geram respostas. Essas ações só acontecem quando um comando explícito chamar o serviço correspondente. A abertura normal e os smoke tests comprovam que o calendário continua independente.
+
 ### Fontes fixadas e verificadas em 04/09/2026
 
 - [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos, passaram pela extração do instalador e iniciaram com `--version` pelo controlador real do Rota. Nenhum modelo completo ou inferência foi executado.
@@ -117,10 +123,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 130 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico e fluxo sem gravações parciais. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 131º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 132 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais e composição inerte. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 133º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Criar a composição de produção dos serviços locais, com ciclo de vida e descarte centralizados, sem iniciar runtime, download ou geração na abertura do aplicativo. Depois disso, a interface do Assistente IA poderá ser construída sobre um único ponto seguro de entrada.
+Criar o controlador de estado da futura tela do Assistente IA: carregamento de perfil/instalação/histórico, envio e cancelamento, comandos rápidos e mensagens de erro, ainda separado do XAML. A aplicação de propostas deve continuar desabilitada.
