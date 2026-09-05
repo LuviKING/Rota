@@ -1,0 +1,320 @@
+<Window x:Class="Rota.Desktop.AiAssistantWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Assistente IA local · Rota"
+        Width="1080" Height="760" MinWidth="820" MinHeight="580"
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Background="{DynamicResource BackgroundBrush}">
+    <Window.Resources>
+        <Style x:Key="AssistantCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+
+        <Style x:Key="QuickActionButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+        </Style>
+
+        <Style x:Key="ChoiceRadio" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,0,18,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="44" Height="44" CornerRadius="13"
+                            Background="{DynamicResource PrimarySoftBrush}"
+                            Margin="0,0,12,0">
+                        <TextBlock Text="&#xEA80;" Style="{StaticResource IconGlyphText}"
+                                   Foreground="{DynamicResource PrimaryBrush}"
+                                   FontSize="21" Width="28" Height="28" LineHeight="28" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Assistente IA" FontSize="24" FontWeight="Bold" />
+                        <TextBlock Text="Privado, local e sob seu controle"
+                                   Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Background="{DynamicResource SuccessSoftBrush}" CornerRadius="10" Padding="10,6" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" Margin="0,0,7,0" />
+                        <TextBlock Text="LOCAL · OFFLINE" Foreground="{DynamicResource SuccessBrush}"
+                                   FontSize="9.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <Button Style="{StaticResource IconButton}" Click="Close_Click"
+                        ToolTip="Fechar assistente" AutomationProperties.Name="Fechar assistente">&#xE8BB;</Button>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="0.84*" MinWidth="310" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="1.16*" MinWidth="390" />
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,5,0">
+                    <Border Style="{StaticResource AssistantCard}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Estado da IA local" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="StatusText" Text="Carregando assistente…"
+                                               Foreground="{DynamicResource MutedBrush}" FontSize="10.5"
+                                               TextWrapping="Wrap" Margin="0,5,10,0" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="{DynamicResource SubtleBrush}"
+                                        CornerRadius="9" Padding="9,5" VerticalAlignment="Top">
+                                    <TextBlock x:Name="ProfileText" Text="Automático"
+                                               Foreground="{DynamicResource PrimaryBrush}"
+                                               FontSize="9.5" FontWeight="SemiBold" />
+                                </Border>
+                            </Grid>
+                            <Border x:Name="InstallationNotice" Background="{DynamicResource AssessmentSoftBrush}"
+                                    BorderBrush="{DynamicResource AssessmentBrush}" BorderThickness="1"
+                                    CornerRadius="11" Padding="12,10" Margin="0,12,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE946;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource AssessmentBrush}"
+                                               FontSize="17" Width="22" Height="22" LineHeight="22" Margin="0,0,8,0" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock x:Name="InstallationTitle" Text="IA local ainda não instalada"
+                                                   Foreground="{DynamicResource AssessmentBrush}"
+                                                   FontSize="10.5" FontWeight="SemiBold" />
+                                        <TextBlock Text="A instalação não começa sozinha. O fluxo guiado será liberado em uma próxima etapa."
+                                                   Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                                   TextWrapping="Wrap" Margin="0,3,0,0" />
+                                        <Button x:Name="OpenExternalPromptButton" Style="{StaticResource SecondaryButton}"
+                                                Click="OpenExternalPrompt_Click" HorizontalAlignment="Left"
+                                                MinHeight="36" Padding="10,6" Margin="0,9,0,0"
+                                                ToolTip="Usar o gerador de prompt que já existia no Rota">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE8C8;" Style="{StaticResource IconGlyphText}"
+                                                           FontSize="15" Width="20" Height="20" LineHeight="20" />
+                                                <TextBlock Text="Usar prompt com outra IA" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="WarningNotice" Visibility="Collapsed"
+                                    Background="{DynamicResource ErrorSoftBrush}" CornerRadius="10"
+                                    Padding="11,8" Margin="0,10,0,0">
+                                <TextBlock x:Name="WarningText" Foreground="{DynamicResource ErrorBrush}"
+                                           FontSize="9.5" TextWrapping="Wrap" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="AÇÕES RÁPIDAS" Style="{StaticResource SectionLabel}" Margin="2,0,0,7" />
+                    <WrapPanel Margin="0,0,0,6">
+                        <Button x:Name="QuickBuildPlanButton" Style="{StaticResource QuickActionButton}"
+                                Tag="BuildPlan" Click="QuickAction_Click" ToolTip="Montar um plano novo">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8FD;" Style="{StaticResource IconGlyphText}" FontSize="17" />
+                                <TextBlock Text="Montar meu plano" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource QuickActionButton}" Tag="ReorganizeWeek"
+                                Click="QuickAction_Click" ToolTip="Reorganizar apenas a semana futura">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyphText}" FontSize="17" />
+                                <TextBlock Text="Reorganizar semana" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource QuickActionButton}" Tag="AdjustLoad"
+                                Click="QuickAction_Click" ToolTip="Ajustar a carga diária">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyphText}" FontSize="17" />
+                                <TextBlock Text="Ajustar carga" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource QuickActionButton}" Tag="PrepareForEnem"
+                                Click="QuickAction_Click" ToolTip="Criar um plano equilibrado para o ENEM">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE82D;" Style="{StaticResource IconGlyphText}" FontSize="17" />
+                                <TextBlock Text="Preparar para o ENEM" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource QuickActionButton}" Tag="ReviewDelays"
+                                Click="QuickAction_Click" ToolTip="Propor uma recuperação segura dos atrasos">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE823;" Style="{StaticResource IconGlyphText}" FontSize="17" />
+                                <TextBlock Text="Revisar atrasos" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
+
+                    <TextBlock Text="O QUE VOCÊ PRECISA?" Style="{StaticResource SectionLabel}" Margin="2,0,0,7" />
+                    <TextBox x:Name="RequestBox" Height="132" AcceptsReturn="True" TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"
+                             Style="{StaticResource InputTextBox}" TextChanged="RequestBox_TextChanged"
+                             AutomationProperties.Name="Pedido para o assistente local"
+                             ToolTip="Descreva seu objetivo, prazo, rotina ou a mudança desejada." />
+                    <StackPanel Orientation="Horizontal" Margin="2,9,0,0">
+                        <RadioButton x:Name="NewPlanChoice" Content="Criar plano novo" GroupName="ProposalKind"
+                                     Style="{StaticResource ChoiceRadio}" IsChecked="True"
+                                     Checked="ProposalKind_Checked" Tag="StudyPlan" />
+                        <RadioButton x:Name="ChangePlanChoice" Content="Ajustar plano atual" GroupName="ProposalKind"
+                                     Style="{StaticResource ChoiceRadio}"
+                                     Checked="ProposalKind_Checked" Tag="PlanChanges" />
+                    </StackPanel>
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="SendButton" Style="{StaticResource PrimaryButton}" Click="Send_Click"
+                                IsEnabled="False" MinWidth="170" AutomationProperties.Name="Gerar prévia local">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE724;" Style="{StaticResource IconGlyphText}"
+                                           Foreground="White" FontSize="16" Width="21" Height="21" LineHeight="21" />
+                                <TextBlock Text="Gerar prévia local" Margin="7,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="CancelButton" Grid.Column="2" Style="{StaticResource SecondaryButton}"
+                                Click="Cancel_Click" Visibility="Collapsed" MinWidth="104"
+                                AutomationProperties.Name="Cancelar operação da IA">Cancelar</Button>
+                    </Grid>
+                    <TextBlock x:Name="SendHintText"
+                               Text="Descreva o pedido. O envio será liberado quando a IA local estiver pronta."
+                               Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                               TextWrapping="Wrap" Margin="2,7,0,0" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Column="2" Style="{StaticResource AssistantCard}" Padding="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid Margin="17,15,17,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Prévias e histórico" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock Text="Resultados validados ou bloqueados pela segurança do Rota"
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="10"
+                                       TextWrapping="Wrap" Margin="0,4,10,0" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="{DynamicResource SubtleBrush}"
+                                CornerRadius="9" Padding="9,5" VerticalAlignment="Center">
+                            <TextBlock x:Name="HistoryCountText" Text="0 propostas"
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5" />
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="1">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      Padding="17,0,11,8">
+                            <ItemsControl x:Name="HistoryList" ItemsSource="{Binding HistoryItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{DynamicResource BackgroundBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                CornerRadius="13" Padding="13" Margin="0,0,6,9">
+                                            <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding KindDisplay}" Foreground="{DynamicResource MutedBrush}"
+                                                               FontSize="9.5" FontWeight="SemiBold" />
+                                                    <Border Grid.Column="1" Background="{Binding StatusBackground}"
+                                                            CornerRadius="8" Padding="8,4">
+                                                        <TextBlock Text="{Binding StatusDisplay}" Foreground="{Binding StatusForeground}"
+                                                                   FontSize="9" FontWeight="SemiBold" />
+                                                    </Border>
+                                                </Grid>
+                                                <TextBlock Text="{Binding Summary}" FontSize="12" FontWeight="SemiBold"
+                                                           TextWrapping="Wrap" Margin="0,8,0,0" />
+                                                <TextBlock Text="{Binding Message}" Foreground="{DynamicResource MutedBrush}"
+                                                           FontSize="10" TextWrapping="Wrap" Margin="0,5,0,0" />
+                                                <TextBlock Text="{Binding MetricsDisplay}" Foreground="{DynamicResource PrimaryBrush}"
+                                                           FontSize="9.5" TextWrapping="Wrap" Margin="0,8,0,0" />
+                                                <TextBlock Text="{Binding CreatedAtDisplay}" Foreground="{DynamicResource MutedBrush}"
+                                                           FontSize="9" Margin="0,6,0,0" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <StackPanel x:Name="EmptyHistoryPanel" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    MaxWidth="270" Margin="24">
+                            <Border Width="50" Height="50" CornerRadius="15"
+                                    Background="{DynamicResource SubtleBrush}" HorizontalAlignment="Center">
+                                <TextBlock Text="&#xE8A5;" Style="{StaticResource IconGlyphText}"
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="21" />
+                            </Border>
+                            <TextBlock Text="Nenhuma prévia ainda" FontSize="13" FontWeight="SemiBold"
+                                       TextAlignment="Center" Margin="0,12,0,0" />
+                            <TextBlock Text="Quando a IA local estiver instalada, suas propostas aparecerão aqui para revisão."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="10"
+                                       TextAlignment="Center" TextWrapping="Wrap" Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="2" Background="{DynamicResource PrimarySoftBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                            CornerRadius="0,0,16,16" Padding="14,11">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE72E;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource PrimaryBrush}"
+                                       FontSize="16" Width="21" Height="21" LineHeight="21" Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Text="Nenhuma proposta altera o calendário sem confirmação."
+                                       Foreground="{DynamicResource PrimaryBrush}" FontSize="9.5"
+                                       FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

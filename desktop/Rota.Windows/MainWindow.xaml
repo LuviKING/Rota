@@ -226,9 +226,10 @@
                             </StackPanel>
                         </Border>
                     </Button>
-                    <Button Style="{StaticResource SidebarNavigationButton}"
+                    <Button x:Name="AiNavigationButton"
+                            Style="{StaticResource SidebarNavigationButton}"
                             Click="AiNav_Click"
-                            ToolTip="Criar ou atualizar plano com IA (Ctrl+G)">
+                            ToolTip="Abrir Assistente IA local (Ctrl+G)">
                         <Border CornerRadius="11" Padding="8,6">
                             <StackPanel Orientation="Horizontal">
                                 <Border Style="{StaticResource SidebarIconContainer}">
@@ -236,7 +237,7 @@
                                                Foreground="{DynamicResource SidebarMutedBrush}"
                                                FontSize="19" />
                                 </Border>
-                                <TextBlock Text="Plano / IA" Foreground="{DynamicResource SidebarTextBrush}"
+                                <TextBlock Text="Assistente IA" Foreground="{DynamicResource SidebarTextBrush}"
                                            FontSize="12.5" Margin="11,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>

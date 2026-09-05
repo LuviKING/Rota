@@ -93,6 +93,7 @@ tests = tests.Concat(Rota.Desktop.Tests.ProposalStoreTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.ProposalWorkflowTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.LocalAiCompositionTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiAssistantControllerTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.AiAssistantPresentationTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 
@@ -439,9 +440,13 @@ static void DesktopWindowsLoad()
             app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             app.InitializeComponent();
             var repo = new StudyRepository(Path.Combine(dir, "state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
+            var assistant = new TestAiAssistantController();
+            var assistantWindow = new AiAssistantWindow(assistant, repo);
+            Eq(0, assistant.InitializeCalls);
             var windows = new Window[]
             {
-                new MainWindow(repo),
+                new MainWindow(repo, assistant),
+                assistantWindow,
                 new AiPromptWindow(repo),
                 new ImportPlanWindow(repo),
                 new SettingsWindow(repo)
@@ -465,14 +470,61 @@ static void DesktopWindowsLoad()
                     True(previousMonth.MinWidth >= 40 && previousMonth.MinHeight >= 40, "previous-month click target is too small");
                     True(nextMonth.MinWidth >= 40 && nextMonth.MinHeight >= 40, "next-month click target is too small");
                     True(todayNavigation.MinHeight >= 44, "sidebar click target is too small");
+                    var aiNavigation = mainWindow.FindName("AiNavigationButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI assistant sidebar button was not created");
+                    True(aiNavigation.MinHeight >= 44, "AI assistant sidebar click target is too small");
 
                     var iconStyle = app.FindResource("IconGlyphText") as Style
                         ?? throw new InvalidOperationException("shared icon style was not loaded");
                     True(iconStyle.Setters.OfType<Setter>().Any(setter => setter.Property == System.Windows.Controls.TextBlock.FontFamilyProperty),
                         "shared icon style does not define a stable icon font");
                 }
+                if (window is AiAssistantWindow localAssistant)
+                {
+                    Eq(1, assistant.InitializeCalls);
+                    var request = localAssistant.FindName("RequestBox") as System.Windows.Controls.TextBox
+                        ?? throw new InvalidOperationException("AI assistant request box was not created");
+                    var send = localAssistant.FindName("SendButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI assistant send button was not created");
+                    var quickAction = localAssistant.FindName("QuickBuildPlanButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI assistant quick action was not created");
+                    var externalPrompt = localAssistant.FindName("OpenExternalPromptButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("existing external AI prompt entry point was not preserved");
+                    True(!send.IsEnabled, "empty AI request must not be sent");
+                    request.Text = "Tenho duas horas por dia.";
+                    True(send.IsEnabled, "ready local AI should enable a non-empty request");
+                    quickAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Contains(request.Text, "Monte um plano");
+                    True(externalPrompt.MinHeight >= 36, "external AI prompt action is too small");
+                    True(!VisualDescendants<System.Windows.Controls.Button>(localAssistant)
+                        .Any(button => (button.Content?.ToString() ?? "").Contains("Aplicar", StringComparison.OrdinalIgnoreCase)),
+                        "AI preview screen must not expose an apply action");
+                }
                 window.Close();
             }
+
+            ThemeManager.Apply(ThemeManager.Light);
+            var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
+            var unavailableWindow = new AiAssistantWindow(unavailable, repo)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            unavailableWindow.Show();
+            unavailableWindow.UpdateLayout();
+            var unavailableRequest = unavailableWindow.FindName("RequestBox") as System.Windows.Controls.TextBox
+                ?? throw new InvalidOperationException("unavailable AI request box was not created");
+            var unavailableSend = unavailableWindow.FindName("SendButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("unavailable AI send button was not created");
+            var installationNotice = unavailableWindow.FindName("InstallationNotice") as System.Windows.Controls.Border
+                ?? throw new InvalidOperationException("AI installation notice was not created");
+            unavailableRequest.Text = "Monte um plano.";
+            True(!unavailableSend.IsEnabled, "AI request must stay disabled without a local installation");
+            Eq(Visibility.Visible, installationNotice.Visibility);
+            unavailableWindow.Close();
+            ThemeManager.Apply(ThemeManager.Dark);
         }
         catch (Exception ex)
         {
@@ -716,6 +768,16 @@ static void AiProposalDoesNotMutateStudyState()
         Eq("protected-plan", repository.Settings.ActivePlanId);
         Eq(1, repository.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
     });
+}
+
+static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
+{
+    for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); index++)
+    {
+        var child = System.Windows.Media.VisualTreeHelper.GetChild(root, index);
+        if (child is T match) yield return match;
+        foreach (var descendant in VisualDescendants<T>(child)) yield return descendant;
+    }
 }
 
 static void HardwarePolicySelectsLightweight()
@@ -1662,4 +1724,48 @@ sealed class FailingAiConfigurationStore : IAiConfigurationStore
 
     public Task SaveAsync(AiConfiguration configuration, CancellationToken cancellationToken = default) =>
         Task.FromException(new IOException("simulated configuration activation failure"));
+}
+
+sealed class TestAiAssistantController : IAiAssistantController
+{
+    private readonly AiInstallationState _installationState;
+
+    public TestAiAssistantController(AiInstallationState installationState = AiInstallationState.Ready)
+    {
+        _installationState = installationState;
+    }
+
+    public AiAssistantState State { get; private set; } = new();
+    public int InitializeCalls { get; private set; }
+    public int CancelCalls { get; private set; }
+    public event EventHandler? StateChanged;
+
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        InitializeCalls++;
+        State = new AiAssistantState
+        {
+            IsInitialized = true,
+            EffectiveProfile = AiProfile.Performance,
+            InstallationState = _installationState,
+            StatusMessage = _installationState == AiInstallationState.Ready
+                ? "IA local pronta e offline."
+                : "IA local ainda não instalada."
+        };
+        StateChanged?.Invoke(this, EventArgs.Empty);
+        return Task.CompletedTask;
+    }
+
+    public Task<AiStoredProposal?> SendAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        CancellationToken cancellationToken = default) => Task.FromResult<AiStoredProposal?>(null);
+
+    public void CancelCurrentOperation() => CancelCalls++;
+
+    public AiAssistantInput ApplyQuickAction(AiAssistantInput input, AiAssistantQuickAction action) =>
+        input with { FreeText = input.FreeText.TrimEnd() + Environment.NewLine + "Monte um plano de estudos completo." };
+
+    public AiProposalKind SuggestedKind(AiAssistantQuickAction action) => AiProposalKind.StudyPlan;
 }

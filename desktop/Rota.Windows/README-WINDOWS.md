@@ -11,6 +11,9 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - cards de contexto mostram plano ativo, objetivo, carga do mês e progresso mensal usando dados reais do calendário;
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;
 - os blocos do dia mostram matéria, duração, tipo, tópico, meta e ação de conclusão.
+- o menu **Assistente IA** abre a primeira tela da IA local com perfil, estado offline, ações rápidas e histórico de prévias;
+- propostas da IA aparecem apenas como prévia validada ou bloqueada e não alteram o calendário nesta etapa;
+- o gerador de prompt para usar com outra IA permanece disponível dentro do assistente.
 
 A preferência de tema fica separada do estado de estudos em `%LOCALAPPDATA%\Rota\theme.txt`. O calendário e o histórico continuam em `%LOCALAPPDATA%\Rota\desktop-state.json`.
 
@@ -36,7 +39,7 @@ Atalhos úteis:
 
 - `Ctrl+T`: voltar para hoje;
 - `Ctrl+I`: importar StudyPlan;
-- `Ctrl+G`: abrir Plano / IA;
+- `Ctrl+G`: abrir Assistente IA;
 - `Ctrl+,`: abrir Configurações;
 - `Ctrl+Shift+L`: alternar entre tema escuro e claro.
 

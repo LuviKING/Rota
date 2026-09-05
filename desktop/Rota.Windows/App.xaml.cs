@@ -38,7 +38,7 @@ public partial class App : Application
             var smokeDataPath = _isSmokeTest ? Environment.GetEnvironmentVariable("ROTA_SMOKE_DATA_PATH") : null;
             var repository = new StudyRepository(string.IsNullOrWhiteSpace(smokeDataPath) ? null : smokeDataPath);
             _localAiServices = LocalAiServices.Create(repository);
-            var window = new MainWindow(repository);
+            var window = new MainWindow(repository, _localAiServices.AssistantController);
             MainWindow = window;
             window.Show();
             if (_isSmokeTest)

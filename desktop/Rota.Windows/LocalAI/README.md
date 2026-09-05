@@ -1,6 +1,6 @@
 # Fundação da IA local do Rota Windows
 
-Este namespace contém somente os contratos e serviços de base da IA local. Ele não é conectado à interface nesta etapa e não possui acesso ao `StudyRepository`.
+Este namespace contém os contratos e serviços da IA local usados pela primeira tela visível do Assistente IA. A interface só conversa com o controlador seguro: ela não recebe acesso direto ao backend, ao instalador ou a qualquer operação de escrita no calendário.
 
 ## Limite de responsabilidade
 
@@ -15,7 +15,7 @@ Há dois formatos de proposta independentes:
 
 `AiConfigurationStore` mantém a configuração separada em `%LOCALAPPDATA%\Rota\AI\config.json`. A escrita é atômica, cria uma cópia `.bak` e preserva arquivos inválidos antes de recuperar uma configuração íntegra ou criar os valores seguros padrão.
 
-Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. A instalação local é preparada por um serviço separado e nunca acontece automaticamente ao abrir o Rota. O ciclo de vida e o backend de inferência do `llama.cpp` existem como serviços isolados, mas ainda não são acionados pela interface e não há chat visível ao usuário.
+Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. A instalação local é preparada por um serviço separado e nunca acontece automaticamente ao abrir o Rota. O ciclo de vida e o backend de inferência do `llama.cpp` permanecem isolados; a tela só permite enviar quando a instalação local já estiver íntegra e pronta.
 
 ## Perfis de hardware
 
@@ -109,11 +109,17 @@ O histórico só é chamado depois que geração e prévia terminam e depois de 
 
 A composição é deliberadamente inerte: seus construtores não criam a pasta de IA, não leem hardware, não baixam arquivos, não iniciam `llama-server` e não geram respostas. Essas ações só acontecem quando um comando explícito chamar o serviço correspondente. A abertura normal e os smoke tests comprovam que o calendário continua independente.
 
-## Controlador da interface futura
+## Controlador da interface
 
-`AiAssistantController` concentra o estado que a tela do assistente consumirá, sem depender de XAML. Ao abrir essa futura área, ele poderá carregar perfil efetivo, estado da instalação e até 100 propostas do histórico. Os cinco comandos rápidos previstos já são transformados em entradas estruturadas e escolhem criação de `StudyPlan` ou alteração conforme o caso.
+`AiAssistantController` concentra o estado consumido pela tela do assistente, sem depender de XAML. Somente ao abrir essa área ele carrega perfil efetivo, estado da instalação e até 100 propostas do histórico. Os cinco comandos rápidos são transformados em entradas estruturadas e escolhem criação de `StudyPlan` ou alteração conforme o caso.
 
 O envio só é liberado quando runtime e modelo estão prontos. Durante a geração, o controlador publica estado ocupado e mantém um cancelamento próprio; cancelar encerra a operação e informa que nenhuma proposta parcial foi salva. Sucesso acrescenta a prévia ao histórico visível com o aviso de que nada foi aplicado. Erros inesperados são contidos sem expor detalhes internos. O descarte central espera uma operação ativa terminar após cancelá-la, antes de desmontar os serviços.
+
+## Primeira tela do Assistente IA
+
+`AiAssistantWindow` integra o controlador ao visual já existente do Rota. Ela mostra estado local/offline, perfil efetivo, disponibilidade da instalação, avisos, cinco ações rápidas, escolha entre plano novo e ajuste do plano atual, envio, cancelamento e o histórico de prévias validadas ou bloqueadas. O layout preserva os alvos de clique, ícones e estados visuais compartilhados e mantém as duas colunas utilizáveis na menor janela suportada.
+
+A tela não possui ação de aplicar, aceitar ou rejeitar. Toda resposta permanece como prévia, com a mensagem explícita de que o calendário não foi alterado. A instalação também não começa automaticamente e não há botão de instalação neste bloco. O gerador anterior de prompt para outra IA continua acessível como opção secundária, preservando a funcionalidade já existente.
 
 ### Fontes fixadas e verificadas em 04/09/2026
 
@@ -129,10 +135,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 138 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte e estados do controlador. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 139º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 140 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados do controlador e carga real da nova janela WPF com seus bloqueios de envio e aplicação. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 141º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Construir a primeira tela visível do Assistente IA sobre esse controlador, mantendo instalação e aplicação fora dela até seus fluxos de confirmação estarem completos. A tela deve mostrar claramente estado local/offline, perfil, histórico, ações rápidas, envio, cancelamento e prévia bloqueada ou validada, sem parecer que uma proposta já alterou o calendário.
+Construir o fluxo guiado de instalação da IA local sobre `LocalAiInstaller`, com consentimento explícito, tamanho do download, progresso, cancelamento, verificação e explicação clara do armazenamento. A instalação deve continuar separada da geração e nunca pode começar só porque o aplicativo ou o assistente foi aberto.

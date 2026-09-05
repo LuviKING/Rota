@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Rota.Desktop.LocalAI;
 
 namespace Rota.Desktop;
 
@@ -13,6 +14,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 {
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
     private readonly StudyRepository _repository;
+    private readonly IAiAssistantController _aiAssistantController;
     private DateOnly _selectedDate;
     private DateOnly _displayMonth;
     private string _theme;
@@ -63,9 +65,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public MainWindow(StudyRepository repository)
+    public MainWindow(StudyRepository repository, IAiAssistantController aiAssistantController)
     {
-        _repository = repository;
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _aiAssistantController = aiAssistantController ?? throw new ArgumentNullException(nameof(aiAssistantController));
         _selectedDate = DateOnly.FromDateTime(DateTime.Today);
         _displayMonth = new DateOnly(_selectedDate.Year, _selectedDate.Month, 1);
         _theme = ThemeManager.LoadPreference(_repository.DataDirectory);
@@ -275,7 +278,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void AiNav_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new AiPromptWindow(_repository) { Owner = this };
+        var dialog = new AiAssistantWindow(_aiAssistantController, _repository) { Owner = this };
         dialog.ShowDialog();
     }
 

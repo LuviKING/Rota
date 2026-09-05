@@ -176,7 +176,7 @@ Valida, nesta ordem:
 Valida:
 
 1. restore e build Release em runner Windows;
-2. testes de invariantes do importador, repositório, histórico, revisões e prompt para IA, além da carga real das quatro janelas WPF;
+2. testes de invariantes do importador, repositório, histórico, revisões e IA local, além da carga real das cinco janelas WPF;
 3. publicação `win-x64` self-contained em arquivo executável;
 4. metadados e SHA-256 do executável;
 5. smoke test de inicialização real do `Rota.exe`;
