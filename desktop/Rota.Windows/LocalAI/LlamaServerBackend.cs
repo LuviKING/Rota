@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -22,6 +23,8 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
         Não invente acesso a arquivos, internet, ferramentas ou dados ausentes. Preserve sessões concluídas e trate mudanças como pedidos futuros.
         Nunca proponha remoção direta de uma sessão marcada como protected_from_direct_removal.
         Para StudyPlan, use format=studyplan, format_version=0.2, revision=1, datas AAAA-MM-DD e kind=study.
+        reference_date é a data local de hoje e constitui um limite rígido: nenhuma sessão de StudyPlan pode ser anterior a ela.
+        Interprete expressões relativas como hoje, amanhã e próximo ano usando reference_date, nunca o ano de treinamento do modelo.
         Respeite estritamente os limites do schema: títulos curtos, IDs curtos, sessões de 10 a 360 minutos e textos sem caracteres de controle.
         Um plano novo pode conter no máximo 20 sessões por proposta, para concluir integralmente dentro do contexto local.
         Em um plano novo, objective.name e objective.date são fixados pelo Rota a partir dos campos declarados pela pessoa; não os reformule.
@@ -224,6 +227,10 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
         await _generationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            var referenceNow = _utcNow();
+            if (referenceNow == default || referenceNow.Offset != TimeSpan.Zero)
+                throw new AiInferenceException("O relógio local não forneceu um timestamp UTC válido.");
+            var referenceDate = DateOnly.FromDateTime(referenceNow.ToLocalTime().DateTime);
             var runtimeStatus = await _runtimeHost.StartAsync(configuration, cancellationToken).ConfigureAwait(false);
             if (runtimeStatus.State != AiRuntimeState.Ready)
                 throw new AiInferenceException("O runtime local não confirmou que está pronto para gerar.");
@@ -234,7 +241,8 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
                 configuration,
                 planningContext,
                 conversationContext,
-                enemCatalogContext);
+                enemCatalogContext,
+                referenceDate);
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
                 new Uri(connection.Endpoint, "v1/chat/completions"));
@@ -256,7 +264,7 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
                 if (!response.IsSuccessStatusCode)
                     throw new AiInferenceException($"O runtime local recusou a geração (HTTP {(int)response.StatusCode}).");
                 var responseBytes = await ReadBoundedAsync(response.Content, linked.Token).ConfigureAwait(false);
-                return ParseResponse(responseBytes, kind);
+                return ParseResponse(responseBytes, kind, referenceDate);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -287,11 +295,13 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
         AiConfiguration configuration,
         AiPlanningContext? planningContext,
         AiConversationContext? conversationContext,
-        AiEnemCatalogContext? enemCatalogContext)
+        AiEnemCatalogContext? enemCatalogContext,
+        DateOnly referenceDate)
     {
         var payload = new
         {
             request_kind = kind == AiProposalKind.StudyPlan ? "study_plan" : "plan_changes",
+            reference_date = StudyRepository.Iso(referenceDate),
             user_payload = new
             {
                 objective_or_exam = input.ObjectiveOrExam,
@@ -432,7 +442,7 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
         return JsonSerializer.SerializeToElement(schema);
     }
 
-    private AiProposal ParseResponse(byte[] responseBytes, AiProposalKind kind)
+    private AiProposal ParseResponse(byte[] responseBytes, AiProposalKind kind, DateOnly referenceDate)
     {
         using var responseDocument = JsonDocument.Parse(responseBytes, new JsonDocumentOptions { MaxDepth = 64 });
         EnsureNoDuplicateProperties(responseDocument.RootElement);
@@ -468,7 +478,7 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
             using var generatedDocument = JsonDocument.Parse(generatedJson, new JsonDocumentOptions { MaxDepth = 64 });
             EnsureNoDuplicateProperties(generatedDocument.RootElement);
             var proposal = kind == AiProposalKind.StudyPlan
-                ? ParseStudyPlan(generatedJson)
+                ? ParseStudyPlan(generatedJson, referenceDate)
                 : ParseChanges(generatedJson);
             AiContractValidator.ValidateProposal(proposal, kind);
             return proposal;
@@ -483,17 +493,95 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
         }
     }
 
-    private AiProposal ParseStudyPlan(string generatedJson)
+    private AiProposal ParseStudyPlan(string generatedJson, DateOnly referenceDate)
     {
         var result = JsonSerializer.Deserialize<StudyPlanWireResult>(generatedJson, _wireOptions)
             ?? throw new AiInferenceException("A proposta de plano está vazia.");
         if (result.Warnings is null || result.StudyPlan.ValueKind != JsonValueKind.Object)
             throw new AiInferenceException("A proposta não contém um StudyPlan estruturado.");
+        var studyPlanJson = NormalizePastStudyPlanDates(result.StudyPlan, referenceDate, result.Warnings);
         return NewProposal(
             result.Summary,
             AiProposalKind.StudyPlan,
             result.Warnings,
-            studyPlan: new AiStudyPlanDraft { StudyPlanJson = result.StudyPlan.GetRawText() });
+            studyPlan: new AiStudyPlanDraft { StudyPlanJson = studyPlanJson });
+    }
+
+    private static string NormalizePastStudyPlanDates(
+        JsonElement studyPlan,
+        DateOnly referenceDate,
+        List<string> warnings)
+    {
+        var raw = studyPlan.GetRawText();
+        PlanPackage package;
+        try
+        {
+            package = StudyPlanImporter.Parse(raw);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new AiInferenceException("A IA local devolveu um StudyPlan inválido.", ex);
+        }
+
+        var parsedDates = package.Sessions
+            .Select(session => DateOnly.ParseExact(
+                session.Date,
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture))
+            .ToList();
+        var earliest = parsedDates.Min();
+        if (earliest >= referenceDate)
+            return raw;
+
+        var latest = parsedDates.Max();
+        var span = latest.DayNumber - earliest.DayNumber;
+        var daysBehind = referenceDate.DayNumber - earliest.DayNumber;
+        var offset = checked(((daysBehind + 6) / 7) * 7);
+        var adjustedStart = DateOnly.FromDayNumber(earliest.DayNumber + offset);
+        if (package.ObjectiveDate.Length > 0)
+        {
+            var objectiveDate = DateOnly.ParseExact(
+                package.ObjectiveDate,
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture);
+            if (adjustedStart.DayNumber + span > objectiveDate.DayNumber)
+            {
+                throw new AiInferenceException(
+                    "A IA local gerou datas antigas e o calendário não cabe antes da data do objetivo.");
+            }
+        }
+
+        JsonObject root;
+        try
+        {
+            root = JsonNode.Parse(raw)?.AsObject()
+                ?? throw new JsonException("O StudyPlan não é um objeto JSON.");
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            throw new AiInferenceException("O StudyPlan não pôde ter as datas antigas corrigidas.", ex);
+        }
+
+        var sessions = root["sessions"]?.AsArray()
+            ?? throw new AiInferenceException("O StudyPlan não contém sessões ajustáveis.");
+        for (var index = 0; index < sessions.Count; index++)
+        {
+            var adjusted = DateOnly.FromDayNumber(parsedDates[index].DayNumber + offset);
+            sessions[index]!["date"] = StudyRepository.Iso(adjusted);
+        }
+
+        warnings.Add(
+            $"O Rota realocou {sessions.Count} sessão(ões) que a IA datou no passado; o cronograma agora começa em {adjustedStart:dd/MM/yyyy}, preservando os dias da semana.");
+        var normalized = root.ToJsonString();
+        try
+        {
+            StudyPlanImporter.Parse(normalized);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new AiInferenceException("O StudyPlan corrigido não passou pela validação final.", ex);
+        }
+        return normalized;
     }
 
     private AiProposal ParseChanges(string generatedJson)

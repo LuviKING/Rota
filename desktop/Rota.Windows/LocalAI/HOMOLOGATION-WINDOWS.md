@@ -22,7 +22,15 @@ Os tempos de instalação abaixo usam os arquivos oficiais já presentes em cach
 
 Na rodada final conjunta, o uso total informado pela NVIDIA subiu de 1.071 MiB para um pico de 7.084 MiB durante o perfil Desempenho, variação de 6.013 MiB. O Windows em modo WDDM não forneceu a memória por processo, por isso esse número é a variação total da placa e pode incluir pequenas oscilações de outros aplicativos.
 
-Todos os perfis receberam o pedido somente como texto livre, como ocorre na tela do Assistente IA, e produziram exatamente uma sessão válida de 30 minutos para `Matemática` / `Álgebra, funções, equações e gráficos`, na data solicitada e dentro do catálogo ENEM fixado. A rodada final conjunta passou nos três perfis.
+Na homologação inicial da 0.3.0, todos os perfis receberam o pedido somente como texto livre, como ocorre na tela do Assistente IA, e produziram exatamente uma sessão válida de 30 minutos para `Matemática` / `Álgebra, funções, equações e gráficos`, na data solicitada e dentro do catálogo ENEM fixado. A rodada final conjunta passou nos três perfis.
+
+## Regressão corrigida na 0.3.1
+
+Um pedido genérico feito na interface conseguiu gerar uma proposta, mas o modelo atribuiu datas de 2025 às sessões. Como todas já estavam no passado em 05/09/2026, a prévia foi corretamente bloqueada e a pessoa não conseguia aplicar o plano.
+
+A correção passou a enviar a data local de referência em todo pedido e a exigir que expressões relativas sejam calculadas a partir dela. Como defesa adicional, um cronograma devolvido no passado é deslocado integralmente para o futuro, preservando os dias da semana e respeitando a data do objetivo; se isso for impossível, a proposta continua bloqueada.
+
+O pedido real relatado — `Quero me preparar pra prova do ENEM do ano que vem` — foi repetido no perfil Desempenho com o modelo Qwen3 8B e runtime Vulkan reais. Em 05/09/2026, o resultado foi um plano para o ENEM 2027 com 20 sessões futuras, 600 minutos e prévia aplicável. O runtime iniciou em 18,8 s e a geração terminou em 37,7 s. O calendário real não foi aberto nem alterado.
 
 ## Correções encontradas durante o ensaio
 
@@ -42,7 +50,7 @@ Os cinco artefatos devem estar previamente no diretório de cache com os nomes d
 dotnet run --project .\desktop\Rota.Windows.Homologation\Rota.Windows.Homologation.csproj -c Release -- --root "$env:TEMP\RotaAI-Homologation" --cache .\artifacts\model-cache --output .\artifacts\homologation-results.json
 ```
 
-O relatório JSON inclui hardware detectado, perfil automático, modelo, processamento, contexto, tempos, memória, quantidade de sessões, minutos planejados, resumo, erro e resultado por perfil. A ferramenta usa uma configuração isolada por perfil e não referencia `StudyRepository`, `desktop-state.json` ou o serviço que aplica propostas.
+O relatório JSON inclui hardware detectado, perfil automático, modelo, processamento, contexto, tempos, memória, quantidade de sessões, minutos planejados, resumo, erro e resultado por perfil. A ferramenta usa uma configuração e um calendário temporário isolados por perfil; ela não referencia `%LOCALAPPDATA%\Rota\desktop-state.json` nem o serviço que aplica propostas.
 
 ## Artefatos verificados
 

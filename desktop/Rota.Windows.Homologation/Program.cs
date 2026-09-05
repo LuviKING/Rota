@@ -1,6 +1,7 @@
 using Rota.Desktop;
 using Rota.Desktop.LocalAI;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 
 var options = Options.Parse(args);
@@ -134,7 +135,7 @@ static async Task<ProfileResult> RunProfileAsync(
             enemCatalogProvider: EnemCatalogService.Default);
         var input = new AiAssistantInput
         {
-            FreeText = "Crie uma prévia mínima para o ENEM, com prova em 2031-11-09. Gere exatamente uma única sessão de 30 minutos em 2031-02-10, com a matéria Matemática e o conteúdo Álgebra, funções, equações e gráficos. Use somente nomes do catálogo."
+            FreeText = "Quero me preparar pra prova do ENEM do ano que vem. Monte um plano equilibrado e aplicável."
         };
         var generationWatch = Stopwatch.StartNew();
         var generation = await planning.CreateGenerationAsync(input, AiProposalKind.StudyPlan);
@@ -146,16 +147,25 @@ static async Task<ProfileResult> RunProfileAsync(
         peakPrivate = Math.Max(peakPrivate, process.PrivateMemorySize64);
         peakNvidiaMemory = Maximum(peakNvidiaMemory, TryReadNvidiaTotalMemory());
         var package = StudyPlanImporter.Parse(generation.Proposal.StudyPlan!.StudyPlanJson);
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var objectiveDateValid = DateOnly.TryParseExact(
+            package.ObjectiveDate,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var objectiveDate);
         if (!string.Equals(package.ObjectiveName, "ENEM", StringComparison.Ordinal) ||
-            !string.Equals(package.ObjectiveDate, "2031-11-09", StringComparison.Ordinal) ||
-            package.Sessions.Count != 1 || package.Sessions[0].Minutes != 30 ||
-            !package.Sessions.Any(session =>
-                string.Equals(session.Date, "2031-02-10", StringComparison.Ordinal) &&
-                string.Equals(session.Subject, "Matemática", StringComparison.Ordinal) &&
-                string.Equals(session.Topic, "Álgebra, funções, equações e gráficos", StringComparison.Ordinal)))
+            !objectiveDateValid || objectiveDate.Year != today.Year + 1 ||
+            package.Sessions.Count == 0 ||
+            package.Sessions.Any(session => string.CompareOrdinal(session.Date, StudyRepository.Iso(today)) < 0) ||
+            package.Sessions.Any(session => string.CompareOrdinal(session.Date, package.ObjectiveDate) > 0))
         {
-            throw new InvalidDataException("A proposta não preservou o objetivo e a sessão mínima pedidos pela interface.");
+            throw new InvalidDataException("A proposta realista do ENEM não produziu um calendário futuro para o próximo ano.");
         }
+        var previewRepository = new StudyRepository(Path.Combine(profileRoot, "regression-preview-state.json"));
+        var preview = new AiProposalPreviewService(previewRepository).Preview(generation.Proposal);
+        if (!preview.CanProceed || preview.AddedSessionCount == 0)
+            throw new InvalidDataException("A proposta realista do ENEM não ficou aplicável na prévia do calendário.");
         var gpuMemory = TryReadNvidiaMemory(status.ProcessId.Value);
         await runtime.StopAsync();
 

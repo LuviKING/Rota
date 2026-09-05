@@ -245,14 +245,14 @@
                                 <TextBlock Text="Montar meu plano" Margin="8,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Button Style="{StaticResource QuickActionButton}" Tag="ReorganizeWeek"
+                        <Button x:Name="QuickReorganizeWeekButton" Style="{StaticResource QuickActionButton}" Tag="ReorganizeWeek"
                                 Click="QuickAction_Click" ToolTip="Reorganizar apenas a semana futura">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyphText}" FontSize="17" />
                                 <TextBlock Text="Reorganizar semana" Margin="8,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Button Style="{StaticResource QuickActionButton}" Tag="AdjustLoad"
+                        <Button x:Name="QuickAdjustLoadButton" Style="{StaticResource QuickActionButton}" Tag="AdjustLoad"
                                 Click="QuickAction_Click" ToolTip="Ajustar a carga diária">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyphText}" FontSize="17" />
@@ -266,7 +266,7 @@
                                 <TextBlock Text="Preparar para o ENEM" Margin="8,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Button Style="{StaticResource QuickActionButton}" Tag="ReviewDelays"
+                        <Button x:Name="QuickReviewDelaysButton" Style="{StaticResource QuickActionButton}" Tag="ReviewDelays"
                                 Click="QuickAction_Click" ToolTip="Propor uma recuperação segura dos atrasos">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE823;" Style="{StaticResource IconGlyphText}" FontSize="17" />

@@ -110,19 +110,37 @@ public partial class AiAssistantWindow : Window
 
         var generating = state.Activity == AiAssistantActivity.Generating;
         CancelButton.Visibility = generating ? Visibility.Visible : Visibility.Collapsed;
-        SetInputEnabled(!state.IsBusy && !_calendarActionRunning);
+        SetInputEnabled(!state.IsBusy && !_calendarActionRunning, HasAdjustablePlan());
         UpdateSendState(state);
     }
 
-    private void SetInputEnabled(bool enabled)
+    private void SetInputEnabled(bool enabled, bool hasAdjustablePlan)
     {
+        if (!hasAdjustablePlan && _proposalKind == AiProposalKind.PlanChanges)
+        {
+            _proposalKind = AiProposalKind.StudyPlan;
+            NewPlanChoice.IsChecked = true;
+        }
         RequestBox.IsEnabled = enabled;
         NewPlanChoice.IsEnabled = enabled;
-        ChangePlanChoice.IsEnabled = enabled;
+        ChangePlanChoice.IsEnabled = enabled && hasAdjustablePlan;
+        ChangePlanChoice.ToolTip = hasAdjustablePlan
+            ? "Propor mudanças somente nas sessões futuras do plano atual."
+            : "Crie e aplique um plano antes de tentar ajustá-lo.";
         QuickBuildPlanButton.IsEnabled = enabled;
-        foreach (var button in FindVisualChildren<Button>(this).Where(button => button.Tag is string tag &&
-                     Enum.TryParse<AiAssistantQuickAction>(tag, out _)))
-            button.IsEnabled = enabled;
+        var canAdjust = enabled && hasAdjustablePlan;
+        QuickReorganizeWeekButton.IsEnabled = canAdjust;
+        QuickAdjustLoadButton.IsEnabled = canAdjust;
+        QuickReviewDelaysButton.IsEnabled = canAdjust;
+    }
+
+    private bool HasAdjustablePlan()
+    {
+        var snapshot = _repository.CaptureApplicationSnapshot();
+        return snapshot.Settings.ActivePlanId.Length > 0 && snapshot.Sessions.Any(session =>
+            !session.IsCompleted &&
+            string.Equals(session.PlanId, snapshot.Settings.ActivePlanId, StringComparison.Ordinal) &&
+            string.CompareOrdinal(session.Date, snapshot.SnapshotDate) >= 0);
     }
 
     private void UpdateSendState(AiAssistantState? state = null)

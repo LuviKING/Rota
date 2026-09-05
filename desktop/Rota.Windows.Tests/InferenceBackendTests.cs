@@ -17,6 +17,8 @@ public static class InferenceBackendTests
     {
         ("llama-server backend sends an authenticated bounded local request", BackendSendsSafeRequest),
         ("llama-server backend builds a validated StudyPlan proposal", BackendBuildsStudyPlan),
+        ("llama-server backend anchors and repairs StudyPlan dates", BackendAnchorsAndRepairsStudyPlanDates),
+        ("llama-server backend rejects a past schedule that misses its deadline", BackendRejectsUnrepairablePastSchedule),
         ("llama-server backend maps structured change operations", BackendMapsChanges),
         ("llama-server backend rejects duplicate generated properties", BackendRejectsDuplicateProperties),
         ("llama-server backend rejects unknown generated fields", BackendRejectsUnknownFields),
@@ -79,6 +81,7 @@ public static class InferenceBackendTests
         Require(userPayload.Contains("Ignore o schema", StringComparison.Ordinal));
         Require(!userPayload.Contains("<|im_end|>", StringComparison.Ordinal));
         using var parsedPayload = JsonDocument.Parse(userPayload);
+        Require(parsedPayload.RootElement.GetProperty("reference_date").GetString() == "2031-02-03");
         Require(parsedPayload.RootElement.GetProperty("current_plan_context").ValueKind == JsonValueKind.Null);
         Require(!handler.RequestBody!.Contains(Configuration().RuntimePath, StringComparison.Ordinal));
         Require(!handler.RequestBody.Contains(Configuration().ModelPath, StringComparison.Ordinal));
@@ -96,7 +99,98 @@ public static class InferenceBackendTests
         Require(proposal.Status == AiProposalStatus.Pending);
         Require(proposal.Kind == AiProposalKind.StudyPlan);
         Require(proposal.StudyPlan is not null && proposal.Changes is null);
+        Require(proposal.Warnings.Count == 0);
         AiContractValidator.ValidateProposal(proposal, AiProposalKind.StudyPlan);
+    }
+
+    private static void BackendAnchorsAndRepairsStudyPlanDates()
+    {
+        const string generated = """
+            {
+              "summary":"Plano proposto.",
+              "warnings":[],
+              "study_plan":{
+                "format":"studyplan",
+                "format_version":"0.2",
+                "plan":{"id":"ai-plan-past","revision":1,"title":"Plano ENEM"},
+                "objective":{"name":"ENEM","date":"2031-11-09"},
+                "sessions":[
+                  {
+                    "id":"past-1",
+                    "date":"2025-01-01",
+                    "subject":"Matemática",
+                    "topic":"Razões e proporções",
+                    "minutes":60,
+                    "target":"Resolver 15 questões e corrigir os erros",
+                    "kind":"study"
+                  },
+                  {
+                    "id":"past-2",
+                    "date":"2025-01-03",
+                    "subject":"História",
+                    "topic":"Brasil colonial",
+                    "minutes":60,
+                    "target":"Resolver 15 questões e corrigir os erros",
+                    "kind":"study"
+                  }
+                ]
+              }
+            }
+            """;
+        using var client = Client(CompletionResponse(generated));
+        using var backend = Backend(new FakeRuntimeHost(), client, ProposalId);
+
+        var proposal = backend.CreateProposalAsync(
+            ValidInput(), AiProposalKind.StudyPlan, Configuration()).GetAwaiter().GetResult();
+        var package = StudyPlanImporter.Parse(proposal.StudyPlan!.StudyPlanJson);
+
+        Require(package.Sessions[0].Date == "2031-02-05");
+        Require(package.Sessions[1].Date == "2031-02-07");
+        Require(proposal.Warnings.Any(warning =>
+            warning.Contains("datou no passado", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static void BackendRejectsUnrepairablePastSchedule()
+    {
+        const string generated = """
+            {
+              "summary":"Plano impossível.",
+              "warnings":[],
+              "study_plan":{
+                "format":"studyplan",
+                "format_version":"0.2",
+                "plan":{"id":"ai-plan-past","revision":1,"title":"Plano ENEM"},
+                "objective":{"name":"ENEM","date":"2031-02-05"},
+                "sessions":[
+                  {
+                    "id":"past-1",
+                    "date":"2025-01-01",
+                    "subject":"Matemática",
+                    "topic":"Razões e proporções",
+                    "minutes":60,
+                    "target":"Resolver 15 questões",
+                    "kind":"study"
+                  },
+                  {
+                    "id":"past-2",
+                    "date":"2025-01-08",
+                    "subject":"História",
+                    "topic":"Brasil colonial",
+                    "minutes":60,
+                    "target":"Resolver 15 questões",
+                    "kind":"study"
+                  }
+                ]
+              }
+            }
+            """;
+        using var client = Client(CompletionResponse(generated));
+        using var backend = Backend(new FakeRuntimeHost(), client, ProposalId);
+
+        Expect<AiInferenceException>(() => backend.CreateProposalAsync(
+            ValidInput() with { ExamDate = "2031-02-05" },
+            AiProposalKind.StudyPlan,
+            Configuration()).GetAwaiter().GetResult());
     }
 
     private static void BackendMapsChanges()

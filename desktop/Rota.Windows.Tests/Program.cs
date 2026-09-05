@@ -510,9 +510,15 @@ static void DesktopWindowsLoad()
                         ?? throw new InvalidOperationException("AI assistant send button was not created");
                     var quickAction = localAssistant.FindName("QuickBuildPlanButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("AI assistant quick action was not created");
+                    var changePlan = localAssistant.FindName("ChangePlanChoice") as System.Windows.Controls.RadioButton
+                        ?? throw new InvalidOperationException("AI change-plan choice was not created");
+                    var reorganize = localAssistant.FindName("QuickReorganizeWeekButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI reorganize action was not created");
                     var externalPrompt = localAssistant.FindName("OpenExternalPromptButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("existing external AI prompt entry point was not preserved");
                     True(!send.IsEnabled, "empty AI request must not be sent");
+                    True(!changePlan.IsEnabled, "change-plan choice must stay disabled without a future plan");
+                    True(!reorganize.IsEnabled, "change-plan quick actions must stay disabled without a future plan");
                     request.Text = "Tenho duas horas por dia.";
                     True(send.IsEnabled, "ready local AI should enable a non-empty request");
                     quickAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
@@ -577,7 +583,8 @@ static void DesktopWindowsLoad()
         throw new TimeoutException("desktop window smoke test timed out");
     try
     {
-        if (failure is not null) throw new InvalidOperationException("desktop window smoke failed", failure);
+        if (failure is not null)
+            throw new InvalidOperationException("desktop window smoke failed: " + failure.Message, failure);
     }
     finally
     {

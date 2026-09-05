@@ -4,7 +4,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 
 ## Estado da edição Windows
 
-- Versão: **0.3.0**
+- Versão: **0.3.1**
 - interface principal **calendar-first**, com o mês completo em grade e a agenda detalhada do dia selecionado logo abaixo;
 - navegação rápida entre meses, dias e retorno para hoje;
 - tema **escuro e claro**, com troca imediata pela interface e preferência preservada localmente;
@@ -55,7 +55,7 @@ A identidade persistida de uma sessão é o par `(plan.id, session.id)`. O marca
 
 ## Executável
 
-O CI publica o artefato **`Rota-Windows-v0.3.0-x64`** com um executável `win-x64` **self-contained**, então o usuário não precisa instalar o .NET 8 separadamente.
+O CI publica o artefato **`Rota-Windows-v0.3.1-x64`** com um executável `win-x64` **self-contained**, então o usuário não precisa instalar o .NET 8 separadamente.
 
 Os modelos de IA não ficam embutidos no EXE. A pessoa escolhe um perfil e confirma a instalação dentro do aplicativo; só então o Rota baixa e verifica o runtime e o modelo correspondentes. Isso mantém o instalador do aplicativo menor e torna transparente o espaço necessário para cada perfil.
 
