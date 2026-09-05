@@ -109,6 +109,12 @@ O histórico só é chamado depois que geração e prévia terminam e depois de 
 
 A composição é deliberadamente inerte: seus construtores não criam a pasta de IA, não leem hardware, não baixam arquivos, não iniciam `llama-server` e não geram respostas. Essas ações só acontecem quando um comando explícito chamar o serviço correspondente. A abertura normal e os smoke tests comprovam que o calendário continua independente.
 
+## Controlador da interface futura
+
+`AiAssistantController` concentra o estado que a tela do assistente consumirá, sem depender de XAML. Ao abrir essa futura área, ele poderá carregar perfil efetivo, estado da instalação e até 100 propostas do histórico. Os cinco comandos rápidos previstos já são transformados em entradas estruturadas e escolhem criação de `StudyPlan` ou alteração conforme o caso.
+
+O envio só é liberado quando runtime e modelo estão prontos. Durante a geração, o controlador publica estado ocupado e mantém um cancelamento próprio; cancelar encerra a operação e informa que nenhuma proposta parcial foi salva. Sucesso acrescenta a prévia ao histórico visível com o aviso de que nada foi aplicado. Erros inesperados são contidos sem expor detalhes internos. O descarte central espera uma operação ativa terminar após cancelá-la, antes de desmontar os serviços.
+
 ### Fontes fixadas e verificadas em 04/09/2026
 
 - [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos, passaram pela extração do instalador e iniciaram com `--version` pelo controlador real do Rota. Nenhum modelo completo ou inferência foi executado.
@@ -123,10 +129,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 132 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais e composição inerte. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 133º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 138 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte e estados do controlador. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 139º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Criar o controlador de estado da futura tela do Assistente IA: carregamento de perfil/instalação/histórico, envio e cancelamento, comandos rápidos e mensagens de erro, ainda separado do XAML. A aplicação de propostas deve continuar desabilitada.
+Construir a primeira tela visível do Assistente IA sobre esse controlador, mantendo instalação e aplicação fora dela até seus fluxos de confirmação estarem completos. A tela deve mostrar claramente estado local/offline, perfil, histórico, ações rápidas, envio, cancelamento e prévia bloqueada ou validada, sem parecer que uma proposta já alterou o calendário.

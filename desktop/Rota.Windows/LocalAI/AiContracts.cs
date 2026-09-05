@@ -82,6 +82,23 @@ public enum AiProposalPreviewState
     Blocked
 }
 
+public enum AiAssistantActivity
+{
+    Idle,
+    Loading,
+    Generating,
+    Error
+}
+
+public enum AiAssistantQuickAction
+{
+    BuildPlan,
+    ReorganizeWeek,
+    AdjustLoad,
+    PrepareForEnem,
+    ReviewDelays
+}
+
 public sealed record AiPlanningContext
 {
     public const int CurrentSchemaVersion = 1;
@@ -190,6 +207,20 @@ public sealed record AiProposalGeneration
 {
     public AiProposal Proposal { get; init; } = new();
     public AiPlanningContext? PlanningContext { get; init; }
+}
+
+public sealed record AiAssistantState
+{
+    public bool IsInitialized { get; init; }
+    public AiAssistantActivity Activity { get; init; } = AiAssistantActivity.Idle;
+    public AiProfile EffectiveProfile { get; init; } = AiProfile.Automatic;
+    public AiInstallationState InstallationState { get; init; } = AiInstallationState.NotInstalled;
+    public string StatusMessage { get; init; } = "Assistente local não carregado.";
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<AiStoredProposal> History { get; init; } = Array.Empty<AiStoredProposal>();
+
+    public bool IsBusy => Activity is AiAssistantActivity.Loading or AiAssistantActivity.Generating;
+    public bool IsOfflineReady => InstallationState == AiInstallationState.Ready;
 }
 
 public sealed record AiModelDescriptor(
@@ -304,6 +335,21 @@ public interface IAiProposalWorkflowService
         AiAssistantInput input,
         AiProposalKind kind,
         CancellationToken cancellationToken = default);
+}
+
+public interface IAiAssistantController
+{
+    AiAssistantState State { get; }
+    event EventHandler? StateChanged;
+
+    Task InitializeAsync(CancellationToken cancellationToken = default);
+    Task<AiStoredProposal?> SendAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        CancellationToken cancellationToken = default);
+    void CancelCurrentOperation();
+    AiAssistantInput ApplyQuickAction(AiAssistantInput input, AiAssistantQuickAction action);
+    AiProposalKind SuggestedKind(AiAssistantQuickAction action);
 }
 
 public sealed class AiContractValidationException : ArgumentException

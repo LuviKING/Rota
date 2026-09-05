@@ -18,6 +18,7 @@ public sealed class LocalAiServices : IAsyncDisposable
         PreviewService = new AiProposalPreviewService(repository, ContextProvider);
         ProposalStore = new AiProposalStore(Path.Combine(rootDirectory, "proposals.json"));
         Workflow = new AiProposalWorkflowService(PlanningService, PreviewService, ProposalStore);
+        AssistantController = new AiAssistantController(ConfigurationStore, ModelManager, ProposalStore, Workflow);
     }
 
     public string RootDirectory { get; }
@@ -32,6 +33,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     public AiProposalPreviewService PreviewService { get; }
     public AiProposalStore ProposalStore { get; }
     public AiProposalWorkflowService Workflow { get; }
+    public AiAssistantController AssistantController { get; }
 
     public static LocalAiServices Create(StudyRepository repository, string? rootDirectory = null)
     {
@@ -49,6 +51,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        await AssistantController.DisposeAsync().ConfigureAwait(false);
         Workflow.Dispose();
         Backend.Dispose();
         try
