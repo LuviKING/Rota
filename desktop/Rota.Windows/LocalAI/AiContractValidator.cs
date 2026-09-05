@@ -42,7 +42,7 @@ public static class AiContractValidator
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        ValidateText(input.ObjectiveOrExam, "Objetivo ou prova", 160, allowEmpty: true);
+        ValidateText(input.ObjectiveOrExam, "Objetivo ou prova", 120, allowEmpty: true);
         ValidateText(input.ExamDate, "Data da prova", 10, allowEmpty: true);
         ValidateText(input.Goal, "Meta", 500, allowEmpty: true, allowLineBreaks: true);
         ValidateText(input.Notes, "Observações", 2_000, allowEmpty: true, allowLineBreaks: true);

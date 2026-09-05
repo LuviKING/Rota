@@ -149,6 +149,7 @@ public sealed class AiInstallationManifest
             if (!modelIds.Add(model.ModelId))
                 throw new AiContractValidationException("O manifesto contém pacotes duplicados para um modelo.");
             ValidateArtifact(model.Artifact, ".gguf", artifactIds, artifactFileNames);
+            AiProfileResourceBudgets.ValidateModel(descriptor, model.Artifact.ExpectedSizeBytes);
             if (!string.Equals(model.Artifact.FileName, descriptor.FileName, StringComparison.Ordinal))
                 throw new AiContractValidationException("O nome do artefato não corresponde ao catálogo local de modelos.");
         }

@@ -52,7 +52,26 @@ public static class InferenceBackendTests
         Require(root.GetProperty("model").GetString() == "qwen3-4b-q4-k-m");
         Require(root.GetProperty("max_tokens").GetInt32() == 4096);
         Require(!root.GetProperty("stream").GetBoolean());
-        Require(root.GetProperty("json_schema").GetProperty("additionalProperties").ValueKind == JsonValueKind.False);
+        var schema = root.GetProperty("json_schema");
+        Require(schema.GetProperty("additionalProperties").ValueKind == JsonValueKind.False);
+        var studyPlan = schema.GetProperty("properties").GetProperty("study_plan").GetProperty("properties");
+        var plan = studyPlan.GetProperty("plan").GetProperty("properties");
+        Require(plan.GetProperty("id").GetProperty("maxLength").GetInt32() == 80);
+        Require(plan.GetProperty("title").GetProperty("maxLength").GetInt32() == 120);
+        Require(studyPlan.GetProperty("objective").GetProperty("properties")
+            .GetProperty("name").GetProperty("maxLength").GetInt32() == 120);
+        Require(studyPlan.GetProperty("objective").GetProperty("properties")
+            .GetProperty("name").GetProperty("const").GetString() == "ENEM");
+        Require(studyPlan.GetProperty("objective").GetProperty("properties")
+            .GetProperty("date").GetProperty("const").GetString() == "2031-11-09");
+        var session = studyPlan.GetProperty("sessions").GetProperty("items").GetProperty("properties");
+        Require(studyPlan.GetProperty("sessions").GetProperty("maxItems").GetInt32() == 20);
+        Require(session.GetProperty("id").GetProperty("maxLength").GetInt32() == 100);
+        Require(session.GetProperty("subject").GetProperty("maxLength").GetInt32() == 80);
+        Require(session.GetProperty("topic").GetProperty("maxLength").GetInt32() == 160);
+        Require(session.GetProperty("minutes").GetProperty("minimum").GetInt32() == 10);
+        Require(session.GetProperty("minutes").GetProperty("maximum").GetInt32() == 360);
+        Require(session.GetProperty("target").GetProperty("maxLength").GetInt32() == 180);
         var messages = root.GetProperty("messages");
         Require(messages.GetArrayLength() == 2);
         Require(messages[0].GetProperty("role").GetString() == "system");
@@ -269,14 +288,16 @@ public static class InferenceBackendTests
         var handler = new CompletionHandler(CompletionResponse(ValidStudyPlanResult()));
         using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
         using var backend = Backend(new FakeRuntimeHost(), client);
-        var context = EnemCatalogService.Default.CreateContext(new AiAssistantInput
+        var input = ValidInput() with
         {
-            ObjectiveOrExam = "ENEM",
+            ObjectiveOrExam = "",
+            FreeText = "Prepare um plano para o ENEM.",
             WeakSubjects = new List<string> { "Matemática" }
-        })!;
+        };
+        var context = EnemCatalogService.Default.CreateContext(input)!;
 
         backend.CreateProposalAsync(
-            ValidInput(),
+            input,
             AiProposalKind.StudyPlan,
             Configuration(),
             null,
@@ -295,6 +316,21 @@ public static class InferenceBackendTests
         Require(sent.GetProperty("writing").GetProperty("name").GetString() == "Redação");
         Require(!userContent.Contains("https://", StringComparison.OrdinalIgnoreCase));
         Require(!userContent.Contains("aliases", StringComparison.OrdinalIgnoreCase));
+        var schemaObjective = request.RootElement.GetProperty("json_schema").GetProperty("properties")
+            .GetProperty("study_plan").GetProperty("properties").GetProperty("objective")
+            .GetProperty("properties").GetProperty("name");
+        Require(schemaObjective.GetProperty("const").GetString() == "ENEM");
+        var schemaSession = request.RootElement.GetProperty("json_schema").GetProperty("properties")
+            .GetProperty("study_plan").GetProperty("properties").GetProperty("sessions")
+            .GetProperty("items").GetProperty("properties");
+        var allowedSubjects = schemaSession.GetProperty("subject").GetProperty("enum")
+            .EnumerateArray().Select(value => value.GetString()).ToArray();
+        var allowedTopics = schemaSession.GetProperty("topic").GetProperty("enum")
+            .EnumerateArray().Select(value => value.GetString()).ToArray();
+        Require(allowedSubjects.Contains("Matemática", StringComparer.Ordinal));
+        Require(!allowedSubjects.Contains("matematica", StringComparer.Ordinal));
+        Require(allowedTopics.Contains("Álgebra, funções, equações e gráficos", StringComparer.Ordinal));
+        Require(!allowedTopics.Contains("mat-algebra", StringComparer.Ordinal));
     }
 
     private static void PlanningServiceContainsInferenceFailure()

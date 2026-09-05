@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 
 namespace Rota.Desktop.LocalAI;
 
@@ -21,6 +22,9 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
         Não invente acesso a arquivos, internet, ferramentas ou dados ausentes. Preserve sessões concluídas e trate mudanças como pedidos futuros.
         Nunca proponha remoção direta de uma sessão marcada como protected_from_direct_removal.
         Para StudyPlan, use format=studyplan, format_version=0.2, revision=1, datas AAAA-MM-DD e kind=study.
+        Respeite estritamente os limites do schema: títulos curtos, IDs curtos, sessões de 10 a 360 minutos e textos sem caracteres de controle.
+        Um plano novo pode conter no máximo 20 sessões por proposta, para concluir integralmente dentro do contexto local.
+        Em um plano novo, objective.name e objective.date são fixados pelo Rota a partir dos campos declarados pela pessoa; não os reformule.
         Para operações, use somente os tipos enumerados e preencha apenas campos pertinentes.
         Responda em português do Brasil, de forma curta, e mantenha avisos objetivos.
         """;
@@ -42,9 +46,9 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "id": { "type": "string", "minLength": 1, "maxLength": 120 },
+                    "id": { "type": "string", "minLength": 1, "maxLength": 80 },
                     "revision": { "const": 1 },
-                    "title": { "type": "string", "minLength": 1, "maxLength": 200 }
+                    "title": { "type": "string", "minLength": 1, "maxLength": 120 }
                   },
                   "required": ["id", "revision", "title"]
                 },
@@ -52,7 +56,7 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
-                    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
                     "date": { "type": "string", "minLength": 10, "maxLength": 10 }
                   },
                   "required": ["name", "date"]
@@ -60,17 +64,17 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
                 "sessions": {
                   "type": "array",
                   "minItems": 1,
-                  "maxItems": 200,
+                  "maxItems": 20,
                   "items": {
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "id": { "type": "string", "minLength": 1, "maxLength": 120 },
+                      "id": { "type": "string", "minLength": 1, "maxLength": 100 },
                       "date": { "type": "string", "minLength": 10, "maxLength": 10 },
-                      "subject": { "type": "string", "minLength": 1, "maxLength": 120 },
-                      "topic": { "type": "string", "minLength": 1, "maxLength": 200 },
-                      "minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
-                      "target": { "type": "string", "minLength": 1, "maxLength": 500 },
+                      "subject": { "type": "string", "minLength": 1, "maxLength": 80 },
+                      "topic": { "type": "string", "minLength": 1, "maxLength": 160 },
+                      "minutes": { "type": "integer", "minimum": 10, "maximum": 360 },
+                      "target": { "type": "string", "minLength": 1, "maxLength": 180 },
                       "kind": { "const": "study" }
                     },
                     "required": ["id", "date", "subject", "topic", "minutes", "target", "kind"]
@@ -383,10 +387,49 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
             max_tokens = MaximumGeneratedTokens,
             stream = false,
             seed = 0,
-            json_schema = kind == AiProposalKind.StudyPlan ? StudyPlanSchema : ChangesSchema,
+            json_schema = kind == AiProposalKind.StudyPlan
+                ? BuildStudyPlanSchema(input, enemCatalogContext)
+                : ChangesSchema,
             chat_template_kwargs = new { enable_thinking = false }
         };
         return JsonSerializer.SerializeToUtf8Bytes(request, _wireOptions);
+    }
+
+    private static JsonElement BuildStudyPlanSchema(
+        AiAssistantInput input,
+        AiEnemCatalogContext? enemCatalogContext)
+    {
+        var schema = JsonNode.Parse(StudyPlanSchema.GetRawText())?.AsObject()
+            ?? throw new AiInferenceException("O schema local de StudyPlan não pôde ser preparado.");
+        var studyPlanProperties = schema["properties"]?["study_plan"]?["properties"]?.AsObject()
+            ?? throw new AiInferenceException("O schema local de StudyPlan está incompleto.");
+        var objectiveProperties = studyPlanProperties["objective"]?["properties"]?.AsObject()
+            ?? throw new AiInferenceException("O schema local do objetivo está incompleto.");
+        var objective = input.ObjectiveOrExam.Trim();
+        if (objective.Length == 0 && enemCatalogContext is not null)
+            objective = "ENEM";
+        if (objective.Length > 0)
+            objectiveProperties["name"]!.AsObject()["const"] = objective;
+        var date = input.ExamDate.Trim();
+        if (date.Length > 0)
+            objectiveProperties["date"]!.AsObject()["const"] = date;
+        if (enemCatalogContext is not null)
+        {
+            var sessionProperties = studyPlanProperties["sessions"]?["items"]?["properties"]?.AsObject()
+                ?? throw new AiInferenceException("O schema local das sessões está incompleto.");
+            var subjectNames = new JsonArray();
+            var contentNames = new JsonArray();
+            foreach (var subject in enemCatalogContext.Areas.SelectMany(area => area.Subjects)
+                         .Append(enemCatalogContext.Writing))
+            {
+                subjectNames.Add(subject.Name);
+                foreach (var content in subject.Contents)
+                    contentNames.Add(content.Name);
+            }
+            sessionProperties["subject"]!.AsObject()["enum"] = subjectNames;
+            sessionProperties["topic"]!.AsObject()["enum"] = contentNames;
+        }
+        return JsonSerializer.SerializeToElement(schema);
     }
 
     private AiProposal ParseResponse(byte[] responseBytes, AiProposalKind kind)
