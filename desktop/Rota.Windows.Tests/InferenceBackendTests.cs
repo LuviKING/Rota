@@ -29,6 +29,7 @@ public static class InferenceBackendTests
         ("llama-server backend rejects a non-loopback connection", BackendRejectsNonLoopbackConnection),
         ("llama-server backend sends bounded current-plan context only for changes", BackendSendsPlanningContext),
         ("llama-server backend sends bounded conversation context as untrusted data", BackendSendsConversationContext),
+        ("llama-server backend sends the bounded ENEM catalog as authoritative data", BackendSendsEnemCatalogContext),
         ("llama-server backend rejects current-plan context for a new plan", BackendRejectsContextForStudyPlan),
         ("AI planning service contains llama-server failures", PlanningServiceContainsInferenceFailure)
     };
@@ -261,6 +262,39 @@ public static class InferenceBackendTests
         Require(sent.GetProperty("turns").GetArrayLength() == 2);
         Require(sent.GetProperty("turns")[0].GetProperty("role").GetString() == "user");
         Require(sent.GetProperty("turns")[1].GetProperty("role").GetString() == "assistant");
+    }
+
+    private static void BackendSendsEnemCatalogContext()
+    {
+        var handler = new CompletionHandler(CompletionResponse(ValidStudyPlanResult()));
+        using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        using var backend = Backend(new FakeRuntimeHost(), client);
+        var context = EnemCatalogService.Default.CreateContext(new AiAssistantInput
+        {
+            ObjectiveOrExam = "ENEM",
+            WeakSubjects = new List<string> { "Matemática" }
+        })!;
+
+        backend.CreateProposalAsync(
+            ValidInput(),
+            AiProposalKind.StudyPlan,
+            Configuration(),
+            null,
+            null,
+            context,
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        using var request = JsonDocument.Parse(handler.RequestBody!);
+        var systemPrompt = request.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
+        Require(systemPrompt.Contains("única lista permitida", StringComparison.Ordinal));
+        var userContent = request.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!;
+        using var payload = JsonDocument.Parse(userContent);
+        var sent = payload.RootElement.GetProperty("enem_catalog_context");
+        Require(sent.GetProperty("catalog_version").GetString() == EnemCatalogService.CurrentCatalogVersion);
+        Require(sent.GetProperty("objective_areas").GetArrayLength() == 4);
+        Require(sent.GetProperty("writing").GetProperty("name").GetString() == "Redação");
+        Require(!userContent.Contains("https://", StringComparison.OrdinalIgnoreCase));
+        Require(!userContent.Contains("aliases", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void PlanningServiceContainsInferenceFailure()

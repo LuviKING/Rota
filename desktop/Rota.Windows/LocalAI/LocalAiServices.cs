@@ -14,7 +14,8 @@ public sealed class LocalAiServices : IAsyncDisposable
         RuntimeHost = new LocalAiRuntimeHost(ModelManager);
         Backend = new LlamaServerBackend(RuntimeHost);
         ContextProvider = new StudyPlanningContextProvider(repository);
-        PlanningService = new AiPlanningService(Backend, ConfigurationStore, ContextProvider);
+        EnemCatalog = EnemCatalogService.Default;
+        PlanningService = new AiPlanningService(Backend, ConfigurationStore, ContextProvider, EnemCatalog);
         PreviewService = new AiProposalPreviewService(repository, ContextProvider);
         ProposalStore = new AiProposalStore(Path.Combine(rootDirectory, "proposals.json"));
         ConversationStore = new AiConversationStore(Path.Combine(rootDirectory, "conversation.json"));
@@ -41,6 +42,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     public LocalAiRuntimeHost RuntimeHost { get; }
     public LlamaServerBackend Backend { get; }
     public StudyPlanningContextProvider ContextProvider { get; }
+    public EnemCatalogService EnemCatalog { get; }
     public AiPlanningService PlanningService { get; }
     public AiProposalPreviewService PreviewService { get; }
     public AiProposalStore ProposalStore { get; }

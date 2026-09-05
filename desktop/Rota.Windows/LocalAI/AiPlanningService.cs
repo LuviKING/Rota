@@ -5,15 +5,18 @@ public sealed class AiPlanningService : IAiPlanningService
     private readonly ILocalAiBackend _backend;
     private readonly IAiConfigurationStore _configurationStore;
     private readonly IAiPlanningContextProvider? _contextProvider;
+    private readonly IAiEnemCatalogProvider? _enemCatalogProvider;
 
     public AiPlanningService(
         ILocalAiBackend backend,
         IAiConfigurationStore configurationStore,
-        IAiPlanningContextProvider? contextProvider = null)
+        IAiPlanningContextProvider? contextProvider = null,
+        IAiEnemCatalogProvider? enemCatalogProvider = null)
     {
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
         _configurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
         _contextProvider = contextProvider;
+        _enemCatalogProvider = enemCatalogProvider;
     }
 
     public async Task<AiProposal> CreateProposalAsync(
@@ -46,11 +49,15 @@ public sealed class AiPlanningService : IAiPlanningService
 
         AiProposal proposal;
         AiPlanningContext? planningContext = null;
+        AiEnemCatalogContext? enemCatalogContext = null;
         try
         {
             planningContext = kind == AiProposalKind.PlanChanges
                 ? _contextProvider?.Capture()
                 : null;
+            enemCatalogContext = _enemCatalogProvider?.CreateContext(input);
+            if (enemCatalogContext is not null)
+                AiContractValidator.ValidateEnemCatalogContext(enemCatalogContext);
             proposal = await _backend
                 .CreateProposalAsync(
                     input,
@@ -58,6 +65,7 @@ public sealed class AiPlanningService : IAiPlanningService
                     configuration,
                     planningContext,
                     conversationContext,
+                    enemCatalogContext,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -75,6 +83,8 @@ public sealed class AiPlanningService : IAiPlanningService
             AiContractValidator.ValidateProposal(proposal, kind);
             if (proposal.Status != AiProposalStatus.Pending)
                 throw new AiContractValidationException("Uma nova proposta da IA precisa iniciar no estado Pending.");
+            if (enemCatalogContext is not null)
+                EnemProposalValidator.Validate(proposal, enemCatalogContext);
         }
         catch (AiContractValidationException ex)
         {
@@ -84,7 +94,8 @@ public sealed class AiPlanningService : IAiPlanningService
         return new AiProposalGeneration
         {
             Proposal = proposal,
-            PlanningContext = planningContext
+            PlanningContext = planningContext,
+            EnemCatalogContext = enemCatalogContext
         };
     }
 }

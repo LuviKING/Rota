@@ -208,6 +208,71 @@ public static class AiContractValidator
             throw new AiContractValidationException("O contexto da conversa excede o limite seguro.");
     }
 
+    public static void ValidateEnemCatalogContext(AiEnemCatalogContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.SchemaVersion != AiEnemCatalogContext.CurrentSchemaVersion)
+            throw new AiContractValidationException("A versão do contexto do catálogo ENEM não é suportada.");
+        ValidateText(context.CatalogVersion, nameof(context.CatalogVersion), 80, allowEmpty: false);
+        ValidateText(context.Basis, nameof(context.Basis), 500, allowEmpty: false);
+        if (context.Areas is null || context.Areas.Count != 4)
+            throw new AiContractValidationException("O contexto ENEM precisa conter as quatro áreas objetivas.");
+        if (context.Writing is null || context.Writing.Id != "redacao")
+            throw new AiContractValidationException("A redação precisa permanecer separada das áreas objetivas.");
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var subjectNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var subjectCount = 0;
+        var contentCount = 0;
+        foreach (var area in context.Areas)
+        {
+            ValidateCatalogId(area.Id, "área");
+            ValidateText(area.Name, "nome da área", 120, allowEmpty: false);
+            if (!ids.Add(area.Id) || area.Subjects is null || area.Subjects.Count == 0)
+                throw new AiContractValidationException("O contexto ENEM contém uma área duplicada ou vazia.");
+            foreach (var subject in area.Subjects)
+            {
+                ValidateCatalogSubject(subject, ids, subjectNames, ref contentCount);
+                subjectCount++;
+            }
+        }
+        ValidateCatalogSubject(context.Writing, ids, subjectNames, ref contentCount);
+        subjectCount++;
+        if (subjectCount > 16 || contentCount > 60)
+            throw new AiContractValidationException("O contexto ENEM excede os limites de matérias ou conteúdos.");
+    }
+
+    private static void ValidateCatalogSubject(
+        AiEnemSubjectContext subject,
+        HashSet<string> ids,
+        HashSet<string> names,
+        ref int contentCount)
+    {
+        ValidateCatalogId(subject.Id, "matéria");
+        ValidateText(subject.Name, "nome da matéria", 120, allowEmpty: false);
+        if (!ids.Add(subject.Id) || !names.Add(subject.Name) ||
+            subject.UserEmphasis is not ("weak" or "strong" or "mentioned" or "coverage") ||
+            subject.Contents is null || subject.Contents.Count is < 3 or > 5)
+        {
+            throw new AiContractValidationException("O contexto ENEM contém uma matéria inválida.");
+        }
+        foreach (var content in subject.Contents)
+        {
+            ValidateCatalogId(content.Id, "conteúdo");
+            ValidateText(content.Name, "nome do conteúdo", 160, allowEmpty: false);
+            if (!ids.Add(content.Id))
+                throw new AiContractValidationException("O contexto ENEM contém identificadores duplicados.");
+            contentCount++;
+        }
+    }
+
+    private static void ValidateCatalogId(string value, string field)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 80 || value.Any(character =>
+                !(character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-')))
+            throw new AiContractValidationException($"O identificador de {field} do contexto ENEM é inválido.");
+    }
+
     public static void ValidatePreview(AiProposalPreview preview)
     {
         ArgumentNullException.ThrowIfNull(preview);

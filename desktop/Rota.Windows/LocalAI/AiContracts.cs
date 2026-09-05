@@ -254,6 +254,38 @@ public sealed record AiConversationContextTurn
     public string Text { get; init; } = "";
 }
 
+public sealed record AiEnemCatalogContext
+{
+    public const int CurrentSchemaVersion = 1;
+
+    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
+    public string CatalogVersion { get; init; } = "";
+    public string Basis { get; init; } = "";
+    public List<AiEnemAreaContext> Areas { get; init; } = new();
+    public AiEnemSubjectContext Writing { get; init; } = new();
+}
+
+public sealed record AiEnemAreaContext
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+    public List<AiEnemSubjectContext> Subjects { get; init; } = new();
+}
+
+public sealed record AiEnemSubjectContext
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string UserEmphasis { get; init; } = "coverage";
+    public List<AiEnemContentContext> Contents { get; init; } = new();
+}
+
+public sealed record AiEnemContentContext
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+}
+
 public sealed record AiPreparedApplication
 {
     public Guid ConfirmationId { get; init; }
@@ -279,6 +311,7 @@ public sealed record AiProposalGeneration
 {
     public AiProposal Proposal { get; init; } = new();
     public AiPlanningContext? PlanningContext { get; init; }
+    public AiEnemCatalogContext? EnemCatalogContext { get; init; }
 }
 
 public sealed record AiAssistantState
@@ -342,11 +375,28 @@ public interface ILocalAiBackend
         AiConversationContext? conversationContext,
         CancellationToken cancellationToken) =>
         CreateProposalAsync(input, kind, configuration, planningContext, cancellationToken);
+
+    Task<AiProposal> CreateProposalAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        AiConfiguration configuration,
+        AiPlanningContext? planningContext,
+        AiConversationContext? conversationContext,
+        AiEnemCatalogContext? enemCatalogContext,
+        CancellationToken cancellationToken) =>
+        CreateProposalAsync(input, kind, configuration, planningContext, conversationContext, cancellationToken);
 }
 
 public interface IAiPlanningContextProvider
 {
     AiPlanningContext Capture();
+}
+
+public interface IAiEnemCatalogProvider
+{
+    string CatalogVersion { get; }
+    string OfficialSourceUrl { get; }
+    AiEnemCatalogContext? CreateContext(AiAssistantInput input);
 }
 
 public interface IAiConfigurationStore

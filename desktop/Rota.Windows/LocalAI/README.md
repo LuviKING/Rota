@@ -91,6 +91,14 @@ O contexto é copiado para contratos próprios antes de chegar ao backend. O mod
 
 O arquivo aceita no máximo 200 turnos e 2 MiB, rejeita propriedades duplicadas e campos desconhecidos, grava por substituição atômica e recupera a última cópia íntegra. O modelo recebe somente até seis trocas concluídas, com 500 caracteres por turno e 6.000 caracteres no total. Pedidos incompletos, cancelados ou com falha não entram no contexto. O texto é neutralizado junto com o restante do payload e continua sendo dado não confiável; nenhuma função, caminho local, recibo ou capacidade de escrita acompanha a conversa.
 
+## Catálogo ENEM estruturado
+
+`EnemCatalogService` fixa a versão `inep-enem-2026-r1` a partir da publicação institucional do Inep de 2026. As quatro áreas objetivas oficiais permanecem intactas e a redação fica como componente separado. A matriz oficial organiza competências, habilidades e objetos de conhecimento; a divisão desses objetos em 14 matérias é declarada explicitamente como curadoria interna do Rota, sem atribuí-la ao Inep.
+
+O catálogo contém IDs estáveis, nomes canônicos, aliases locais e 55 grupos de conteúdo: 50 nas áreas objetivas e cinco de redação. Ele só é ativado quando o pedido menciona ENEM como termo isolado. A seleção enviada ao modelo omite aliases e URL, fica limitada a quatro áreas, 15 matérias e 55 conteúdos e marca preferências declaradas como `weak`, `strong`, `mentioned` ou `coverage`. O modelo continua livre para escolher prioridade, ordem, datas e carga, mas não recebe permissão para criar currículo.
+
+Toda proposta de plano ENEM é verificada depois da inferência: cada `subject` e `topic` precisa corresponder a um nome canônico presente no contexto enviado. Operações que adicionam sessão ou alteram prioridade também precisam usar matéria do catálogo. Matéria ou conteúdo inventado bloqueia a proposta antes da prévia, do histórico e da tela. Pedidos que não são do ENEM continuam seguindo o fluxo geral sem essa restrição.
+
 ## Prévia isolada
 
 `AiProposalPreviewService` transforma uma proposta pendente em uma prévia `Ready` ou `Blocked`, sem aplicar a proposta. Planos novos reutilizam a validação já existente do repositório. Alterações trabalham sobre uma cópia do contexto: mover, adicionar e remover sessões, mudar disponibilidade e redistribuir carga produzem contagens e itens de comparação determinísticos.
@@ -111,7 +119,7 @@ O histórico só é chamado depois que geração e prévia terminam e depois de 
 
 ## Composição de produção
 
-`LocalAiServices` monta configuração, detecção de hardware, catálogo, instalador, runtime, backend, contexto do plano, conversa, prévia, histórico, fluxo e aplicação confirmada usando uma única raiz `%LOCALAPPDATA%\Rota\AI`. O aplicativo cria esse contêiner depois do repositório e o descarta ao sair, encerrando primeiro os controladores e fluxos e, em seguida, qualquer processo de runtime pertencente ao Rota.
+`LocalAiServices` monta configuração, detecção de hardware, catálogo de modelos, catálogo ENEM, instalador, runtime, backend, contexto do plano, conversa, prévia, histórico, fluxo e aplicação confirmada usando uma única raiz `%LOCALAPPDATA%\Rota\AI`. O aplicativo cria esse contêiner depois do repositório e o descarta ao sair, encerrando primeiro os controladores e fluxos e, em seguida, qualquer processo de runtime pertencente ao Rota.
 
 A composição é deliberadamente inerte: seus construtores não criam a pasta de IA, não leem hardware, não baixam arquivos, não iniciam `llama-server` e não geram respostas. Essas ações só acontecem quando um comando explícito chamar o serviço correspondente. A abertura normal e os smoke tests comprovam que o calendário continua independente.
 
@@ -145,13 +153,15 @@ O recibo da proposta e o ponto de desfazer são gravados no mesmo commit atômic
 
 A disponibilidade agora aceita precisão de minutos e conserva dias habilitados; prioridades por matéria também são persistidas. Estados antigos continuam carregando com os valores padrão quando esses campos ainda não existem.
 
-### Fontes fixadas e verificadas em 04/09/2026
+### Fontes fixadas e verificadas em 05/09/2026
 
 - [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos, passaram pela extração do instalador e iniciaram com `--version` pelo controlador real do Rota. Nenhum modelo completo ou inferência foi executado.
 - [documentação do llama-server b10795](https://github.com/ggml-org/llama.cpp/blob/b10795/tools/server/README.md): fonte dos argumentos de host, porta, camadas de GPU e do contrato `GET /health`.
 - [Qwen3 1.7B](https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/tree/90862c4b9d2787eaed51d12237eafdfe7c5f6077): Q8_0, 1.834.426.016 bytes.
 - [Qwen3 4B](https://huggingface.co/Qwen/Qwen3-4B-GGUF/tree/bc640142c66e1fdd12af0bd68f40445458f3869b): Q4_K_M, 2.497.280.256 bytes.
 - [Qwen3 8B](https://huggingface.co/Qwen/Qwen3-8B-GGUF/tree/7c41481f57cb95916b40956ab2f0b139b296d974): Q4_K_M, 5.027.783.488 bytes.
+- [Matrizes de Referência do Enem](https://www.gov.br/inep/pt-br/centrais-de-conteudo/acervo-linha-editorial/publicacoes-institucionais/avaliacoes-e-exames-da-educacao-basica/matrizes-de-referencia-enem): publicação institucional do Inep de 2026 usada para as quatro áreas, competências, habilidades e objetos de conhecimento.
+- [Redação do Enem 2025 — Cartilha do participante](https://www.gov.br/inep/pt-br/centrais-de-conteudo/acervo-linha-editorial/publicacoes-institucionais/avaliacoes-e-exames-da-educacao-basica/redacao-do-enem-2025-cartilha-do-a-participante): fonte oficial para o componente separado de redação e suas cinco competências.
 
 Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos foram conferidos via HEAD. Os modelos completos não foram baixados nem testados com inferência. O catálogo passou à versão 2: o identificador provisório Leve Q4 do bloco anterior foi corrigido para o Q8 oficial disponível. O orçamento de memória desse modelo deve ser medido antes da liberação da interface.
 
@@ -159,10 +169,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 168 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados dos controladores e carga real das janelas WPF. A conversa contínua testa persistência, limites do contexto, cancelamento, vínculo com propostas, recuperação atômica e reconciliação após interrupção. A aplicação confirmada testa preparação sem escrita, expiração por mudança ou virada do dia, clique duplicado, recibo persistente, reinício, falha de gravação, reconciliação do histórico, recuperação atômica, operações estruturadas, carga concluída protegida e desfazer seguro. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 169º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 177 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados dos controladores e carga real das janelas WPF. A conversa contínua testa persistência, limites do contexto, cancelamento, vínculo com propostas, recuperação atômica e reconciliação após interrupção. O catálogo ENEM testa estrutura oficial, redação separada, ativação explícita, aliases, ênfase, limites, adulteração, envio ao backend e rejeição de matérias ou conteúdos inventados. A aplicação confirmada testa preparação sem escrita, expiração por mudança ou virada do dia, clique duplicado, recibo persistente, reinício, falha de gravação, reconciliação do histórico, recuperação atômica, operações estruturadas, carga concluída protegida e desfazer seguro. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 178º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Construir o catálogo interno estruturado do ENEM. A etapa deve fixar áreas, matérias e conteúdos validados, fornecer somente uma seleção limitada e relevante ao modelo e impedir que a IA trate assuntos inventados como parte oficial do currículo.
+Homologar inferência real nos três perfis de modelo. A etapa deve medir inicialização, memória, tempo de geração e qualidade mínima com CPU e Vulkan compatíveis, revisar o orçamento do perfil Leve e registrar resultados reproduzíveis sem alterar o calendário durante os ensaios.
