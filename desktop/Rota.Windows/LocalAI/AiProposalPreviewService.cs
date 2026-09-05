@@ -23,12 +23,14 @@ public sealed class AiProposalPreviewService : IAiProposalPreviewService
             AiContractValidator.ValidateProposal(proposal);
             if (proposal.Status != AiProposalStatus.Pending)
                 throw new PreviewBlockedException("Somente uma proposta pendente pode gerar prévia.");
-            return proposal.Kind switch
+            var preview = proposal.Kind switch
             {
                 AiProposalKind.StudyPlan => PreviewStudyPlan(proposal),
                 AiProposalKind.PlanChanges => PreviewChanges(proposal, planningContext ?? _contextProvider.Capture()),
                 _ => throw new PreviewBlockedException("O tipo de proposta não pode ser visualizado.")
             };
+            AiContractValidator.ValidatePreview(preview);
+            return preview;
         }
         catch (Exception ex) when (ex is AiContractValidationException or ArgumentException or InvalidDataException or PreviewBlockedException)
         {

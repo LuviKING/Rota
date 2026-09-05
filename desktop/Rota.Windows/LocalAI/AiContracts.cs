@@ -32,6 +32,7 @@ public enum AiProposalStatus
 {
     Pending,
     Validated,
+    Accepted,
     Applied,
     Rejected,
     Failed
@@ -164,6 +165,7 @@ public sealed record AiProposalPreview
     public List<AiPreviewOperation> Operations { get; init; } = new();
     public List<string> Warnings { get; init; } = new();
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool CanProceed => State == AiProposalPreviewState.Ready;
 }
 
@@ -175,6 +177,13 @@ public sealed record AiPreviewOperation
     public string SessionId { get; init; } = "";
     public string OriginalDate { get; init; } = "";
     public string ProposedDate { get; init; } = "";
+}
+
+public sealed record AiStoredProposal
+{
+    public AiProposal Proposal { get; init; } = new();
+    public AiProposalPreview Preview { get; init; } = new();
+    public DateTimeOffset UpdatedAtUtc { get; init; }
 }
 
 public sealed record AiModelDescriptor(
@@ -262,6 +271,20 @@ public interface IAiPlanningService
 public interface IAiProposalPreviewService
 {
     AiProposalPreview Preview(AiProposal proposal, AiPlanningContext? planningContext = null);
+}
+
+public interface IAiProposalStore
+{
+    string StorePath { get; }
+    string LastLoadWarning { get; }
+
+    Task<IReadOnlyList<AiStoredProposal>> LoadAsync(CancellationToken cancellationToken = default);
+    Task<AiStoredProposal> SavePreviewAsync(
+        AiProposal proposal,
+        AiProposalPreview preview,
+        CancellationToken cancellationToken = default);
+    Task<AiStoredProposal> AcceptAsync(Guid proposalId, CancellationToken cancellationToken = default);
+    Task<AiStoredProposal> RejectAsync(Guid proposalId, CancellationToken cancellationToken = default);
 }
 
 public sealed class AiContractValidationException : ArgumentException

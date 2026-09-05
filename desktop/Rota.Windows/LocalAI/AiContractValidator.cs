@@ -169,6 +169,62 @@ public static class AiContractValidator
         }
     }
 
+    public static void ValidatePreview(AiProposalPreview preview)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        if (preview.ProposalId == Guid.Empty)
+            throw new AiContractValidationException("A prévia precisa identificar a proposta.");
+        ValidateEnum(preview.Kind, "tipo da prévia");
+        ValidateEnum(preview.State, "estado da prévia");
+        ValidateText(preview.Message, "Mensagem da prévia", 2_000, allowEmpty: false, allowLineBreaks: true);
+        if (preview.BeforeSessionCount < 0 || preview.AfterSessionCount < 0 ||
+            preview.BeforeMinutes < 0 || preview.AfterMinutes < 0 ||
+            preview.AddedSessionCount < 0 || preview.RemovedSessionCount < 0 || preview.MovedSessionCount < 0)
+        {
+            throw new AiContractValidationException("A prévia contém contagens negativas.");
+        }
+        if (preview.State == AiProposalPreviewState.Ready &&
+            preview.AfterSessionCount != preview.BeforeSessionCount +
+            preview.AddedSessionCount - preview.RemovedSessionCount)
+        {
+            throw new AiContractValidationException("As contagens da prévia são inconsistentes.");
+        }
+        if (preview.State == AiProposalPreviewState.Blocked &&
+            (preview.AfterSessionCount != preview.BeforeSessionCount ||
+             preview.AfterMinutes != preview.BeforeMinutes ||
+             preview.AddedSessionCount != 0 || preview.RemovedSessionCount != 0 || preview.MovedSessionCount != 0))
+        {
+            throw new AiContractValidationException("Uma prévia bloqueada não pode declarar alterações.");
+        }
+        if (preview.Operations is null || preview.Operations.Count > MaxOperationCount)
+            throw new AiContractValidationException("A lista de operações da prévia é inválida.");
+        foreach (var operation in preview.Operations)
+        {
+            if (operation is null || operation.OperationId == Guid.Empty)
+                throw new AiContractValidationException("A prévia contém uma operação sem identidade.");
+            ValidateEnum(operation.Type, "tipo de operação da prévia");
+            ValidateText(operation.Summary, "Resumo da operação da prévia", 500, allowEmpty: false, allowLineBreaks: true);
+            ValidateText(operation.SessionId, "ID da sessão da prévia", 120, allowEmpty: true);
+            ValidateText(operation.OriginalDate, "Data original da prévia", 10, allowEmpty: true);
+            ValidateText(operation.ProposedDate, "Data proposta da prévia", 10, allowEmpty: true);
+            ValidateOptionalDate(operation.OriginalDate, "A prévia contém uma data original inválida.");
+            ValidateOptionalDate(operation.ProposedDate, "A prévia contém uma data proposta inválida.");
+        }
+        if (preview.Warnings is null || preview.Warnings.Count > 50)
+            throw new AiContractValidationException("A lista de avisos da prévia é inválida.");
+        foreach (var warning in preview.Warnings)
+            ValidateText(warning, "Aviso da prévia", 1_000, allowEmpty: false, allowLineBreaks: true);
+    }
+
+    private static void ValidateOptionalDate(string value, string error)
+    {
+        if (value.Length > 0 &&
+            !DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new AiContractValidationException(error);
+        }
+    }
+
     private static void ValidateStudyPlanDraft(AiStudyPlanDraft draft)
     {
         if (string.IsNullOrWhiteSpace(draft.StudyPlanJson))
