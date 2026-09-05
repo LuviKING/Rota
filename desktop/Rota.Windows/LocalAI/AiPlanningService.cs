@@ -19,6 +19,12 @@ public sealed class AiPlanningService : IAiPlanningService
     public async Task<AiProposal> CreateProposalAsync(
         AiAssistantInput input,
         AiProposalKind kind,
+        CancellationToken cancellationToken = default) =>
+        (await CreateGenerationAsync(input, kind, cancellationToken).ConfigureAwait(false)).Proposal;
+
+    public async Task<AiProposalGeneration> CreateGenerationAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -30,9 +36,10 @@ public sealed class AiPlanningService : IAiPlanningService
         AiContractValidator.ValidateConfiguration(configuration);
 
         AiProposal proposal;
+        AiPlanningContext? planningContext = null;
         try
         {
-            var planningContext = kind == AiProposalKind.PlanChanges
+            planningContext = kind == AiProposalKind.PlanChanges
                 ? _contextProvider?.Capture()
                 : null;
             proposal = await _backend
@@ -59,6 +66,10 @@ public sealed class AiPlanningService : IAiPlanningService
             throw new AiPlanningException("O backend local retornou uma proposta inválida.", ex);
         }
 
-        return proposal;
+        return new AiProposalGeneration
+        {
+            Proposal = proposal,
+            PlanningContext = planningContext
+        };
     }
 }

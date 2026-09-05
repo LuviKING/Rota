@@ -104,10 +104,14 @@ public static class PlanningContextTests
                 var provider = new StudyPlanningContextProvider(repository, () => Today);
                 var service = new AiPlanningService(backend, store, provider);
 
-                service.CreateProposalAsync(ValidInput(), AiProposalKind.PlanChanges).GetAwaiter().GetResult();
+                var changes = service.CreateGenerationAsync(
+                    ValidInput(), AiProposalKind.PlanChanges).GetAwaiter().GetResult();
                 Require(backend.LastPlanningContext?.ActivePlanId == "active-plan");
-                service.CreateProposalAsync(ValidInput(), AiProposalKind.StudyPlan).GetAwaiter().GetResult();
+                Require(ReferenceEquals(changes.PlanningContext, backend.LastPlanningContext));
+                var newPlan = service.CreateGenerationAsync(
+                    ValidInput(), AiProposalKind.StudyPlan).GetAwaiter().GetResult();
                 Require(backend.LastPlanningContext is null);
+                Require(newPlan.PlanningContext is null);
             }
             finally
             {

@@ -186,6 +186,12 @@ public sealed record AiStoredProposal
     public DateTimeOffset UpdatedAtUtc { get; init; }
 }
 
+public sealed record AiProposalGeneration
+{
+    public AiProposal Proposal { get; init; } = new();
+    public AiPlanningContext? PlanningContext { get; init; }
+}
+
 public sealed record AiModelDescriptor(
     string Id,
     string DisplayName,
@@ -266,6 +272,11 @@ public interface IAiPlanningService
         AiAssistantInput input,
         AiProposalKind kind,
         CancellationToken cancellationToken = default);
+
+    Task<AiProposalGeneration> CreateGenerationAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IAiProposalPreviewService
@@ -287,6 +298,14 @@ public interface IAiProposalStore
     Task<AiStoredProposal> RejectAsync(Guid proposalId, CancellationToken cancellationToken = default);
 }
 
+public interface IAiProposalWorkflowService
+{
+    Task<AiStoredProposal> PrepareAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed class AiContractValidationException : ArgumentException
 {
     public AiContractValidationException(string message) : base(message)
@@ -301,6 +320,13 @@ public sealed class AiContractValidationException : ArgumentException
 public sealed class AiPlanningException : Exception
 {
     public AiPlanningException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+}
+
+public sealed class AiProposalWorkflowException : Exception
+{
+    public AiProposalWorkflowException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

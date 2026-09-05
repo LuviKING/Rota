@@ -97,6 +97,12 @@ A prévia bloqueia IDs ausentes ou ambíguos, datas passadas ou posteriores ao o
 
 Uma prévia pronta entra no histórico como `Validated`; uma prévia bloqueada entra como `Failed`. Aceitar é uma transição explícita para `Accepted`, mas ainda não aplica nada. A pessoa também pode rejeitar uma proposta validada ou aceita. Estados finais não voltam para estados anteriores, IDs não podem se repetir e proposta, prévia e timestamp UTC são validados em toda leitura e gravação. O estado `Applied` fica reservado para um bloco posterior com confirmação e aplicação transacional.
 
+## Fluxo coordenado
+
+`AiProposalWorkflowService` executa geração, prévia e gravação como uma única operação serializada e cancelável. Para alterações, `AiPlanningService` devolve junto da proposta a mesma fotografia enviada ao modelo; o coordenador entrega exatamente essa instância à prévia. Assim, uma agenda alterada enquanto a geração está em andamento não faz a validação usar silenciosamente outro contexto.
+
+O histórico só é chamado depois que geração e prévia terminam e depois de uma última verificação de cancelamento. Falha em qualquer etapa vira erro controlado e não deixa proposta parcial. Prévia bloqueada é registrada de forma íntegra como `Failed`, para que a futura interface consiga explicar o motivo. O fluxo não possui método de aplicação e não escreve em `StudyRepository`.
+
 ### Fontes fixadas e verificadas em 04/09/2026
 
 - [llama.cpp b10795](https://github.com/ggml-org/llama.cpp/releases/tag/b10795): pré-release oficial, CPU/Vulkan Windows x64. Ambos os ZIPs foram baixados para testes isolados, tiveram tamanho e SHA-256 conferidos, passaram pela extração do instalador e iniciaram com `--version` pelo controlador real do Rota. Nenhum modelo completo ou inferência foi executado.
@@ -111,10 +117,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 126 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita e recuperação do histórico de propostas. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 127º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 130 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico e fluxo sem gravações parciais. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 131º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Unir geração, fotografia do plano, prévia e gravação em um fluxo único, garantindo que a mesma fotografia usada pela IA seja a usada na prévia. O fluxo deve preservar cancelamento e nunca salvar uma proposta parcial. A aplicação continuará desabilitada.
+Criar a composição de produção dos serviços locais, com ciclo de vida e descarte centralizados, sem iniciar runtime, download ou geração na abertura do aplicativo. Depois disso, a interface do Assistente IA poderá ser construída sobre um único ponto seguro de entrada.
