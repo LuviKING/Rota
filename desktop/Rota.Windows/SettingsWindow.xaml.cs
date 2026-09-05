@@ -31,7 +31,7 @@ public partial class SettingsWindow : Window
     private void UpdateSliderLabels()
     {
         if (HoursValue is null || BlockValue is null) return;
-        HoursValue.Text = $"{(int)Math.Round(HoursSlider.Value)} h/dia";
+        HoursValue.Text = $"{HoursSlider.Value:0.##} h/dia";
         BlockValue.Text = $"{(int)Math.Round(BlockSlider.Value)} min";
     }
 
@@ -42,7 +42,7 @@ public partial class SettingsWindow : Window
             _repository.SavePreferences(
                 ObjectiveBox.Text,
                 ObjectiveDateBox.Text.Trim(),
-                (int)Math.Round(HoursSlider.Value),
+                HoursSlider.Value,
                 (int)Math.Round(BlockSlider.Value / 15.0) * 15,
                 ReviewD1.IsChecked == true,
                 ReviewD3.IsChecked == true,

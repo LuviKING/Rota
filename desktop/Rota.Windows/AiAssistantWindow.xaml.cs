@@ -11,19 +11,24 @@ public partial class AiAssistantWindow : Window
 {
     private readonly IAiAssistantController _controller;
     private readonly IAiInstallationController _installationController;
+    private readonly IAiProposalApplicationService _applicationService;
     private readonly StudyRepository _repository;
     private AiProposalKind _proposalKind = AiProposalKind.StudyPlan;
     private bool _initializationStarted;
+    private bool _calendarActionRunning;
+    private string _applicationWarning = "";
 
     public ObservableCollection<AiProposalCardView> HistoryItems { get; } = new();
 
     public AiAssistantWindow(
         IAiAssistantController controller,
         IAiInstallationController installationController,
+        IAiProposalApplicationService applicationService,
         StudyRepository repository)
     {
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
         _installationController = installationController ?? throw new ArgumentNullException(nameof(installationController));
+        _applicationService = applicationService ?? throw new ArgumentNullException(nameof(applicationService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
@@ -38,6 +43,15 @@ public partial class AiAssistantWindow : Window
     {
         if (_initializationStarted) return;
         _initializationStarted = true;
+        try
+        {
+            await _applicationService.ReconcileAsync();
+            _applicationWarning = "";
+        }
+        catch (Exception ex) when (ex is AiProposalApplicationException or IOException or UnauthorizedAccessException)
+        {
+            _applicationWarning = "O histórico de aplicações precisa de atenção: " + ex.Message;
+        }
         await _controller.InitializeAsync();
         if (IsLoaded) RefreshState();
     }
@@ -68,18 +82,24 @@ public partial class AiAssistantWindow : Window
             ? "Runtime pronto; modelo local ausente"
             : "IA local ainda não instalada";
 
-        WarningNotice.Visibility = state.Warnings.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        WarningText.Text = state.Warnings.Count == 0 ? "" : state.Warnings[^1];
+        var warning = string.IsNullOrWhiteSpace(_applicationWarning)
+            ? state.Warnings.LastOrDefault() ?? ""
+            : _applicationWarning;
+        WarningNotice.Visibility = warning.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        WarningText.Text = warning;
 
         HistoryItems.Clear();
         foreach (var item in state.History.OrderByDescending(item => item.UpdatedAtUtc))
-            HistoryItems.Add(new AiProposalCardView(item));
+            HistoryItems.Add(new AiProposalCardView(
+                item,
+                _applicationService.GetCalendarState(item.Proposal.Id),
+                !_calendarActionRunning));
         EmptyHistoryPanel.Visibility = HistoryItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         HistoryCountText.Text = HistoryItems.Count == 1 ? "1 proposta" : $"{HistoryItems.Count} propostas";
 
         var generating = state.Activity == AiAssistantActivity.Generating;
         CancelButton.Visibility = generating ? Visibility.Visible : Visibility.Collapsed;
-        SetInputEnabled(!state.IsBusy);
+        SetInputEnabled(!state.IsBusy && !_calendarActionRunning);
         UpdateSendState(state);
     }
 
@@ -98,13 +118,13 @@ public partial class AiAssistantWindow : Window
     {
         state ??= _controller.State;
         var hasRequest = !string.IsNullOrWhiteSpace(RequestBox.Text);
-        SendButton.IsEnabled = state.IsInitialized && state.IsOfflineReady && !state.IsBusy && hasRequest;
+        SendButton.IsEnabled = state.IsInitialized && state.IsOfflineReady && !state.IsBusy && !_calendarActionRunning && hasRequest;
         SendHintText.Text = !state.IsInitialized || state.Activity == AiAssistantActivity.Loading
             ? "Carregando o estado local…"
             : !state.IsOfflineReady
                 ? "O envio será liberado quando runtime e modelo locais estiverem instalados."
                 : hasRequest
-                    ? "A resposta ficará somente como prévia até uma confirmação futura."
+                    ? "A resposta ficará como prévia; depois você poderá revisar e confirmar a aplicação."
                     : "Descreva seu pedido ou escolha uma ação rápida.";
     }
 
@@ -159,6 +179,94 @@ public partial class AiAssistantWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _controller.CancelCurrentOperation();
 
+    private async void ReviewAndApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryProposalId(sender, out var proposalId) || _calendarActionRunning) return;
+        await RunCalendarActionAsync(async () =>
+        {
+            var prepared = await _applicationService.PrepareAsync(proposalId);
+            var dialog = new AiProposalConfirmationWindow(prepared) { Owner = this };
+            if (dialog.ShowDialog() != true || !prepared.CanApply) return;
+
+            var result = await _applicationService.ApplyAsync(prepared.ConfirmationId);
+            MessageBox.Show(
+                result.Message,
+                result.Success ? "Proposta aplicada" : "Aplicação não realizada",
+                MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        });
+    }
+
+    private async void RejectProposal_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryProposalId(sender, out var proposalId) || _calendarActionRunning) return;
+        var answer = MessageBox.Show(
+            "Rejeitar esta proposta? Ela continuará registrada no histórico e não alterará o calendário.",
+            "Rejeitar proposta",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+
+        await RunCalendarActionAsync(async () =>
+        {
+            await _applicationService.RejectAsync(proposalId);
+        });
+    }
+
+    private async void UndoProposal_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryProposalId(sender, out var proposalId) || _calendarActionRunning) return;
+        var answer = MessageBox.Show(
+            "Desfazer esta aplicação?\n\nO Rota só continuará se o calendário ainda estiver exatamente como ficou após a aplicação. Conclusões ou ajustes posteriores nunca serão apagados.",
+            "Desfazer aplicação",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+
+        await RunCalendarActionAsync(async () =>
+        {
+            var result = await _applicationService.UndoAsync(proposalId);
+            MessageBox.Show(
+                result.Message,
+                result.Success ? "Aplicação desfeita" : "Nada foi desfeito",
+                MessageBoxButton.OK,
+                result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        });
+    }
+
+    private async Task RunCalendarActionAsync(Func<Task> action)
+    {
+        _calendarActionRunning = true;
+        RefreshState();
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is AiProposalApplicationException or AiContractValidationException or
+                                   IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            MessageBox.Show(ex.Message, "Assistente IA", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            try
+            {
+                await _controller.InitializeAsync();
+            }
+            finally
+            {
+                _calendarActionRunning = false;
+                if (IsLoaded) RefreshState();
+            }
+        }
+    }
+
+    private static bool TryProposalId(object sender, out Guid proposalId)
+    {
+        proposalId = Guid.Empty;
+        return sender is Button { Tag: Guid value } && (proposalId = value) != Guid.Empty;
+    }
+
     private void OpenExternalPrompt_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new AiPromptWindow(_repository) { Owner = this };
@@ -198,15 +306,39 @@ public sealed class AiProposalCardView
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
     public AiProposalCardView(AiStoredProposal stored)
+        : this(stored, new CalendarApplicationState(false, false, false, false, ""), actionsEnabled: true)
     {
+    }
+
+    public AiProposalCardView(
+        AiStoredProposal stored,
+        CalendarApplicationState calendarState,
+        bool actionsEnabled)
+    {
+        ProposalId = stored.Proposal.Id;
         Summary = string.IsNullOrWhiteSpace(stored.Proposal.Summary) ? "Proposta sem resumo" : stored.Proposal.Summary;
         Message = stored.Preview.Message;
         KindDisplay = stored.Proposal.Kind == AiProposalKind.StudyPlan ? "PLANO NOVO" : "AJUSTE DO PLANO";
-        (StatusDisplay, StatusBackground, StatusForeground) = Status(stored);
+        (StatusDisplay, StatusBackground, StatusForeground) = Status(stored, calendarState);
         MetricsDisplay = BuildMetrics(stored.Preview);
         CreatedAtDisplay = stored.UpdatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy 'às' HH:mm", PtBr);
+        var canReview = !calendarState.Exists && stored.Preview.CanProceed &&
+            stored.Proposal.Status is AiProposalStatus.Validated or AiProposalStatus.Accepted;
+        ApplyVisibility = canReview ? Visibility.Visible : Visibility.Collapsed;
+        RejectVisibility = canReview ? Visibility.Visible : Visibility.Collapsed;
+        UndoVisibility = calendarState.IsApplied || stored.Proposal.Status == AiProposalStatus.Applied
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        CanApply = canReview && actionsEnabled;
+        CanReject = canReview && actionsEnabled;
+        CanUndo = calendarState.CanUndo && actionsEnabled;
+        UndoHintVisibility = (calendarState.IsApplied || stored.Proposal.Status == AiProposalStatus.Applied) && !calendarState.CanUndo
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        UndoHint = calendarState.Message;
     }
 
+    public Guid ProposalId { get; }
     public string Summary { get; }
     public string Message { get; }
     public string KindDisplay { get; }
@@ -215,15 +347,30 @@ public sealed class AiProposalCardView
     public string CreatedAtDisplay { get; }
     public Brush StatusBackground { get; }
     public Brush StatusForeground { get; }
+    public Visibility ApplyVisibility { get; }
+    public Visibility RejectVisibility { get; }
+    public Visibility UndoVisibility { get; }
+    public Visibility UndoHintVisibility { get; }
+    public bool CanApply { get; }
+    public bool CanReject { get; }
+    public bool CanUndo { get; }
+    public string UndoHint { get; }
 
-    private static (string Label, Brush Background, Brush Foreground) Status(AiStoredProposal stored)
+    private static (string Label, Brush Background, Brush Foreground) Status(
+        AiStoredProposal stored,
+        CalendarApplicationState calendarState)
     {
         if (stored.Preview.State == AiProposalPreviewState.Blocked || stored.Proposal.Status == AiProposalStatus.Failed)
             return ("BLOQUEADA", ThemeManager.ResourceBrush("ErrorSoftBrush"), ThemeManager.ResourceBrush("ErrorBrush"));
+        if (calendarState.IsUndone)
+            return ("DESFEITA", ThemeManager.ResourceBrush("SubtleBrush"), ThemeManager.ResourceBrush("MutedBrush"));
+        if (calendarState.IsApplied)
+            return ("APLICADA", ThemeManager.ResourceBrush("SuccessSoftBrush"), ThemeManager.ResourceBrush("SuccessBrush"));
         return stored.Proposal.Status switch
         {
             AiProposalStatus.Accepted => ("ACEITA", ThemeManager.ResourceBrush("PrimarySoftBrush"), ThemeManager.ResourceBrush("PrimaryBrush")),
             AiProposalStatus.Applied => ("APLICADA", ThemeManager.ResourceBrush("SuccessSoftBrush"), ThemeManager.ResourceBrush("SuccessBrush")),
+            AiProposalStatus.Undone => ("DESFEITA", ThemeManager.ResourceBrush("SubtleBrush"), ThemeManager.ResourceBrush("MutedBrush")),
             AiProposalStatus.Rejected => ("REJEITADA", ThemeManager.ResourceBrush("SubtleBrush"), ThemeManager.ResourceBrush("MutedBrush")),
             _ => ("VALIDADA", ThemeManager.ResourceBrush("SuccessSoftBrush"), ThemeManager.ResourceBrush("SuccessBrush"))
         };

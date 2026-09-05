@@ -15,9 +15,24 @@ public sealed class StudyPlanningContextProvider : IAiPlanningContextProvider
 
     public AiPlanningContext Capture()
     {
-        var snapshotDate = DateOnly.FromDateTime(_now());
-        var settings = _repository.Settings;
-        var candidates = _repository.UpcomingSessions(snapshotDate, MaximumFutureSessions + 1);
+        var requestedDate = StudyRepository.Iso(DateOnly.FromDateTime(_now()));
+        var snapshot = _repository.CaptureApplicationSnapshot();
+        if (!string.Equals(snapshot.SnapshotDate, requestedDate, StringComparison.Ordinal))
+            snapshot = snapshot with { SnapshotDate = requestedDate };
+        return FromSnapshot(snapshot);
+    }
+
+    public static AiPlanningContext FromSnapshot(RepositoryApplicationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var settings = snapshot.Settings;
+        var candidates = snapshot.Sessions
+            .Where(session => !session.IsCompleted && string.CompareOrdinal(session.Date, snapshot.SnapshotDate) >= 0)
+            .OrderBy(session => session.Date, StringComparer.Ordinal)
+            .ThenBy(session => session.Kind == "review" ? 0 : session.Kind == "study" ? 1 : 2)
+            .ThenBy(session => session.Subject, StringComparer.CurrentCultureIgnoreCase)
+            .Take(MaximumFutureSessions + 1)
+            .ToList();
         var sessions = candidates
             .Take(MaximumFutureSessions)
             .Select(session => new AiPlanningSessionContext
@@ -37,14 +52,16 @@ public sealed class StudyPlanningContextProvider : IAiPlanningContextProvider
 
         var context = new AiPlanningContext
         {
-            SnapshotDate = StudyRepository.Iso(snapshotDate),
+            SnapshotDate = snapshot.SnapshotDate,
             ObjectiveName = settings.ObjectiveName,
             ObjectiveDate = settings.ObjectiveDate,
             ActivePlanId = settings.ActivePlanId,
             ActivePlanRevision = settings.ActivePlanRevision,
             ActivePlanTitle = settings.ActivePlanTitle,
-            DailyMinutesLimit = checked(settings.DailyHours * 60),
+            DailyMinutesLimit = StudyRepository.DailyMinutesLimit(settings),
             BlockMinutes = settings.BlockMinutes,
+            AvailableDays = settings.AvailableStudyDays.ToList(),
+            SubjectPriorities = new Dictionary<string, int>(settings.SubjectPriorities, StringComparer.OrdinalIgnoreCase),
             FutureSessions = sessions,
             HasMoreFutureSessions = candidates.Count > MaximumFutureSessions
         };

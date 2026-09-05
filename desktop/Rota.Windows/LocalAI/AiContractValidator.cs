@@ -135,6 +135,18 @@ public static class AiContractValidator
         }
         if (context.DailyMinutesLimit is < 60 or > 720 || context.BlockMinutes is < 30 or > 180)
             throw new AiContractValidationException("Os limites de tempo do contexto da IA são inválidos.");
+        ValidateDays(context.AvailableDays, "Dias disponíveis do contexto");
+        if (context.AvailableDays.Count == 0)
+            throw new AiContractValidationException("O contexto da IA precisa de ao menos um dia disponível.");
+        if (context.SubjectPriorities is null || context.SubjectPriorities.Count > 500)
+            throw new AiContractValidationException("As prioridades do contexto da IA são inválidas.");
+        var prioritySubjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var priority in context.SubjectPriorities)
+        {
+            ValidateText(priority.Key, "Matéria priorizada do contexto", 80, allowEmpty: false);
+            if (!prioritySubjects.Add(priority.Key) || priority.Value is < 1 or > 100)
+                throw new AiContractValidationException("Uma prioridade do contexto da IA é inválida.");
+        }
         if (context.FutureSessions is null || context.FutureSessions.Count > MaxPlanningSessions)
             throw new AiContractValidationException("O contexto da IA contém sessões futuras demais ou ausentes.");
 

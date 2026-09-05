@@ -4,12 +4,12 @@ Este namespace contém os contratos e serviços da IA local usados pela primeira
 
 ## Limite de responsabilidade
 
-O backend local recebe uma entrada estruturada e devolve uma `AiProposal`. Ele nunca aplica alterações no calendário. Uma proposta nova permanece em `Pending` mesmo depois da validação de contrato; o estado `Validated` fica reservado para uma etapa futura, depois que o motor determinístico do Rota produzir um preview válido.
+O backend local recebe uma entrada estruturada e devolve uma `AiProposal`. Ele nunca aplica alterações no calendário. Uma proposta nova permanece em `Pending` mesmo depois da validação de contrato; o estado `Validated` só é atribuído depois que o motor determinístico do Rota produzir um preview válido.
 
 Há dois formatos de proposta independentes:
 
 - `AiStudyPlanDraft`: contém StudyPlan Code 0.2 e passa pelo `StudyPlanImporter` existente sem ser aplicado;
-- `AiPlanChangeDraft`: contém operações estruturadas que o motor do Rota poderá interpretar futuramente.
+- `AiPlanChangeDraft`: contém operações estruturadas que o motor determinístico do Rota interpreta durante uma aplicação confirmada.
 
 ## Configuração
 
@@ -95,17 +95,17 @@ A prévia bloqueia IDs ausentes ou ambíguos, datas passadas ou posteriores ao o
 
 `AiProposalStore` mantém propostas e prévias em `%LOCALAPPDATA%\Rota\AI\proposals.json`, separado de `desktop-state.json`. O arquivo aceita no máximo 100 registros e 8 MiB, rejeita campos ou propriedades JSON duplicadas, grava por substituição atômica e recupera a última cópia íntegra quando o arquivo principal é corrompido.
 
-Uma prévia pronta entra no histórico como `Validated`; uma prévia bloqueada entra como `Failed`. Aceitar é uma transição explícita para `Accepted`, mas ainda não aplica nada. A pessoa também pode rejeitar uma proposta validada ou aceita. Estados finais não voltam para estados anteriores, IDs não podem se repetir e proposta, prévia e timestamp UTC são validados em toda leitura e gravação. O estado `Applied` fica reservado para um bloco posterior com confirmação e aplicação transacional.
+Uma prévia pronta entra no histórico como `Validated`; uma prévia bloqueada entra como `Failed`. A confirmação final leva a proposta para `Applied`, e um desfazer concluído registra `Undone`. A pessoa também pode rejeitar uma proposta validada ou aceita. IDs não podem se repetir e proposta, prévia e timestamp UTC são validados em toda leitura e gravação.
 
 ## Fluxo coordenado
 
 `AiProposalWorkflowService` executa geração, prévia e gravação como uma única operação serializada e cancelável. Para alterações, `AiPlanningService` devolve junto da proposta a mesma fotografia enviada ao modelo; o coordenador entrega exatamente essa instância à prévia. Assim, uma agenda alterada enquanto a geração está em andamento não faz a validação usar silenciosamente outro contexto.
 
-O histórico só é chamado depois que geração e prévia terminam e depois de uma última verificação de cancelamento. Falha em qualquer etapa vira erro controlado e não deixa proposta parcial. Prévia bloqueada é registrada de forma íntegra como `Failed`, para que a futura interface consiga explicar o motivo. O fluxo não possui método de aplicação e não escreve em `StudyRepository`.
+O histórico só é chamado depois que geração e prévia terminam e depois de uma última verificação de cancelamento. Falha em qualquer etapa vira erro controlado e não deixa proposta parcial. Prévia bloqueada é registrada de forma íntegra como `Failed`. O fluxo de geração continua sem método de aplicação e não escreve em `StudyRepository`; a aplicação fica isolada no serviço específico descrito abaixo.
 
 ## Composição de produção
 
-`LocalAiServices` monta configuração, detecção de hardware, catálogo, instalador, runtime, backend, contexto, prévia, histórico e fluxo usando uma única raiz `%LOCALAPPDATA%\Rota\AI`. O aplicativo cria esse contêiner depois do repositório e o descarta ao sair, encerrando primeiro fluxo e backend e, em seguida, qualquer processo de runtime pertencente ao Rota.
+`LocalAiServices` monta configuração, detecção de hardware, catálogo, instalador, runtime, backend, contexto, prévia, histórico, fluxo e aplicação confirmada usando uma única raiz `%LOCALAPPDATA%\Rota\AI`. O aplicativo cria esse contêiner depois do repositório e o descarta ao sair, encerrando primeiro os controladores e fluxos e, em seguida, qualquer processo de runtime pertencente ao Rota.
 
 A composição é deliberadamente inerte: seus construtores não criam a pasta de IA, não leem hardware, não baixam arquivos, não iniciam `llama-server` e não geram respostas. Essas ações só acontecem quando um comando explícito chamar o serviço correspondente. A abertura normal e os smoke tests comprovam que o calendário continua independente.
 
@@ -115,11 +115,11 @@ A composição é deliberadamente inerte: seus construtores não criam a pasta d
 
 O envio só é liberado quando runtime e modelo estão prontos. Durante a geração, o controlador publica estado ocupado e mantém um cancelamento próprio; cancelar encerra a operação e informa que nenhuma proposta parcial foi salva. Sucesso acrescenta a prévia ao histórico visível com o aviso de que nada foi aplicado. Erros inesperados são contidos sem expor detalhes internos. O descarte central espera uma operação ativa terminar após cancelá-la, antes de desmontar os serviços.
 
-## Primeira tela do Assistente IA
+## Tela do Assistente IA
 
-`AiAssistantWindow` integra o controlador ao visual já existente do Rota. Ela mostra estado local/offline, perfil efetivo, disponibilidade da instalação, avisos, cinco ações rápidas, escolha entre plano novo e ajuste do plano atual, envio, cancelamento e o histórico de prévias validadas ou bloqueadas. O layout preserva os alvos de clique, ícones e estados visuais compartilhados e mantém as duas colunas utilizáveis na menor janela suportada.
+`AiAssistantWindow` integra o controlador ao visual já existente do Rota. Ela mostra estado local/offline, perfil efetivo, disponibilidade da instalação, avisos, cinco ações rápidas, escolha entre plano novo e ajuste do plano atual, envio, cancelamento e o histórico de prévias validadas ou bloqueadas. Propostas prontas oferecem ações explícitas de revisar/aplicar e rejeitar; uma aplicação ainda elegível oferece desfazer. O layout preserva os alvos de clique, ícones e estados visuais compartilhados e mantém as duas colunas utilizáveis na menor janela suportada.
 
-A tela não possui ação de aplicar, aceitar ou rejeitar. Toda resposta permanece como prévia, com a mensagem explícita de que o calendário não foi alterado. O gerador anterior de prompt para outra IA continua acessível como opção secundária, preservando a funcionalidade já existente.
+`AiProposalConfirmationWindow` reapresenta a avaliação feita sobre o calendário atual, as contagens antes/depois, operações e avisos. Somente o botão final "Aplicar no calendário" consome a confirmação descartável. O gerador anterior de prompt para outra IA continua acessível como opção secundária, preservando a funcionalidade já existente.
 
 ## Instalação guiada
 
@@ -128,6 +128,16 @@ A tela não possui ação de aplicar, aceitar ou rejeitar. Toda resposta permane
 `AiInstallationWindow` mostra Automático, Leve, Equilibrado e Desempenho, além do modelo, processamento, tamanho e destino antes do download. O clique em instalar ainda abre uma confirmação final com esses mesmos dados. Durante a instalação, a tela apresenta etapa, bytes, porcentagem e cancelamento. Sucesso só é exibido depois da ativação atômica; cancelamento ou falha informam que nenhuma instalação incompleta foi ativada.
 
 Abrir o Rota ou o Assistente IA continua inerte. A detecção de hardware ocorre ao abrir a configuração da IA, mas o download só começa depois da confirmação final da pessoa. O controlador da instalação não tem acesso ao calendário ou ao histórico de estudos.
+
+## Aplicação confirmada e desfazer seguro
+
+`AiProposalApplicationService` recarrega a proposta pelo ID, captura o estado inteiro do calendário numa única seção crítica e recalcula a prévia antes de emitir uma confirmação descartável. A confirmação fica vinculada à proposta, à data e à versão exata do estado. Qualquer conclusão, importação, preferência, outra aplicação ou virada do dia expira a confirmação e exige nova revisão.
+
+Planos completos continuam passando pelo `StudyPlanImporter`. Operações estruturadas são traduzidas pelo código determinístico do Rota: mover, adicionar e remover sessões futuras, registrar prioridade, alterar disponibilidade e executar a redistribuição já calculada pela prévia. Reconstrução genérica permanece bloqueada. A aplicação final revalida o estado completo, inclusive sessões concluídas futuras e revisões automáticas, e proíbe qualquer mudança em passado, conclusão ou origem `runtime`.
+
+O recibo da proposta e o ponto de desfazer são gravados no mesmo commit atômico de `desktop-state.json`. Esse recibo é a fonte da verdade quando a atualização posterior de `proposals.json` falha, permitindo reconciliar `Applied` ou `Undone` ao reabrir sem aplicar novamente. O mesmo ID nunca pode ser reaplicado, nem depois de desfazer. O ponto de desfazer restaura o estado anterior somente enquanto nenhuma mutação ocorreu depois; caso contrário, o Rota recusa a operação e preserva integralmente as mudanças posteriores. O índice máximo de revisões dos planos nunca diminui.
+
+A disponibilidade agora aceita precisão de minutos e conserva dias habilitados; prioridades por matéria também são persistidas. Estados antigos continuam carregando com os valores padrão quando esses campos ainda não existem.
 
 ### Fontes fixadas e verificadas em 04/09/2026
 
@@ -143,10 +153,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 146 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados dos controladores e carga real das janelas WPF. A instalação guiada testa análise sem download, perfis automático e manual, confirmação descartável, progresso, sucesso verificado, cancelamento e falha contida. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 147º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 159 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados dos controladores e carga real das janelas WPF. A aplicação confirmada testa preparação sem escrita, expiração por mudança ou virada do dia, clique duplicado, recibo persistente, reinício, falha de gravação, reconciliação do histórico, recuperação atômica, operações estruturadas, carga concluída protegida e desfazer seguro. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 160º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Construir a confirmação e aplicação transacional das propostas validadas. A etapa deve comparar novamente o calendário atual, pedir confirmação explícita, aplicar somente pelo motor determinístico do Rota, registrar o resultado e criar um caminho seguro de desfazer, sem dar acesso de escrita à IA.
+Construir a conversa local contínua do Assistente IA. A etapa deve manter um histórico de turnos local, limitado e atômico, vincular cada pedido à proposta correspondente e permitir continuar ou retomar a conversa sem incluir funções de escrita no contexto do modelo.

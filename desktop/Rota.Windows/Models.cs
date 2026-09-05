@@ -58,11 +58,13 @@ public sealed class AppSettings
 {
     public string ObjectiveName { get; set; } = "Meu objetivo";
     public string ObjectiveDate { get; set; } = "";
-    public int DailyHours { get; set; } = 5;
+    public double DailyHours { get; set; } = 5;
     public int BlockMinutes { get; set; } = 60;
     public bool ReviewD1 { get; set; } = true;
     public bool ReviewD3 { get; set; } = true;
     public bool ReviewD7 { get; set; } = true;
+    public List<DayOfWeek> AvailableStudyDays { get; set; } = Enum.GetValues<DayOfWeek>().ToList();
+    public Dictionary<string, int> SubjectPriorities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string ActivePlanId { get; set; } = "";
     public int ActivePlanRevision { get; set; }
     public string ActivePlanTitle { get; set; } = "";
@@ -72,9 +74,69 @@ public sealed class AppSettings
 public sealed class AppState
 {
     public int StateVersion { get; set; } = 1;
+    public long MutationVersion { get; set; }
     public AppSettings Settings { get; set; } = new();
     public List<SessionItem> Sessions { get; set; } = new();
+    public List<CalendarApplicationReceipt> AiApplications { get; set; } = new();
+    public CalendarUndoCheckpoint? AiUndoCheckpoint { get; set; }
 }
+
+public sealed class CalendarApplicationReceipt
+{
+    public string ProposalId { get; set; } = "";
+    public string ProposalHash { get; set; } = "";
+    public string Status { get; set; } = "applied";
+    public long AppliedMutationVersion { get; set; }
+    public long AppliedAtUnixMs { get; set; }
+    public long UndoneMutationVersion { get; set; }
+    public long UndoneAtUnixMs { get; set; }
+
+    public CalendarApplicationReceipt Copy() => new()
+    {
+        ProposalId = ProposalId,
+        ProposalHash = ProposalHash,
+        Status = Status,
+        AppliedMutationVersion = AppliedMutationVersion,
+        AppliedAtUnixMs = AppliedAtUnixMs,
+        UndoneMutationVersion = UndoneMutationVersion,
+        UndoneAtUnixMs = UndoneAtUnixMs
+    };
+}
+
+public sealed class CalendarUndoCheckpoint
+{
+    public string ProposalId { get; set; } = "";
+    public long ExpectedMutationVersion { get; set; }
+    public AppSettings Settings { get; set; } = new();
+    public List<SessionItem> Sessions { get; set; } = new();
+
+    public CalendarUndoCheckpoint Copy() => new()
+    {
+        ProposalId = ProposalId,
+        ExpectedMutationVersion = ExpectedMutationVersion,
+        Settings = StudyRepository.CopySettings(Settings),
+        Sessions = Sessions.Select(session => session.Copy()).ToList()
+    };
+}
+
+public sealed record RepositoryApplicationSnapshot(
+    long MutationVersion,
+    string SnapshotDate,
+    AppSettings Settings,
+    IReadOnlyList<SessionItem> Sessions);
+
+public sealed record CalendarApplicationState(
+    bool Exists,
+    bool IsApplied,
+    bool IsUndone,
+    bool CanUndo,
+    string Message);
+
+public sealed record CalendarMutationResult(
+    bool Success,
+    bool AlreadyHandled,
+    string Message,
+    long MutationVersion = 0);
 
 public sealed record SessionProgress(int Completed, int Total, int Minutes)
 {

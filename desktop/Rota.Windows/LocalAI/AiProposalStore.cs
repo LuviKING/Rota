@@ -91,6 +91,12 @@ public sealed class AiProposalStore : IAiProposalStore, IDisposable
     public Task<AiStoredProposal> AcceptAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
         TransitionAsync(proposalId, AiProposalStatus.Accepted, cancellationToken);
 
+    public Task<AiStoredProposal> MarkAppliedAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
+        TransitionAsync(proposalId, AiProposalStatus.Applied, cancellationToken);
+
+    public Task<AiStoredProposal> MarkUndoneAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
+        TransitionAsync(proposalId, AiProposalStatus.Undone, cancellationToken);
+
     public Task<AiStoredProposal> RejectAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
         TransitionAsync(proposalId, AiProposalStatus.Rejected, cancellationToken);
 
@@ -134,8 +140,12 @@ public sealed class AiProposalStore : IAiProposalStore, IDisposable
         (current, target) switch
         {
             (AiProposalStatus.Validated, AiProposalStatus.Accepted) => true,
+            (AiProposalStatus.Validated, AiProposalStatus.Applied) => true,
             (AiProposalStatus.Validated, AiProposalStatus.Rejected) => true,
+            (AiProposalStatus.Accepted, AiProposalStatus.Applied) => true,
             (AiProposalStatus.Accepted, AiProposalStatus.Rejected) => true,
+            (AiProposalStatus.Applied, AiProposalStatus.Undone) => true,
+            (AiProposalStatus.Undone, AiProposalStatus.Applied) => true,
             _ => false
         };
 
@@ -268,7 +278,7 @@ public sealed class AiProposalStore : IAiProposalStore, IDisposable
             throw new AiContractValidationException("O registro da proposta precisa de um timestamp UTC.");
         if (record.Preview.State == AiProposalPreviewState.Ready &&
             record.Proposal.Status is not AiProposalStatus.Validated and not AiProposalStatus.Accepted and
-                not AiProposalStatus.Applied and not AiProposalStatus.Rejected)
+                not AiProposalStatus.Applied and not AiProposalStatus.Undone and not AiProposalStatus.Rejected)
         {
             throw new AiContractValidationException("O estado da proposta não corresponde à prévia aprovada.");
         }

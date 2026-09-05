@@ -41,7 +41,8 @@ public partial class App : Application
             var window = new MainWindow(
                 repository,
                 _localAiServices.AssistantController,
-                _localAiServices.InstallationController);
+                _localAiServices.InstallationController,
+                _localAiServices.ApplicationService);
             MainWindow = window;
             window.Show();
             if (_isSmokeTest)

@@ -239,6 +239,10 @@ public static class AiAssistantControllerTests
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<AiStoredProposal> AcceptAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+        public Task<AiStoredProposal> MarkAppliedAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public Task<AiStoredProposal> MarkUndoneAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
         public Task<AiStoredProposal> RejectAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

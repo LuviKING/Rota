@@ -11,6 +11,7 @@ public sealed class StudyRepository
     private const int CurrentStateVersion = 1;
     private const long MaxStateFileBytes = 8 * 1024 * 1024;
     private const int MaxStoredSessions = 20_000;
+    private const int MaxAiApplicationReceipts = 100;
     private readonly object _gate = new();
     private readonly string _dataPath;
     private readonly Func<DateTime> _now;
@@ -41,7 +42,7 @@ public sealed class StudyRepository
     {
         get
         {
-            lock (_gate) return CloneSettings(_state.Settings);
+            lock (_gate) return CopySettings(_state.Settings);
         }
     }
 
@@ -171,11 +172,13 @@ public sealed class StudyRepository
         }
     }
 
-    public void SavePreferences(string objectiveName, string objectiveDate, int dailyHours, int blockMinutes, bool d1, bool d3, bool d7)
+    public void SavePreferences(string objectiveName, string objectiveDate, double dailyHours, int blockMinutes, bool d1, bool d3, bool d7)
     {
         objectiveDate = (objectiveDate ?? "").Trim();
         if (objectiveDate.Length > 0 && !DateOnly.TryParseExact(objectiveDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
             throw new ArgumentException("Use uma data válida no formato AAAA-MM-DD.");
+        if (!double.IsFinite(dailyHours) || dailyHours is < 1 or > 12)
+            throw new ArgumentException("O limite diário precisa ficar entre 1 e 12 horas.");
         var cleanObjectiveName = CleanText(objectiveName, "Meu objetivo", 120, "Nome do objetivo");
 
         lock (_gate)
@@ -183,7 +186,7 @@ public sealed class StudyRepository
             var next = CloneState(_state);
             next.Settings.ObjectiveName = cleanObjectiveName;
             next.Settings.ObjectiveDate = objectiveDate;
-            next.Settings.DailyHours = Math.Clamp(dailyHours, 1, 12);
+            next.Settings.DailyHours = NormalizeDailyHours(dailyHours);
             next.Settings.BlockMinutes = Math.Clamp(blockMinutes, 30, 180);
             next.Settings.ReviewD1 = d1;
             next.Settings.ReviewD3 = d3;
@@ -197,6 +200,195 @@ public sealed class StudyRepository
         lock (_gate)
         {
             WriteStateAtomically(CloneState(_state), destinationPath, keepRecoveryBackup: false);
+        }
+    }
+
+    public RepositoryApplicationSnapshot CaptureApplicationSnapshot()
+    {
+        lock (_gate)
+        {
+            return new RepositoryApplicationSnapshot(
+                _state.MutationVersion,
+                Iso(DateOnly.FromDateTime(_now())),
+                CopySettings(_state.Settings),
+                _state.Sessions.Select(session => session.Copy()).ToList());
+        }
+    }
+
+    public IReadOnlyList<CalendarApplicationReceipt> AiApplicationReceipts()
+    {
+        lock (_gate) return _state.AiApplications.Select(receipt => receipt.Copy()).ToList();
+    }
+
+    public CalendarApplicationState AiApplicationState(Guid proposalId)
+    {
+        if (proposalId == Guid.Empty)
+            return new CalendarApplicationState(false, false, false, false, "A proposta não possui um ID válido.");
+        lock (_gate)
+        {
+            var id = proposalId.ToString("D");
+            var receipt = _state.AiApplications.FirstOrDefault(item => item.ProposalId == id);
+            if (receipt is null)
+                return new CalendarApplicationState(false, false, false, false, "A proposta ainda não foi aplicada ao calendário.");
+            var undone = receipt.Status == "undone";
+            var canUndo = !undone &&
+                _state.AiUndoCheckpoint?.ProposalId == id &&
+                _state.AiUndoCheckpoint.ExpectedMutationVersion == _state.MutationVersion;
+            var message = undone
+                ? "A aplicação desta proposta já foi desfeita."
+                : canUndo
+                    ? "A última aplicação pode ser desfeita com segurança."
+                    : "O calendário mudou depois da aplicação; desfazer foi bloqueado para preservar essas alterações.";
+            return new CalendarApplicationState(true, !undone, undone, canUndo, message);
+        }
+    }
+
+    public CalendarMutationResult CommitAiApplication(
+        Guid proposalId,
+        string proposalHash,
+        long expectedMutationVersion,
+        string expectedSnapshotDate,
+        AppSettings nextSettings,
+        IReadOnlyList<SessionItem> nextSessions)
+    {
+        if (proposalId == Guid.Empty) throw new ArgumentException("A proposta precisa de um ID válido.", nameof(proposalId));
+        ValidateProposalHash(proposalHash);
+        ArgumentNullException.ThrowIfNull(nextSettings);
+        ArgumentNullException.ThrowIfNull(nextSessions);
+
+        lock (_gate)
+        {
+            var id = proposalId.ToString("D");
+            var existing = _state.AiApplications.FirstOrDefault(receipt => receipt.ProposalId == id);
+            if (existing is not null)
+            {
+                if (!string.Equals(existing.ProposalHash, proposalHash, StringComparison.Ordinal))
+                    throw new InvalidDataException("O ID da proposta já foi usado por outro conteúdo.");
+                return new CalendarMutationResult(
+                    false,
+                    true,
+                    existing.Status == "undone"
+                        ? "Esta proposta já foi aplicada e desfeita; ela não pode ser aplicada novamente."
+                        : "Esta proposta já foi aplicada ao calendário.",
+                    _state.MutationVersion);
+            }
+
+            if (_state.AiApplications.Count >= MaxAiApplicationReceipts)
+                return new CalendarMutationResult(false, false, "O limite seguro de propostas aplicadas foi atingido.", _state.MutationVersion);
+            if (_state.MutationVersion != expectedMutationVersion ||
+                !string.Equals(Iso(DateOnly.FromDateTime(_now())), expectedSnapshotDate, StringComparison.Ordinal))
+            {
+                return new CalendarMutationResult(
+                    false,
+                    false,
+                    "O calendário mudou depois da confirmação. Revise a prévia atualizada antes de aplicar.",
+                    _state.MutationVersion);
+            }
+
+            var candidateSettings = CopySettings(nextSettings);
+            var candidateSessions = nextSessions.Select(session => session.Copy()).ToList();
+            EnsureSafeAiTransition(_state.Settings, _state.Sessions, candidateSettings, candidateSessions, expectedSnapshotDate);
+
+            var appliedVersion = checked(_state.MutationVersion + 1);
+            var next = CloneState(_state);
+            next.Settings = candidateSettings;
+            next.Sessions = candidateSessions;
+            next.AiApplications.Add(new CalendarApplicationReceipt
+            {
+                ProposalId = id,
+                ProposalHash = proposalHash,
+                Status = "applied",
+                AppliedMutationVersion = appliedVersion,
+                AppliedAtUnixMs = new DateTimeOffset(_now()).ToUnixTimeMilliseconds()
+            });
+            next.AiUndoCheckpoint = new CalendarUndoCheckpoint
+            {
+                ProposalId = id,
+                ExpectedMutationVersion = appliedVersion,
+                Settings = CopySettings(_state.Settings),
+                Sessions = _state.Sessions.Select(session => session.Copy()).ToList()
+            };
+            Commit(next);
+            return new CalendarMutationResult(true, false, "Proposta aplicada ao calendário com segurança.", _state.MutationVersion);
+        }
+    }
+
+    public CalendarMutationResult ValidateAiApplication(
+        long expectedMutationVersion,
+        string expectedSnapshotDate,
+        AppSettings nextSettings,
+        IReadOnlyList<SessionItem> nextSessions)
+    {
+        ArgumentNullException.ThrowIfNull(nextSettings);
+        ArgumentNullException.ThrowIfNull(nextSessions);
+        lock (_gate)
+        {
+            if (_state.MutationVersion != expectedMutationVersion ||
+                !string.Equals(Iso(DateOnly.FromDateTime(_now())), expectedSnapshotDate, StringComparison.Ordinal))
+            {
+                return new CalendarMutationResult(
+                    false,
+                    false,
+                    "O calendário mudou durante a revisão. Abra a proposta novamente para conferir a prévia atual.",
+                    _state.MutationVersion);
+            }
+            try
+            {
+                EnsureSafeAiTransition(
+                    _state.Settings,
+                    _state.Sessions,
+                    CopySettings(nextSettings),
+                    nextSessions.Select(session => session.Copy()).ToList(),
+                    expectedSnapshotDate);
+                return new CalendarMutationResult(true, false, "A aplicação foi revalidada no calendário atual.", _state.MutationVersion);
+            }
+            catch (InvalidDataException ex)
+            {
+                return new CalendarMutationResult(false, false, ex.Message, _state.MutationVersion);
+            }
+        }
+    }
+
+    public CalendarMutationResult UndoAiApplication(Guid proposalId)
+    {
+        if (proposalId == Guid.Empty) throw new ArgumentException("A proposta precisa de um ID válido.", nameof(proposalId));
+        lock (_gate)
+        {
+            var id = proposalId.ToString("D");
+            var index = _state.AiApplications.FindIndex(receipt => receipt.ProposalId == id);
+            if (index < 0)
+                return new CalendarMutationResult(false, false, "Não existe uma aplicação registrada para desfazer.", _state.MutationVersion);
+            var receipt = _state.AiApplications[index];
+            if (receipt.Status == "undone")
+                return new CalendarMutationResult(false, true, "Esta aplicação já foi desfeita.", _state.MutationVersion);
+            var checkpoint = _state.AiUndoCheckpoint;
+            if (checkpoint is null || checkpoint.ProposalId != id || checkpoint.ExpectedMutationVersion != _state.MutationVersion)
+            {
+                return new CalendarMutationResult(
+                    false,
+                    false,
+                    "O calendário mudou depois da aplicação. O Rota não desfez nada para preservar as alterações posteriores.",
+                    _state.MutationVersion);
+            }
+
+            var restoredSettings = CopySettings(checkpoint.Settings);
+            foreach (var revision in _state.Settings.PlanRevisions)
+            {
+                restoredSettings.PlanRevisions.TryGetValue(revision.Key, out var previous);
+                restoredSettings.PlanRevisions[revision.Key] = Math.Max(previous, revision.Value);
+            }
+
+            var undoneVersion = checked(_state.MutationVersion + 1);
+            var next = CloneState(_state);
+            next.Settings = restoredSettings;
+            next.Sessions = checkpoint.Sessions.Select(session => session.Copy()).ToList();
+            next.AiApplications[index] = receipt.Copy();
+            next.AiApplications[index].Status = "undone";
+            next.AiApplications[index].UndoneMutationVersion = undoneVersion;
+            next.AiApplications[index].UndoneAtUnixMs = new DateTimeOffset(_now()).ToUnixTimeMilliseconds();
+            next.AiUndoCheckpoint = null;
+            Commit(next);
+            return new CalendarMutationResult(true, false, "Aplicação desfeita com segurança.", _state.MutationVersion);
         }
     }
 
@@ -227,10 +419,22 @@ public sealed class StudyRepository
         if (eligible.Count == 0)
             return (new ApplyResult(false, 0, 0, "O plano não contém nenhuma sessão futura que possa ser aplicada com segurança."), eligible);
 
+        var availableDays = _state.Settings.AvailableStudyDays.ToHashSet();
+        var outsideAvailability = eligible.FirstOrDefault(session =>
+            !availableDays.Contains(DateOnly.ParseExact(session.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture).DayOfWeek));
+        if (outsideAvailability is not null)
+        {
+            return (new ApplyResult(
+                false,
+                0,
+                0,
+                $"O plano contém uma sessão fora dos dias disponíveis ({outsideAvailability.Date})."), eligible);
+        }
+
         var protectedSessions = _state.Sessions.Where(s =>
             string.CompareOrdinal(s.Date, today) >= 0 && (s.IsCompleted || s.Origin == "runtime"));
         var capacity = eligible.Concat(protectedSessions).ToList();
-        var dailyLimit = Math.Clamp(_state.Settings.DailyHours, 1, 12) * 60;
+        var dailyLimit = DailyMinutesLimit(_state.Settings);
         var overloadedDate = FirstOverloadedDate(capacity, dailyLimit);
         if (overloadedDate.Length > 0)
         {
@@ -258,6 +462,14 @@ public sealed class StudyRepository
 
     public static int ReviewMinutes(int originalMinutes) => Math.Max(15, Math.Min(35, originalMinutes / 3));
 
+    public static int DailyMinutesLimit(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (!double.IsFinite(settings.DailyHours))
+            throw new InvalidDataException("O limite diário armazenado é inválido.");
+        return checked((int)Math.Round(settings.DailyHours * 60, MidpointRounding.AwayFromZero));
+    }
+
     public static string FirstOverloadedDate(IEnumerable<SessionItem> sessions, int maxMinutesPerDay)
     {
         if (maxMinutesPerDay <= 0) return "";
@@ -277,6 +489,74 @@ public sealed class StudyRepository
     }
 
     public static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static double NormalizeDailyHours(double hours) =>
+        Math.Round(hours * 60, MidpointRounding.AwayFromZero) / 60d;
+
+    private static void ValidateProposalHash(string hash)
+    {
+        if (!IsValidProposalHash(hash))
+            throw new ArgumentException("A assinatura da proposta é inválida.", nameof(hash));
+    }
+
+    private static bool IsValidProposalHash(string? hash) =>
+        hash is { Length: 64 } && hash.All(Uri.IsHexDigit) &&
+        string.Equals(hash, hash.ToUpperInvariant(), StringComparison.Ordinal);
+
+    private static void EnsureSafeAiTransition(
+        AppSettings currentSettings,
+        IReadOnlyList<SessionItem> currentSessions,
+        AppSettings nextSettings,
+        IReadOnlyList<SessionItem> nextSessions,
+        string today)
+    {
+        ValidateCoreState(nextSettings, nextSessions);
+
+        foreach (var revision in currentSettings.PlanRevisions)
+        {
+            if (!nextSettings.PlanRevisions.TryGetValue(revision.Key, out var nextRevision) || nextRevision < revision.Value)
+                throw new InvalidDataException("Uma aplicação da IA não pode reduzir o histórico de revisões dos planos.");
+        }
+
+        var nextByIdentity = nextSessions.ToDictionary(session => (session.PlanId, session.Id));
+        foreach (var current in currentSessions)
+        {
+            var isProtected = current.IsCompleted || current.Origin == "runtime" || string.CompareOrdinal(current.Date, today) < 0;
+            if (!isProtected) continue;
+            if (!nextByIdentity.TryGetValue((current.PlanId, current.Id), out var preserved) || !SessionEquals(current, preserved))
+                throw new InvalidDataException("A aplicação tentou alterar histórico concluído, passado ou uma revisão automática protegida.");
+        }
+
+        var currentIdentities = currentSessions.Select(session => (session.PlanId, session.Id)).ToHashSet();
+        if (nextSessions.Any(session => session.Origin == "runtime" && !currentIdentities.Contains((session.PlanId, session.Id))))
+            throw new InvalidDataException("A aplicação não pode criar revisões automáticas diretamente.");
+
+        var future = nextSessions.Where(session => string.CompareOrdinal(session.Date, today) >= 0).ToList();
+        var overloadedDate = FirstOverloadedDate(future, DailyMinutesLimit(nextSettings));
+        if (overloadedDate.Length > 0)
+            throw new InvalidDataException($"A agenda proposta ultrapassa o limite diário em {overloadedDate}.");
+
+        var availableDays = nextSettings.AvailableStudyDays.ToHashSet();
+        var outsideAvailability = future.FirstOrDefault(session =>
+            !session.IsCompleted && session.Origin == "plan" &&
+            !availableDays.Contains(DateOnly.ParseExact(session.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture).DayOfWeek));
+        if (outsideAvailability is not null)
+            throw new InvalidDataException("A agenda proposta mantém uma sessão comum fora dos dias disponíveis.");
+
+        if (nextSettings.ObjectiveDate.Length > 0 && future.Any(session =>
+                !session.IsCompleted && session.Origin == "plan" &&
+                string.CompareOrdinal(session.Date, nextSettings.ObjectiveDate) > 0))
+        {
+            throw new InvalidDataException("A agenda proposta ultrapassa a data do objetivo.");
+        }
+    }
+
+    private static bool SessionEquals(SessionItem left, SessionItem right) =>
+        left.Id == right.Id && left.PlanId == right.PlanId && left.PlanRevision == right.PlanRevision &&
+        left.Date == right.Date && left.Subject == right.Subject && left.Topic == right.Topic &&
+        left.Minutes == right.Minutes && left.Target == right.Target && left.Kind == right.Kind &&
+        left.ReviewLabel == right.ReviewLabel && left.Status == right.Status && left.Origin == right.Origin &&
+        left.CompletedAtUnixMs == right.CompletedAtUnixMs;
 
     private static int KindOrder(string kind) => kind switch
     {
@@ -346,6 +626,7 @@ public sealed class StudyRepository
 
     private void Commit(AppState next)
     {
+        next.MutationVersion = checked(_state.MutationVersion + 1);
         ValidateState(next);
         SaveStateInternal(next);
         _state = next;
@@ -415,24 +696,97 @@ public sealed class StudyRepository
     private static AppState CreateFreshState() => new()
     {
         StateVersion = CurrentStateVersion,
+        MutationVersion = 0,
         Settings = new AppSettings(),
-        Sessions = new List<SessionItem>()
+        Sessions = new List<SessionItem>(),
+        AiApplications = new List<CalendarApplicationReceipt>()
     };
 
     private static void ValidateState(AppState state)
     {
         if (state.StateVersion != CurrentStateVersion)
             throw new InvalidDataException($"Versão de estado não suportada: {state.StateVersion}.");
-        if (state.Settings is null || state.Sessions is null)
+        if (state.MutationVersion < 0)
+            throw new InvalidDataException("A versão de alteração do estado é inválida.");
+        if (state.Settings is null || state.Sessions is null || state.AiApplications is null)
             throw new InvalidDataException("O estado local está incompleto.");
 
-        var settings = state.Settings;
+        ValidateCoreState(state.Settings, state.Sessions);
+        if (state.AiApplications.Count > MaxAiApplicationReceipts)
+            throw new InvalidDataException("O estado contém recibos de aplicação demais.");
+
+        var receiptIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var receipt in state.AiApplications)
+        {
+            if (receipt is null || !Guid.TryParseExact(receipt.ProposalId, "D", out var receiptId) ||
+                receipt.ProposalId != receiptId.ToString("D") || !receiptIds.Add(receipt.ProposalId))
+                throw new InvalidDataException("O estado contém recibos de aplicação inválidos ou duplicados.");
+            if (!IsValidProposalHash(receipt.ProposalHash))
+                throw new InvalidDataException("Um recibo contém assinatura de proposta inválida.");
+            if (receipt.Status is not "applied" and not "undone" ||
+                receipt.AppliedMutationVersion < 1 || receipt.AppliedMutationVersion > state.MutationVersion ||
+                receipt.AppliedAtUnixMs <= 0)
+            {
+                throw new InvalidDataException("Um recibo de aplicação está inconsistente.");
+            }
+            if (receipt.Status == "applied" && (receipt.UndoneMutationVersion != 0 || receipt.UndoneAtUnixMs != 0))
+                throw new InvalidDataException("Um recibo aplicado contém dados indevidos de desfazer.");
+            if (receipt.Status == "undone" &&
+                (receipt.UndoneMutationVersion <= receipt.AppliedMutationVersion ||
+                 receipt.UndoneMutationVersion > state.MutationVersion || receipt.UndoneAtUnixMs <= 0))
+            {
+                throw new InvalidDataException("Um recibo desfeito está inconsistente.");
+            }
+        }
+
+        if (state.AiUndoCheckpoint is { } checkpoint)
+        {
+            if (!Guid.TryParseExact(checkpoint.ProposalId, "D", out var checkpointId) ||
+                checkpoint.ProposalId != checkpointId.ToString("D") ||
+                checkpoint.ExpectedMutationVersion < 1 || checkpoint.ExpectedMutationVersion > state.MutationVersion)
+            {
+                throw new InvalidDataException("O ponto de desfazer da IA é inválido.");
+            }
+            var matchingReceipt = state.AiApplications.FirstOrDefault(receipt => receipt.ProposalId == checkpoint.ProposalId);
+            if (matchingReceipt is null || matchingReceipt.Status != "applied" ||
+                matchingReceipt.AppliedMutationVersion != checkpoint.ExpectedMutationVersion)
+            {
+                throw new InvalidDataException("O ponto de desfazer não corresponde a uma aplicação registrada.");
+            }
+            if (checkpoint.Settings is null || checkpoint.Sessions is null)
+                throw new InvalidDataException("O ponto de desfazer está incompleto.");
+            ValidateCoreState(checkpoint.Settings, checkpoint.Sessions);
+        }
+    }
+
+    private static void ValidateCoreState(AppSettings settings, IReadOnlyList<SessionItem> sessions)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(sessions);
+
         ValidateStoredText(settings.ObjectiveName, "ObjectiveName", 120, allowEmpty: false);
         ValidateStoredText(settings.ObjectiveDate, "ObjectiveDate", 10, allowEmpty: true);
         if (settings.ObjectiveDate.Length > 0 && !DateOnly.TryParseExact(settings.ObjectiveDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
             throw new InvalidDataException("ObjectiveDate contém uma data inválida.");
-        if (settings.DailyHours is < 1 or > 12 || settings.BlockMinutes is < 30 or > 180)
+        if (!double.IsFinite(settings.DailyHours) || settings.DailyHours is < 1 or > 12 ||
+            Math.Abs(settings.DailyHours * 60 - Math.Round(settings.DailyHours * 60)) > 0.000001 ||
+            settings.BlockMinutes is < 30 or > 180)
             throw new InvalidDataException("As preferências de duração estão fora dos limites.");
+        if (settings.AvailableStudyDays is null || settings.AvailableStudyDays.Count is < 1 or > 7 ||
+            settings.AvailableStudyDays.Distinct().Count() != settings.AvailableStudyDays.Count ||
+            settings.AvailableStudyDays.Any(day => !Enum.IsDefined(day)))
+        {
+            throw new InvalidDataException("Os dias disponíveis armazenados são inválidos.");
+        }
+        if (settings.SubjectPriorities is null || settings.SubjectPriorities.Count > 500)
+            throw new InvalidDataException("As prioridades de matérias armazenadas são inválidas.");
+        var prioritySubjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var priority in settings.SubjectPriorities)
+        {
+            ValidateStoredText(priority.Key, "SubjectPriorities.subject", 80, allowEmpty: false);
+            if (!prioritySubjects.Add(priority.Key) || priority.Value is < 1 or > 100)
+                throw new InvalidDataException("Uma prioridade de matéria armazenada é inválida.");
+        }
         ValidateStoredText(settings.ActivePlanId, "ActivePlanId", 80, allowEmpty: true);
         ValidateStoredText(settings.ActivePlanTitle, "ActivePlanTitle", 120, allowEmpty: true);
         if (settings.ActivePlanRevision < 0 || (settings.ActivePlanId.Length > 0 && settings.ActivePlanRevision < 1))
@@ -445,10 +799,10 @@ public sealed class StudyRepository
             if (entry.Value < 1) throw new InvalidDataException("O índice contém uma revisão inválida.");
         }
 
-        if (state.Sessions.Count > MaxStoredSessions)
+        if (sessions.Count > MaxStoredSessions)
             throw new InvalidDataException($"O estado excede o limite de {MaxStoredSessions} sessões armazenadas.");
         var identities = new HashSet<(string PlanId, string Id)>();
-        foreach (var session in state.Sessions)
+        foreach (var session in sessions)
         {
             if (session is null) throw new InvalidDataException("O estado contém uma sessão nula.");
             ValidateStoredText(session.Id, "Session.Id", 100, allowEmpty: false);
@@ -496,11 +850,14 @@ public sealed class StudyRepository
     private static AppState CloneState(AppState source) => new()
     {
         StateVersion = source.StateVersion,
-        Settings = CloneSettings(source.Settings),
-        Sessions = source.Sessions.Select(session => session.Copy()).ToList()
+        MutationVersion = source.MutationVersion,
+        Settings = CopySettings(source.Settings),
+        Sessions = source.Sessions.Select(session => session.Copy()).ToList(),
+        AiApplications = source.AiApplications.Select(receipt => receipt.Copy()).ToList(),
+        AiUndoCheckpoint = source.AiUndoCheckpoint?.Copy()
     };
 
-    private static AppSettings CloneSettings(AppSettings source) => new()
+    public static AppSettings CopySettings(AppSettings source) => new()
     {
         ObjectiveName = source.ObjectiveName,
         ObjectiveDate = source.ObjectiveDate,
@@ -509,6 +866,8 @@ public sealed class StudyRepository
         ReviewD1 = source.ReviewD1,
         ReviewD3 = source.ReviewD3,
         ReviewD7 = source.ReviewD7,
+        AvailableStudyDays = source.AvailableStudyDays.ToList(),
+        SubjectPriorities = new Dictionary<string, int>(source.SubjectPriorities, StringComparer.OrdinalIgnoreCase),
         ActivePlanId = source.ActivePlanId,
         ActivePlanRevision = source.ActivePlanRevision,
         ActivePlanTitle = source.ActivePlanTitle,

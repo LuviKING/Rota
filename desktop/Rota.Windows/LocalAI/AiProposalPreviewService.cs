@@ -42,15 +42,21 @@ public sealed class AiProposalPreviewService : IAiProposalPreviewService
     {
         var package = StudyPlanImporter.Parse(proposal.StudyPlan!.StudyPlanJson);
         var evaluation = _repository.PreviewPlan(package);
-        var context = _contextProvider.Capture();
-        var currentSessions = _repository.UpcomingSessions(ParseIso(context.SnapshotDate), int.MaxValue);
+        var snapshot = _repository.CaptureApplicationSnapshot();
+        var context = StudyPlanningContextProvider.FromSnapshot(snapshot);
+        var currentSessions = snapshot.Sessions
+            .Where(session => !session.IsCompleted && string.CompareOrdinal(session.Date, snapshot.SnapshotDate) >= 0)
+            .ToList();
         var beforeMinutes = currentSessions.Sum(session => session.Minutes);
-        var futurePlanMinutes = package.Sessions
-            .Where(session => string.CompareOrdinal(session.Date, context.SnapshotDate) >= 0)
-            .Sum(session => session.Minutes);
-        var protectedMinutes = currentSessions
-            .Where(session => session.Origin == "runtime")
-            .Sum(session => session.Minutes);
+        var eligible = package.Sessions.Where(incoming =>
+        {
+            if (string.CompareOrdinal(incoming.Date, snapshot.SnapshotDate) < 0) return false;
+            var existing = snapshot.Sessions.FirstOrDefault(session =>
+                session.PlanId == incoming.PlanId && session.Id == incoming.Id);
+            return existing is null || (!existing.IsCompleted && existing.Origin != "runtime" &&
+                                        string.CompareOrdinal(existing.Date, snapshot.SnapshotDate) >= 0);
+        }).ToList();
+        var protectedFuture = currentSessions.Where(session => session.Origin == "runtime").ToList();
         return new AiProposalPreview
         {
             ProposalId = proposal.Id,
@@ -59,10 +65,12 @@ public sealed class AiProposalPreviewService : IAiProposalPreviewService
             Message = evaluation.Message,
             BeforeSessionCount = currentSessions.Count,
             AfterSessionCount = evaluation.Success
-                ? currentSessions.Count - evaluation.Removed + evaluation.Applied
+                ? protectedFuture.Count + eligible.Count
                 : currentSessions.Count,
             BeforeMinutes = beforeMinutes,
-            AfterMinutes = evaluation.Success ? protectedMinutes + futurePlanMinutes : beforeMinutes,
+            AfterMinutes = evaluation.Success
+                ? protectedFuture.Sum(session => session.Minutes) + eligible.Sum(session => session.Minutes)
+                : beforeMinutes,
             AddedSessionCount = evaluation.Success ? evaluation.Applied : 0,
             RemovedSessionCount = evaluation.Success ? evaluation.Removed : 0,
             Warnings = CopyWarnings(proposal.Warnings, context.HasMoreFutureSessions)
@@ -84,7 +92,7 @@ public sealed class AiProposalPreviewService : IAiProposalPreviewService
         var removed = new HashSet<(string PlanId, string SessionId)>();
         var added = 0;
         var dailyLimit = context.DailyMinutesLimit;
-        HashSet<DayOfWeek>? availableDays = null;
+        HashSet<DayOfWeek>? availableDays = context.AvailableDays.ToHashSet();
 
         foreach (var operation in proposal.Changes!.Operations)
         {

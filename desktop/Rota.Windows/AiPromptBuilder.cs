@@ -50,7 +50,7 @@ public static class AiPromptBuilder
         sb.AppendLine($"- Data local de referência: {StudyRepository.Iso(today)}");
         sb.AppendLine($"- Objetivo salvo: {(string.IsNullOrWhiteSpace(settings.ObjectiveName) ? "não informado" : settings.ObjectiveName)}");
         sb.AppendLine($"- Data do objetivo salva: {(string.IsNullOrWhiteSpace(settings.ObjectiveDate) ? "não informada" : settings.ObjectiveDate)}");
-        sb.AppendLine($"- Limite diário configurado: {settings.DailyHours} h ({settings.DailyHours * 60} min)");
+        sb.AppendLine($"- Limite diário configurado: {settings.DailyHours:0.##} h ({StudyRepository.DailyMinutesLimit(settings)} min)");
         sb.AppendLine($"- Tamanho de bloco preferido: {settings.BlockMinutes} min");
         sb.AppendLine($"- Plano ativo: {(string.IsNullOrWhiteSpace(settings.ActivePlanId) ? "nenhum" : settings.ActivePlanId)}");
         sb.AppendLine($"- Revisão ativa do plano: {settings.ActivePlanRevision}");

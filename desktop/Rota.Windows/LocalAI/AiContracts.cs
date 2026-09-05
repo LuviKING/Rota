@@ -34,6 +34,7 @@ public enum AiProposalStatus
     Validated,
     Accepted,
     Applied,
+    Undone,
     Rejected,
     Failed
 }
@@ -112,6 +113,8 @@ public sealed record AiPlanningContext
     public string ActivePlanTitle { get; init; } = "";
     public int DailyMinutesLimit { get; init; }
     public int BlockMinutes { get; init; }
+    public List<DayOfWeek> AvailableDays { get; init; } = Enum.GetValues<DayOfWeek>().ToList();
+    public Dictionary<string, int> SubjectPriorities { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public List<AiPlanningSessionContext> FutureSessions { get; init; } = new();
     public bool HasMoreFutureSessions { get; init; }
 }
@@ -201,6 +204,27 @@ public sealed record AiStoredProposal
     public AiProposal Proposal { get; init; } = new();
     public AiProposalPreview Preview { get; init; } = new();
     public DateTimeOffset UpdatedAtUtc { get; init; }
+}
+
+public sealed record AiPreparedApplication
+{
+    public Guid ConfirmationId { get; init; }
+    public Guid ProposalId { get; init; }
+    public string Summary { get; init; } = "";
+    public AiProposalKind Kind { get; init; }
+    public AiProposalPreview Preview { get; init; } = new();
+    public bool ChangedSinceSavedPreview { get; init; }
+    public string Message { get; init; } = "";
+
+    public bool CanApply => ConfirmationId != Guid.Empty && Preview.CanProceed;
+}
+
+public sealed record AiProposalApplicationResult
+{
+    public bool Success { get; init; }
+    public bool AlreadyHandled { get; init; }
+    public bool HistorySynchronized { get; init; }
+    public string Message { get; init; } = "";
 }
 
 public sealed record AiProposalGeneration
@@ -326,7 +350,19 @@ public interface IAiProposalStore
         AiProposalPreview preview,
         CancellationToken cancellationToken = default);
     Task<AiStoredProposal> AcceptAsync(Guid proposalId, CancellationToken cancellationToken = default);
+    Task<AiStoredProposal> MarkAppliedAsync(Guid proposalId, CancellationToken cancellationToken = default);
+    Task<AiStoredProposal> MarkUndoneAsync(Guid proposalId, CancellationToken cancellationToken = default);
     Task<AiStoredProposal> RejectAsync(Guid proposalId, CancellationToken cancellationToken = default);
+}
+
+public interface IAiProposalApplicationService
+{
+    Task ReconcileAsync(CancellationToken cancellationToken = default);
+    Task<AiPreparedApplication> PrepareAsync(Guid proposalId, CancellationToken cancellationToken = default);
+    Task<AiProposalApplicationResult> ApplyAsync(Guid confirmationId, CancellationToken cancellationToken = default);
+    Task<AiProposalApplicationResult> UndoAsync(Guid proposalId, CancellationToken cancellationToken = default);
+    Task<AiStoredProposal> RejectAsync(Guid proposalId, CancellationToken cancellationToken = default);
+    CalendarApplicationState GetCalendarState(Guid proposalId);
 }
 
 public interface IAiProposalWorkflowService
@@ -373,6 +409,17 @@ public sealed class AiPlanningException : Exception
 public sealed class AiProposalWorkflowException : Exception
 {
     public AiProposalWorkflowException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+}
+
+public sealed class AiProposalApplicationException : Exception
+{
+    public AiProposalApplicationException(string message) : base(message)
+    {
+    }
+
+    public AiProposalApplicationException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

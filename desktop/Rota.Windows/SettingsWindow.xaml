@@ -30,7 +30,7 @@
                         <TextBlock Text="Limite diário" FontSize="12" FontWeight="SemiBold" />
                         <TextBlock x:Name="HoursValue" HorizontalAlignment="Right" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryBrush}" />
                     </Grid>
-                    <Slider x:Name="HoursSlider" Minimum="1" Maximum="12" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="HoursSlider_ValueChanged" />
+                    <Slider x:Name="HoursSlider" Minimum="1" Maximum="12" TickFrequency="0.5" IsSnapToTickEnabled="True" ValueChanged="HoursSlider_ValueChanged" />
                     <TextBlock Text="A importação é recusada se sessões novas + histórico protegido + revisões runtime excederem este limite." Foreground="{DynamicResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap" />
 
                     <Grid Margin="0,16,0,3">

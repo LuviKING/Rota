@@ -95,6 +95,7 @@ tests = tests.Concat(Rota.Desktop.Tests.LocalAiCompositionTests.Cases).ToArray()
 tests = tests.Concat(Rota.Desktop.Tests.AiAssistantControllerTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiAssistantPresentationTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiInstallationControllerTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.AiProposalApplicationTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 
@@ -443,13 +444,27 @@ static void DesktopWindowsLoad()
             var repo = new StudyRepository(Path.Combine(dir, "state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var assistant = new TestAiAssistantController();
             var installation = new TestAiInstallationController();
-            var assistantWindow = new AiAssistantWindow(assistant, installation, repo);
+            var application = new TestAiProposalApplicationService();
+            var assistantWindow = new AiAssistantWindow(assistant, installation, application, repo);
             Eq(0, assistant.InitializeCalls);
             Eq(0, installation.PrepareCalls);
             var windows = new Window[]
             {
-                new MainWindow(repo, assistant, installation),
+                new MainWindow(repo, assistant, installation, application),
                 assistantWindow,
+                new AiProposalConfirmationWindow(new AiPreparedApplication
+                {
+                    ConfirmationId = Guid.NewGuid(),
+                    ProposalId = Guid.NewGuid(),
+                    Summary = "Prévia de teste",
+                    Preview = new AiProposalPreview
+                    {
+                        ProposalId = Guid.NewGuid(),
+                        Kind = AiProposalKind.StudyPlan,
+                        State = AiProposalPreviewState.Ready,
+                        Message = "Pronta para revisão."
+                    }
+                }),
                 new AiInstallationWindow(installation),
                 new AiPromptWindow(repo),
                 new ImportPlanWindow(repo),
@@ -521,7 +536,7 @@ static void DesktopWindowsLoad()
 
             ThemeManager.Apply(ThemeManager.Light);
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
-            var unavailableWindow = new AiAssistantWindow(unavailable, installation, repo)
+            var unavailableWindow = new AiAssistantWindow(unavailable, installation, application, repo)
             {
                 WindowStartupLocation = WindowStartupLocation.Manual,
                 Left = -20_000,
@@ -1740,6 +1755,26 @@ sealed class FailingAiConfigurationStore : IAiConfigurationStore
 
     public Task SaveAsync(AiConfiguration configuration, CancellationToken cancellationToken = default) =>
         Task.FromException(new IOException("simulated configuration activation failure"));
+}
+
+sealed class TestAiProposalApplicationService : IAiProposalApplicationService
+{
+    public Task ReconcileAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task<AiPreparedApplication> PrepareAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public Task<AiProposalApplicationResult> ApplyAsync(Guid confirmationId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public Task<AiProposalApplicationResult> UndoAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public Task<AiStoredProposal> RejectAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public CalendarApplicationState GetCalendarState(Guid proposalId) =>
+        new(false, false, false, false, "");
 }
 
 sealed class TestAiAssistantController : IAiAssistantController

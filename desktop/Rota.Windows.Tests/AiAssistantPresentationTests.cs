@@ -14,10 +14,22 @@ public static class AiAssistantPresentationTests
     {
         var ready = new AiProposalCardView(Stored(AiProposalPreviewState.Ready, AiProposalStatus.Validated));
         var blocked = new AiProposalCardView(Stored(AiProposalPreviewState.Blocked, AiProposalStatus.Failed));
+        var appliedFromReceipt = new AiProposalCardView(
+            Stored(AiProposalPreviewState.Ready, AiProposalStatus.Validated),
+            new CalendarApplicationState(true, true, false, true, "Pode desfazer."),
+            actionsEnabled: true);
+        var undone = new AiProposalCardView(
+            Stored(AiProposalPreviewState.Ready, AiProposalStatus.Undone),
+            new CalendarApplicationState(true, false, true, false, "Já desfeita."),
+            actionsEnabled: true);
 
         Require(ready.StatusDisplay == "VALIDADA");
         Require(blocked.StatusDisplay == "BLOQUEADA");
         Require(ready.KindDisplay == "AJUSTE DO PLANO");
+        Require(ready.ApplyVisibility == System.Windows.Visibility.Visible && ready.CanApply);
+        Require(appliedFromReceipt.StatusDisplay == "APLICADA");
+        Require(appliedFromReceipt.ApplyVisibility == System.Windows.Visibility.Collapsed && appliedFromReceipt.CanUndo);
+        Require(undone.StatusDisplay == "DESFEITA");
     }
 
     private static void PresentationSummarizesChanges()

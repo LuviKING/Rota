@@ -30,6 +30,13 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
+
+        <Style x:Key="CardActionButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="11,6" />
+            <Setter Property="Margin" Value="0,0,7,7" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
     </Window.Resources>
 
     <Grid Margin="22">
@@ -286,9 +293,39 @@
                                                            FontSize="10" TextWrapping="Wrap" Margin="0,5,0,0" />
                                                 <TextBlock Text="{Binding MetricsDisplay}" Foreground="{DynamicResource PrimaryBrush}"
                                                            FontSize="9.5" TextWrapping="Wrap" Margin="0,8,0,0" />
-                                                <TextBlock Text="{Binding CreatedAtDisplay}" Foreground="{DynamicResource MutedBrush}"
-                                                           FontSize="9" Margin="0,6,0,0" />
-                                            </StackPanel>
+                                                 <TextBlock Text="{Binding CreatedAtDisplay}" Foreground="{DynamicResource MutedBrush}"
+                                                            FontSize="9" Margin="0,6,0,0" />
+                                                 <WrapPanel Margin="0,11,0,-7">
+                                                     <Button Style="{StaticResource CardActionButton}"
+                                                             Background="{DynamicResource PrimaryBrush}"
+                                                             BorderBrush="{DynamicResource PrimaryBrush}"
+                                                             Foreground="White"
+                                                             Content="Revisar e aplicar"
+                                                             Tag="{Binding ProposalId}"
+                                                             Visibility="{Binding ApplyVisibility}"
+                                                             IsEnabled="{Binding CanApply}"
+                                                             Click="ReviewAndApply_Click"
+                                                             AutomationProperties.Name="Revisar e aplicar proposta" />
+                                                     <Button Style="{StaticResource CardActionButton}"
+                                                             Content="Rejeitar"
+                                                             Tag="{Binding ProposalId}"
+                                                             Visibility="{Binding RejectVisibility}"
+                                                             IsEnabled="{Binding CanReject}"
+                                                             Click="RejectProposal_Click"
+                                                             AutomationProperties.Name="Rejeitar proposta" />
+                                                     <Button Style="{StaticResource CardActionButton}"
+                                                             Content="Desfazer aplicação"
+                                                             Tag="{Binding ProposalId}"
+                                                             Visibility="{Binding UndoVisibility}"
+                                                             IsEnabled="{Binding CanUndo}"
+                                                             Click="UndoProposal_Click"
+                                                             AutomationProperties.Name="Desfazer aplicação da proposta" />
+                                                 </WrapPanel>
+                                                 <TextBlock Text="{Binding UndoHint}"
+                                                            Visibility="{Binding UndoHintVisibility}"
+                                                            Foreground="{DynamicResource MutedBrush}"
+                                                            FontSize="9" TextWrapping="Wrap" Margin="0,7,0,0" />
+                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
