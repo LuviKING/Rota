@@ -59,6 +59,7 @@ public partial class AiAssistantWindow : Window
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        _controller.CancelCurrentOperation();
         _controller.StateChanged -= Controller_StateChanged;
         Loaded -= Window_Loaded;
         Closed -= Window_Closed;
@@ -148,13 +149,15 @@ public partial class AiAssistantWindow : Window
         state ??= _controller.State;
         var hasRequest = !string.IsNullOrWhiteSpace(RequestBox.Text);
         SendButton.IsEnabled = state.IsInitialized && state.IsOfflineReady && !state.IsBusy && !_calendarActionRunning && hasRequest;
-        SendHintText.Text = !state.IsInitialized || state.Activity == AiAssistantActivity.Loading
+        var hint = !state.IsInitialized || state.Activity == AiAssistantActivity.Loading
             ? "Carregando o estado local…"
             : !state.IsOfflineReady
                 ? "O envio será liberado quando runtime e modelo locais estiverem instalados."
                 : hasRequest
                     ? "A resposta ficará como prévia; depois você poderá revisar e confirmar a aplicação."
                     : "Descreva seu pedido ou escolha uma ação rápida.";
+        var length = RequestBox.Text.Length.ToString("N0", CultureInfo.GetCultureInfo("pt-BR"));
+        SendHintText.Text = $"{hint} · {length}/8.000 caracteres";
     }
 
     private void RequestBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -438,7 +441,7 @@ public sealed class AiProposalCardView
             return ("APLICADA", ThemeManager.ResourceBrush("SuccessSoftBrush"), ThemeManager.ResourceBrush("SuccessBrush"));
         return stored.Proposal.Status switch
         {
-            AiProposalStatus.Accepted => ("ACEITA", ThemeManager.ResourceBrush("PrimarySoftBrush"), ThemeManager.ResourceBrush("PrimaryBrush")),
+            AiProposalStatus.Accepted => ("ACEITA", ThemeManager.ResourceBrush("PrimarySoftBrush"), ThemeManager.ResourceBrush("PrimaryTextBrush")),
             AiProposalStatus.Applied => ("APLICADA", ThemeManager.ResourceBrush("SuccessSoftBrush"), ThemeManager.ResourceBrush("SuccessBrush")),
             AiProposalStatus.Undone => ("DESFEITA", ThemeManager.ResourceBrush("SubtleBrush"), ThemeManager.ResourceBrush("MutedBrush")),
             AiProposalStatus.Rejected => ("REJEITADA", ThemeManager.ResourceBrush("SubtleBrush"), ThemeManager.ResourceBrush("MutedBrush")),

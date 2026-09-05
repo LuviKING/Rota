@@ -491,7 +491,7 @@ public sealed class MonthDayCardView
             complete ? "SuccessBrush" :
             hasAssessment ? "AssessmentBrush" :
             hasReview ? "ReviewBrush" :
-            "PrimaryBrush");
+            "PrimaryTextBrush");
 
         Summary = BuildSummary(sessions, complete);
         Background = ThemeManager.ResourceBrush(
@@ -513,13 +513,12 @@ public sealed class MonthDayCardView
             .Select(session => session.Subject.Trim())
             .Where(subject => subject.Length > 0)
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
-            .Take(3)
             .ToList();
 
         if (subjects.Count == 0) return $"{sessions.Count} blocos";
         if (subjects.Count <= 2) return string.Join(" • ", subjects);
 
-        return subjects[0] + " • " + subjects[1] + $" • +{sessions.Count - 2}";
+        return subjects[0] + " • " + subjects[1] + $" • +{subjects.Count - 2}";
     }
 }
 
@@ -558,7 +557,7 @@ public sealed class SessionCardView
             session.IsCompleted ? "SuccessBrush" :
             session.Kind == "review" ? "ReviewBrush" :
             session.Kind == "assessment" ? "AssessmentBrush" :
-            "PrimaryBrush");
+            "PrimaryTextBrush");
         BadgeBackground = ThemeManager.ResourceBrush(
             session.IsCompleted ? "SuccessSoftBrush" :
             session.Kind == "review" ? "ReviewSoftBrush" :

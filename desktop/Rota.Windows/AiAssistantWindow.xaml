@@ -57,7 +57,7 @@
                             Background="{DynamicResource PrimarySoftBrush}"
                             Margin="0,0,12,0">
                         <TextBlock Text="&#xEA80;" Style="{StaticResource IconGlyphText}"
-                                   Foreground="{DynamicResource PrimaryBrush}"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"
                                    FontSize="21" Width="28" Height="28" LineHeight="28" />
                     </Border>
                     <StackPanel VerticalAlignment="Center">
@@ -76,7 +76,8 @@
                     </StackPanel>
                 </Border>
                 <Button Style="{StaticResource IconButton}" Click="Close_Click"
-                        ToolTip="Fechar assistente" AutomationProperties.Name="Fechar assistente">&#xE8BB;</Button>
+                        IsCancel="True" ToolTip="Fechar assistente"
+                        AutomationProperties.Name="Fechar assistente">&#xE8BB;</Button>
             </StackPanel>
         </Grid>
 
@@ -105,7 +106,7 @@
                                 <Border Grid.Column="1" Background="{DynamicResource SubtleBrush}"
                                         CornerRadius="9" Padding="9,5" VerticalAlignment="Top">
                                     <TextBlock x:Name="ProfileText" Text="Automático"
-                                               Foreground="{DynamicResource PrimaryBrush}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
                                                FontSize="9.5" FontWeight="SemiBold" />
                                 </Border>
                             </Grid>
@@ -204,7 +205,7 @@
                                                                 <ColumnDefinition Width="Auto" />
                                                             </Grid.ColumnDefinitions>
                                                             <TextBlock Text="{Binding RoleDisplay}"
-                                                                       Foreground="{DynamicResource PrimaryBrush}"
+                                                                       Foreground="{DynamicResource PrimaryTextBrush}"
                                                                        FontSize="8.5" FontWeight="SemiBold" />
                                                             <TextBlock Grid.Column="1" Text="{Binding StatusDisplay}"
                                                                        Visibility="{Binding StatusVisibility}"
@@ -215,7 +216,7 @@
                                                                    TextWrapping="Wrap" Margin="0,5,0,0" />
                                                         <TextBlock Text="{Binding ProposalDisplay}"
                                                                    Visibility="{Binding ProposalVisibility}"
-                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   Foreground="{DynamicResource PrimaryTextBrush}"
                                                                    FontSize="8.5" FontWeight="SemiBold" Margin="0,6,0,0" />
                                                         <TextBlock Text="{Binding CreatedAtDisplay}"
                                                                    Foreground="{DynamicResource MutedBrush}"
@@ -276,10 +277,12 @@
                     </WrapPanel>
 
                     <TextBlock Text="O QUE VOCÊ PRECISA?" Style="{StaticResource SectionLabel}" Margin="2,0,0,7" />
-                    <TextBox x:Name="RequestBox" Height="132" AcceptsReturn="True" TextWrapping="Wrap"
+                    <TextBox x:Name="RequestBox" Height="132" MaxLength="8000"
+                             AcceptsReturn="True" TextWrapping="Wrap" SpellCheck.IsEnabled="True" Language="pt-BR"
                              VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"
                              Style="{StaticResource InputTextBox}" TextChanged="RequestBox_TextChanged"
                              AutomationProperties.Name="Pedido para o assistente local"
+                             AutomationProperties.HelpText="Máximo de 8.000 caracteres."
                              ToolTip="Descreva seu objetivo, prazo, rotina ou a mudança desejada." />
                     <StackPanel Orientation="Horizontal" Margin="2,9,0,0">
                         <RadioButton x:Name="NewPlanChoice" Content="Criar plano novo" GroupName="ProposalKind"
@@ -366,7 +369,7 @@
                                                            TextWrapping="Wrap" Margin="0,8,0,0" />
                                                 <TextBlock Text="{Binding Message}" Foreground="{DynamicResource MutedBrush}"
                                                            FontSize="10" TextWrapping="Wrap" Margin="0,5,0,0" />
-                                                <TextBlock Text="{Binding MetricsDisplay}" Foreground="{DynamicResource PrimaryBrush}"
+                                                <TextBlock Text="{Binding MetricsDisplay}" Foreground="{DynamicResource PrimaryTextBrush}"
                                                            FontSize="9.5" TextWrapping="Wrap" Margin="0,8,0,0" />
                                                  <TextBlock Text="{Binding CreatedAtDisplay}" Foreground="{DynamicResource MutedBrush}"
                                                             FontSize="9" Margin="0,6,0,0" />
@@ -430,10 +433,10 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="&#xE72E;" Style="{StaticResource IconGlyphText}"
-                                       Foreground="{DynamicResource PrimaryBrush}"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
                                        FontSize="16" Width="21" Height="21" LineHeight="21" Margin="0,0,8,0" />
                             <TextBlock Grid.Column="1" Text="Nenhuma proposta altera o calendário sem confirmação."
-                                       Foreground="{DynamicResource PrimaryBrush}" FontSize="9.5"
+                                       Foreground="{DynamicResource PrimaryTextBrush}" FontSize="9.5"
                                        FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
                         </Grid>
                     </Border>

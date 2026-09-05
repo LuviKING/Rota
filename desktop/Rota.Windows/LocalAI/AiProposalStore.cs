@@ -73,7 +73,17 @@ public sealed class AiProposalStore : IAiProposalStore, IDisposable
             if (state.Records.Any(record => record.Proposal.Id == proposal.Id))
                 throw new AiContractValidationException("A proposta já existe no histórico local.");
             if (state.Records.Count >= MaximumRecords)
-                throw new AiContractValidationException("O histórico local atingiu o limite de 100 propostas.");
+            {
+                var removable = state.Records.FirstOrDefault(record =>
+                    record.Proposal.Status is AiProposalStatus.Failed or
+                        AiProposalStatus.Rejected or AiProposalStatus.Undone);
+                if (removable is null)
+                {
+                    throw new AiContractValidationException(
+                        "O histórico local atingiu o limite de 100 propostas ativas ou aplicadas.");
+                }
+                state.Records.Remove(removable);
+            }
 
             var stored = new AiStoredProposal
             {

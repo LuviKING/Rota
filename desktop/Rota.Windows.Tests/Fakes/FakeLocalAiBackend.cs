@@ -36,6 +36,7 @@ internal sealed class FakeLocalAiBackend : ILocalAiBackend
 
     public bool SimulateFailure { get; set; }
     public int CallCount { get; private set; }
+    public AiAssistantInput? LastInput { get; private set; }
     public AiPlanningContext? LastPlanningContext { get; private set; }
 
     public Task<AiProposal> CreateProposalAsync(
@@ -47,6 +48,7 @@ internal sealed class FakeLocalAiBackend : ILocalAiBackend
     {
         cancellationToken.ThrowIfCancellationRequested();
         CallCount++;
+        LastInput = input;
         LastPlanningContext = planningContext;
 
         if (SimulateFailure)

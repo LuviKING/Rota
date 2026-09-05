@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Media;
 
 var tests = new (string Name, Action Body)[]
 {
@@ -40,6 +41,7 @@ var tests = new (string Name, Action Body)[]
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
+    ("Month summaries count distinct remaining subjects", MonthSummaryCountsDistinctSubjects),
     ("AI prompt explains Rota execution model", PromptExplainsExecutionModel),
     ("Local AI profiles expose the supported product tiers", AiProfilesAreStable),
     ("Local AI configuration serializes and reloads", AiConfigurationSerializationRoundTrips),
@@ -444,6 +446,8 @@ static void DesktopWindowsLoad()
         {
             app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             app.InitializeComponent();
+            ThemeManager.Apply(ThemeManager.Dark);
+            AssertThemeContrast();
             var repo = new StudyRepository(Path.Combine(dir, "state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var assistant = new TestAiAssistantController();
             var installation = new TestAiInstallationController();
@@ -480,9 +484,22 @@ static void DesktopWindowsLoad()
                 window.Top = -20_000;
                 window.ShowInTaskbar = false;
                 window.Show();
+                window.Width = window.MinWidth;
+                window.Height = window.MinHeight;
                 window.UpdateLayout();
+                var expectedBackground = ThemeManager.ResourceBrush("BackgroundBrush") as System.Windows.Media.SolidColorBrush
+                    ?? throw new InvalidOperationException("active window background resource was not created");
+                var actualBackground = window.Background as System.Windows.Media.SolidColorBrush
+                    ?? throw new InvalidOperationException($"{window.GetType().Name} does not expose a solid theme background");
+                Eq(expectedBackground.Color, actualBackground.Color);
+                var undersizedButton = VisualDescendants<System.Windows.Controls.Button>(window)
+                    .FirstOrDefault(button => button.IsVisible && button.ActualHeight < 36);
+                True(undersizedButton is null,
+                    $"{window.GetType().Name} contains a visible click target shorter than 36 px");
+                SaveWindowSnapshot(window, "dark-" + window.GetType().Name);
                 if (window is MainWindow mainWindow)
                 {
+                    True(mainWindow.MinWidth <= 1_000, "main window cannot fit a 1024 px work area with margins");
                     var previousMonth = mainWindow.FindName("PreviousMonthButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("previous-month icon button was not created");
                     var nextMonth = mainWindow.FindName("NextMonthButton") as System.Windows.Controls.Button
@@ -500,6 +517,16 @@ static void DesktopWindowsLoad()
                         ?? throw new InvalidOperationException("shared icon style was not loaded");
                     True(iconStyle.Setters.OfType<Setter>().Any(setter => setter.Property == System.Windows.Controls.TextBlock.FontFamilyProperty),
                         "shared icon style does not define a stable icon font");
+                    var textStyle = app.FindResource(typeof(System.Windows.Controls.TextBlock)) as Style
+                        ?? throw new InvalidOperationException("shared text contrast style was not loaded");
+                    True(textStyle.Setters.OfType<Setter>().Any(setter =>
+                            setter.Property == System.Windows.Controls.TextBlock.ForegroundProperty),
+                        "shared text style does not follow the active theme foreground");
+                    var checkBoxStyle = app.FindResource(typeof(System.Windows.Controls.CheckBox)) as Style
+                        ?? throw new InvalidOperationException("shared checkbox style was not loaded");
+                    True(checkBoxStyle.Setters.OfType<Setter>().Any(setter =>
+                            setter.Property == System.Windows.Controls.Control.ForegroundProperty),
+                        "checkbox labels do not follow the active theme foreground");
                 }
                 if (window is AiAssistantWindow localAssistant)
                 {
@@ -517,10 +544,14 @@ static void DesktopWindowsLoad()
                     var externalPrompt = localAssistant.FindName("OpenExternalPromptButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("existing external AI prompt entry point was not preserved");
                     True(!send.IsEnabled, "empty AI request must not be sent");
+                    Eq(8_000, request.MaxLength);
                     True(!changePlan.IsEnabled, "change-plan choice must stay disabled without a future plan");
                     True(!reorganize.IsEnabled, "change-plan quick actions must stay disabled without a future plan");
                     request.Text = "Tenho duas horas por dia.";
                     True(send.IsEnabled, "ready local AI should enable a non-empty request");
+                    var sendHint = localAssistant.FindName("SendHintText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI request length hint was not created");
+                    Contains(sendHint.Text, "/8.000 caracteres");
                     quickAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     Contains(request.Text, "Monte um plano");
                     True(externalPrompt.MinHeight >= 36, "external AI prompt action is too small");
@@ -542,8 +573,10 @@ static void DesktopWindowsLoad()
                 }
                 window.Close();
             }
+            Eq(1, assistant.CancelCalls);
 
             ThemeManager.Apply(ThemeManager.Light);
+            AssertThemeContrast();
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
             var unavailableWindow = new AiAssistantWindow(unavailable, installation, application, repo)
             {
@@ -563,6 +596,7 @@ static void DesktopWindowsLoad()
             unavailableRequest.Text = "Monte um plano.";
             True(!unavailableSend.IsEnabled, "AI request must stay disabled without a local installation");
             Eq(Visibility.Visible, installationNotice.Visibility);
+            SaveWindowSnapshot(unavailableWindow, "light-AiAssistantWindow");
             unavailableWindow.Close();
             ThemeManager.Apply(ThemeManager.Dark);
         }
@@ -592,6 +626,61 @@ static void DesktopWindowsLoad()
     }
 }
 
+static void SaveWindowSnapshot(Window window, string name)
+{
+    var outputDirectory = Environment.GetEnvironmentVariable("ROTA_TEST_UI_SNAPSHOTS");
+    if (string.IsNullOrWhiteSpace(outputDirectory)) return;
+
+    Directory.CreateDirectory(outputDirectory);
+    var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth));
+    var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight));
+    var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+        width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+    bitmap.Render(window);
+    var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+    using var output = new FileStream(
+        Path.Combine(outputDirectory, name + ".png"), FileMode.Create, FileAccess.Write, FileShare.None);
+    encoder.Save(output);
+}
+
+static void AssertThemeContrast()
+{
+    AssertContrast("TextBrush", "BackgroundBrush", 7.0);
+    AssertContrast("TextBrush", "SurfaceRaisedBrush", 7.0);
+    AssertContrast("MutedBrush", "BackgroundBrush", 4.5);
+    AssertContrast("MutedBrush", "SurfaceRaisedBrush", 4.5);
+    AssertContrast("PrimaryTextBrush", "PrimarySoftBrush", 4.5);
+    AssertContrast("SuccessBrush", "SuccessSoftBrush", 4.5);
+    AssertContrast("ReviewBrush", "ReviewSoftBrush", 4.5);
+    AssertContrast("AssessmentBrush", "AssessmentSoftBrush", 4.5);
+    AssertContrast("ErrorBrush", "ErrorSoftBrush", 4.5);
+}
+
+static void AssertContrast(string foregroundKey, string backgroundKey, double minimum)
+{
+    var foreground = ThemeManager.ResourceBrush(foregroundKey) as SolidColorBrush
+        ?? throw new InvalidOperationException($"{foregroundKey} is not a solid color");
+    var background = ThemeManager.ResourceBrush(backgroundKey) as SolidColorBrush
+        ?? throw new InvalidOperationException($"{backgroundKey} is not a solid color");
+    var lighter = Math.Max(RelativeLuminance(foreground.Color), RelativeLuminance(background.Color));
+    var darker = Math.Min(RelativeLuminance(foreground.Color), RelativeLuminance(background.Color));
+    var ratio = (lighter + 0.05) / (darker + 0.05);
+    True(ratio >= minimum,
+        $"{foregroundKey} on {backgroundKey} has contrast {ratio:F2}:1; expected at least {minimum:F1}:1");
+}
+
+static double RelativeLuminance(Color color) =>
+    0.2126 * LinearChannel(color.R) +
+    0.7152 * LinearChannel(color.G) +
+    0.0722 * LinearChannel(color.B);
+
+static double LinearChannel(byte channel)
+{
+    var value = channel / 255d;
+    return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+}
+
 static void PromptExplainsExecutionModel()
 {
     var settings = new AppSettings { ObjectiveName = "IFF", ObjectiveDate = "2026-11-22", DailyHours = 5, BlockMinutes = 60, ActivePlanId = "iff-2026", ActivePlanRevision = 3 };
@@ -603,6 +692,21 @@ static void PromptExplainsExecutionModel()
     Contains(prompt, "histórico protegido");
     Contains(prompt, "Tenho dificuldade em frações.");
     Contains(prompt, "AUDITORIA OBRIGATÓRIA");
+}
+
+static void MonthSummaryCountsDistinctSubjects()
+{
+    var sessions = new[]
+    {
+        new SessionItem { Subject = "Matemática" },
+        new SessionItem { Subject = "Matemática" },
+        new SessionItem { Subject = "Física" },
+        new SessionItem { Subject = "Física" },
+        new SessionItem { Subject = "Química" }
+    };
+    var view = new MonthDayCardView(
+        new DateOnly(2031, 2, 3), sessions, currentMonth: true, selected: false, today: false);
+    Eq("Matemática • Física • +1", view.Summary);
 }
 
 static void AiProfilesAreStable()

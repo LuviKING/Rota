@@ -52,15 +52,17 @@ public sealed class AiPlanningService : IAiPlanningService
         AiEnemCatalogContext? enemCatalogContext = null;
         try
         {
-            planningContext = kind == AiProposalKind.PlanChanges
-                ? _contextProvider?.Capture()
-                : null;
-            enemCatalogContext = _enemCatalogProvider?.CreateContext(input);
+            var configuredContext = _contextProvider?.Capture();
+            planningContext = kind == AiProposalKind.PlanChanges ? configuredContext : null;
+            var effectiveInput = kind == AiProposalKind.StudyPlan
+                ? ApplyConfiguredPlanningDefaults(input, configuredContext)
+                : input;
+            enemCatalogContext = _enemCatalogProvider?.CreateContext(effectiveInput);
             if (enemCatalogContext is not null)
                 AiContractValidator.ValidateEnemCatalogContext(enemCatalogContext);
             proposal = await _backend
                 .CreateProposalAsync(
-                    input,
+                    effectiveInput,
                     kind,
                     configuration,
                     planningContext,
@@ -97,5 +99,30 @@ public sealed class AiPlanningService : IAiPlanningService
             PlanningContext = planningContext,
             EnemCatalogContext = enemCatalogContext
         };
+    }
+
+    private static AiAssistantInput ApplyConfiguredPlanningDefaults(
+        AiAssistantInput input,
+        AiPlanningContext? context)
+    {
+        if (context is null) return input;
+
+        var notes = input.Notes.Trim();
+        var blockPreference = $"Bloco preferido configurado no Rota: {context.BlockMinutes} minutos.";
+        if (notes.Length == 0)
+            notes = blockPreference;
+        else if (notes.Length + Environment.NewLine.Length + blockPreference.Length <= 2_000)
+            notes += Environment.NewLine + blockPreference;
+
+        var effective = input with
+        {
+            AvailableHoursPerDay = input.AvailableHoursPerDay ?? context.DailyMinutesLimit / 60d,
+            AvailableDays = input.AvailableDays.Count == 0
+                ? context.AvailableDays.ToList()
+                : input.AvailableDays.ToList(),
+            Notes = notes
+        };
+        AiContractValidator.ValidateInput(effective);
+        return effective;
     }
 }

@@ -1,7 +1,7 @@
 <Window x:Class="Rota.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Rota" Width="1540" Height="940" MinWidth="1040" MinHeight="680"
+        Title="Rota" Width="1540" Height="940" MinWidth="960" MinHeight="680"
         WindowStartupLocation="CenterScreen"
         Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
@@ -217,7 +217,7 @@
                                 <Border Style="{StaticResource SidebarIconContainer}"
                                         Background="{DynamicResource PrimarySoftBrush}">
                                     <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyphText}"
-                                               Foreground="{DynamicResource PrimaryBrush}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
                                                FontSize="19" />
                                 </Border>
                                 <TextBlock Text="Calendário" Foreground="{DynamicResource SidebarTextBrush}"
@@ -293,7 +293,7 @@
                         <Border Height="1" Background="{DynamicResource BorderBrush}"
                                 Margin="0,11,0,9" />
                         <TextBlock Text="{Binding PlanLabel}"
-                                   Foreground="{DynamicResource PrimaryBrush}"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"
                                    FontSize="9.5" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
@@ -560,7 +560,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
                         <TextBlock Text="•" Style="{StaticResource SymbolGlyphText}"
-                                   Foreground="{DynamicResource PrimaryBrush}"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"
                                    FontSize="16" Width="18" Height="18" LineHeight="18" />
                         <TextBlock Text="conteúdo" Foreground="{DynamicResource MutedBrush}"
                                    FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center" />
@@ -618,7 +618,7 @@
                                 <Border Background="{DynamicResource PrimarySoftBrush}"
                                         CornerRadius="9" Padding="9,5">
                                     <TextBlock Text="{Binding ProgressText}"
-                                               Foreground="{DynamicResource PrimaryBrush}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
                                                FontSize="10" FontWeight="SemiBold" />
                                 </Border>
                             </StackPanel>
@@ -634,7 +634,7 @@
                                 <Border Width="48" Height="48" CornerRadius="14"
                                         Background="{DynamicResource PrimarySoftBrush}">
                                     <TextBlock Text="✓"
-                                               Foreground="{DynamicResource PrimaryBrush}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}"
                                                Style="{StaticResource SymbolGlyphText}"
                                                FontSize="22" Width="30" Height="30" />
                                 </Border>

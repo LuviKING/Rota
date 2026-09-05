@@ -499,12 +499,43 @@ public sealed class LlamaServerBackend : ILocalAiBackend, IDisposable
             ?? throw new AiInferenceException("A proposta de plano está vazia.");
         if (result.Warnings is null || result.StudyPlan.ValueKind != JsonValueKind.Object)
             throw new AiInferenceException("A proposta não contém um StudyPlan estruturado.");
+        var proposalId = NextId();
         var studyPlanJson = NormalizePastStudyPlanDates(result.StudyPlan, referenceDate, result.Warnings);
+        studyPlanJson = AssignLocalStudyPlanIdentity(studyPlanJson, proposalId);
         return NewProposal(
             result.Summary,
             AiProposalKind.StudyPlan,
             result.Warnings,
-            studyPlan: new AiStudyPlanDraft { StudyPlanJson = studyPlanJson });
+            studyPlan: new AiStudyPlanDraft { StudyPlanJson = studyPlanJson },
+            proposalId: proposalId);
+    }
+
+    private static string AssignLocalStudyPlanIdentity(string studyPlanJson, Guid proposalId)
+    {
+        JsonObject root;
+        try
+        {
+            root = JsonNode.Parse(studyPlanJson)?.AsObject()
+                ?? throw new JsonException("O StudyPlan não é um objeto JSON.");
+            var plan = root["plan"]?.AsObject()
+                ?? throw new JsonException("O StudyPlan não contém a identidade do plano.");
+            plan["id"] = $"ai-{proposalId:N}";
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            throw new AiInferenceException("O StudyPlan não pôde receber uma identidade local segura.", ex);
+        }
+
+        var normalized = root.ToJsonString();
+        try
+        {
+            StudyPlanImporter.Parse(normalized);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new AiInferenceException("O StudyPlan identificado não passou pela validação final.", ex);
+        }
+        return normalized;
     }
 
     private static string NormalizePastStudyPlanDates(

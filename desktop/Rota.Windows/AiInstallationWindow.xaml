@@ -43,7 +43,7 @@
                 <Border Width="44" Height="44" CornerRadius="13"
                         Background="{DynamicResource PrimarySoftBrush}" Margin="0,0,12,0">
                     <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyphText}"
-                               Foreground="{DynamicResource PrimaryBrush}" FontSize="21"
+                               Foreground="{DynamicResource PrimaryTextBrush}" FontSize="21"
                                Width="28" Height="28" LineHeight="28" />
                 </Border>
                 <StackPanel VerticalAlignment="Center">
@@ -145,7 +145,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="&#xE946;" Style="{StaticResource IconGlyphText}"
-                                       Foreground="{DynamicResource PrimaryBrush}" FontSize="17"
+                                       Foreground="{DynamicResource PrimaryTextBrush}" FontSize="17"
                                        Width="22" Height="22" LineHeight="22" Margin="0,0,8,0" />
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="O download só começa após sua confirmação" FontSize="11"
@@ -168,7 +168,7 @@
                             <TextBlock x:Name="StatusText" Text="Analisando o perfil…"
                                        FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBlock x:Name="ProgressPercentText" Grid.Column="1" Text=""
-                                       Foreground="{DynamicResource PrimaryBrush}" FontSize="10"
+                                       Foreground="{DynamicResource PrimaryTextBrush}" FontSize="10"
                                        FontWeight="SemiBold" Margin="12,0,0,0" />
                         </Grid>
                         <ProgressBar x:Name="InstallationProgressBar" Height="7" Minimum="0" Maximum="100"

@@ -15,7 +15,8 @@ public static class ProposalStoreTests
         ("AI proposal store keeps blocked previews failed", StoreKeepsBlockedPreviewFailed),
         ("AI proposal store rejects mismatched or duplicate records", StoreRejectsMismatchedAndDuplicateRecords),
         ("AI proposal store recovers its last valid atomic backup", StoreRecoversAtomicBackup),
-        ("AI proposal store rejects duplicate JSON properties", StoreRejectsDuplicateJsonProperties)
+        ("AI proposal store rejects duplicate JSON properties", StoreRejectsDuplicateJsonProperties),
+        ("AI proposal store prunes the oldest terminal record at capacity", StorePrunesTerminalRecordAtCapacity)
     };
 
     private static void StorePersistsSeparately()
@@ -119,6 +120,22 @@ public static class ProposalStoreTests
 
             Require(recovered.Count == 0);
             Require(store.LastLoadWarning.Contains("recuperou", StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    private static void StorePrunesTerminalRecordAtCapacity()
+    {
+        WithStore((store, _) =>
+        {
+            for (var suffix = 1; suffix <= 100; suffix++)
+                store.SavePreviewAsync(Proposal(suffix), BlockedPreview(suffix)).GetAwaiter().GetResult();
+
+            store.SavePreviewAsync(Proposal(101), BlockedPreview(101)).GetAwaiter().GetResult();
+            var records = store.LoadAsync().GetAwaiter().GetResult();
+
+            Require(records.Count == 100);
+            Require(records.All(record => record.Proposal.Id != ProposalId(1)));
+            Require(records.Any(record => record.Proposal.Id == ProposalId(101)));
         });
     }
 

@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 
@@ -62,8 +63,19 @@ public partial class SettingsWindow : Window
 
     private void OpenDataFolder_Click(object sender, RoutedEventArgs e)
     {
-        Directory.CreateDirectory(_repository.DataDirectory);
-        Process.Start(new ProcessStartInfo("explorer.exe", _repository.DataDirectory) { UseShellExecute = true });
+        try
+        {
+            Directory.CreateDirectory(_repository.DataDirectory);
+            Process.Start(new ProcessStartInfo("explorer.exe", _repository.DataDirectory) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
+        {
+            MessageBox.Show(
+                "Não foi possível abrir a pasta de dados.\n\n" + ex.Message,
+                "Rota",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void ExportBackup_Click(object sender, RoutedEventArgs e)

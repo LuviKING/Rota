@@ -17,6 +17,7 @@ public static class InferenceBackendTests
     {
         ("llama-server backend sends an authenticated bounded local request", BackendSendsSafeRequest),
         ("llama-server backend builds a validated StudyPlan proposal", BackendBuildsStudyPlan),
+        ("llama-server backend assigns unique local identities to generated plans", BackendAssignsUniquePlanIdentity),
         ("llama-server backend anchors and repairs StudyPlan dates", BackendAnchorsAndRepairsStudyPlanDates),
         ("llama-server backend rejects a past schedule that misses its deadline", BackendRejectsUnrepairablePastSchedule),
         ("llama-server backend maps structured change operations", BackendMapsChanges),
@@ -101,6 +102,23 @@ public static class InferenceBackendTests
         Require(proposal.StudyPlan is not null && proposal.Changes is null);
         Require(proposal.Warnings.Count == 0);
         AiContractValidator.ValidateProposal(proposal, AiProposalKind.StudyPlan);
+    }
+
+    private static void BackendAssignsUniquePlanIdentity()
+    {
+        using var client = Client(CompletionResponse(ValidStudyPlanResult()));
+        using var backend = Backend(new FakeRuntimeHost(), client, ProposalId, OperationId);
+
+        var first = backend.CreateProposalAsync(
+            ValidInput(), AiProposalKind.StudyPlan, Configuration()).GetAwaiter().GetResult();
+        var second = backend.CreateProposalAsync(
+            ValidInput(), AiProposalKind.StudyPlan, Configuration()).GetAwaiter().GetResult();
+        var firstPlan = StudyPlanImporter.Parse(first.StudyPlan!.StudyPlanJson);
+        var secondPlan = StudyPlanImporter.Parse(second.StudyPlan!.StudyPlanJson);
+
+        Require(firstPlan.PlanId == $"ai-{ProposalId:N}");
+        Require(secondPlan.PlanId == $"ai-{OperationId:N}");
+        Require(firstPlan.PlanId != secondPlan.PlanId);
     }
 
     private static void BackendAnchorsAndRepairsStudyPlanDates()

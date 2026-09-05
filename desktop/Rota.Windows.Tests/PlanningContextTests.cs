@@ -12,7 +12,7 @@ public static class PlanningContextTests
     {
         ("AI planning context is bounded, private, future-only and read-only", ContextIsBoundedPrivateAndReadOnly),
         ("AI planning context rejects stale or inconsistent sessions", ContextRejectsInvalidSessions),
-        ("AI planning service adds current context only to change proposals", ServiceScopesContextToChanges)
+        ("AI planning service scopes context and applies configured plan defaults", ServiceScopesContextToChanges)
     };
 
     private static void ContextIsBoundedPrivateAndReadOnly()
@@ -91,6 +91,7 @@ public static class PlanningContextTests
     {
         WithRepository(repository =>
         {
+            repository.SavePreferences("Objetivo", "2031-12-31", 2.5, 75, true, false, true);
             var applied = repository.ApplyPlan(new PlanPackage(
                 "active-plan", 1, "Plano atual", "Objetivo", "2031-12-31",
                 new List<SessionItem> { Session(1, new DateOnly(2031, 2, 4), "active-plan", 1) }));
@@ -112,6 +113,19 @@ public static class PlanningContextTests
                     ValidInput(), AiProposalKind.StudyPlan).GetAwaiter().GetResult();
                 Require(backend.LastPlanningContext is null);
                 Require(newPlan.PlanningContext is null);
+                Require(backend.LastInput?.AvailableHoursPerDay == 2.5);
+                Require(backend.LastInput?.AvailableDays.SequenceEqual(Enum.GetValues<DayOfWeek>()) == true);
+                Require(backend.LastInput?.Notes.Contains("75 minutos", StringComparison.Ordinal) == true);
+
+                var explicitAvailability = ValidInput() with
+                {
+                    AvailableHoursPerDay = 1,
+                    AvailableDays = new List<DayOfWeek> { DayOfWeek.Sunday }
+                };
+                service.CreateGenerationAsync(
+                    explicitAvailability, AiProposalKind.StudyPlan).GetAwaiter().GetResult();
+                Require(backend.LastInput?.AvailableHoursPerDay == 1);
+                Require(backend.LastInput?.AvailableDays.SequenceEqual(new[] { DayOfWeek.Sunday }) == true);
             }
             finally
             {

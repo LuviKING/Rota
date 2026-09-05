@@ -14,7 +14,7 @@
                                Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap" />
                 </StackPanel>
                 <Border Grid.Column="1" HorizontalAlignment="Right" Background="{DynamicResource PrimarySoftBrush}" CornerRadius="10" Padding="10,6" VerticalAlignment="Center">
-                    <TextBlock Text="Rota Windows 0.3.1" Foreground="{DynamicResource PrimaryBrush}" FontSize="10" FontWeight="SemiBold" />
+                    <TextBlock Text="Rota Windows 0.3.2" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="10" FontWeight="SemiBold" />
                 </Border>
             </Grid>
 
@@ -28,14 +28,14 @@
 
                     <Grid Margin="0,16,0,3">
                         <TextBlock Text="Limite diário" FontSize="12" FontWeight="SemiBold" />
-                        <TextBlock x:Name="HoursValue" HorizontalAlignment="Right" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryBrush}" />
+                        <TextBlock x:Name="HoursValue" HorizontalAlignment="Right" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryTextBrush}" />
                     </Grid>
                     <Slider x:Name="HoursSlider" Minimum="1" Maximum="12" TickFrequency="0.5" IsSnapToTickEnabled="True" ValueChanged="HoursSlider_ValueChanged" />
                     <TextBlock Text="A importação é recusada se sessões novas + histórico protegido + revisões runtime excederem este limite." Foreground="{DynamicResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap" />
 
                     <Grid Margin="0,16,0,3">
                         <TextBlock Text="Bloco preferido" FontSize="12" FontWeight="SemiBold" />
-                        <TextBlock x:Name="BlockValue" HorizontalAlignment="Right" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryBrush}" />
+                        <TextBlock x:Name="BlockValue" HorizontalAlignment="Right" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryTextBrush}" />
                     </Grid>
                     <Slider x:Name="BlockSlider" Minimum="30" Maximum="180" TickFrequency="15" IsSnapToTickEnabled="True" ValueChanged="BlockSlider_ValueChanged" />
                     <TextBlock Text="Esse valor entra no prompt para a IA; sessões individuais ainda podem variar entre 10 e 360 minutos." Foreground="{DynamicResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap" />

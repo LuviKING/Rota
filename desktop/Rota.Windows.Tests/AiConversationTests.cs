@@ -150,15 +150,15 @@ public static class AiConversationTests
         string text,
         DateTimeOffset createdAt,
         Guid proposalId = default) => new()
-    {
-        RequestId = requestId,
-        Role = role,
-        Status = status,
-        ProposalKind = AiProposalKind.PlanChanges,
-        ProposalId = proposalId,
-        CreatedAtUtc = createdAt,
-        Text = text
-    };
+        {
+            RequestId = requestId,
+            Role = role,
+            Status = status,
+            ProposalKind = AiProposalKind.PlanChanges,
+            ProposalId = proposalId,
+            CreatedAtUtc = createdAt,
+            Text = text
+        };
 
     private static AiStoredProposal StoredProposal(Guid requestId)
     {

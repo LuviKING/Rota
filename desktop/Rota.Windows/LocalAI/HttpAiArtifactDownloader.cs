@@ -88,7 +88,8 @@ public sealed class HttpAiArtifactDownloader : IAiArtifactDownloader
             // ResponseHeadersRead makes this a header timeout; body reads have an idle timeout.
             Timeout = TimeSpan.FromSeconds(60)
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Rota-Windows/0.2");
+        var version = typeof(HttpAiArtifactDownloader).Assembly.GetName().Version?.ToString(3) ?? "0.3";
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"Rota-Windows/{version}");
         return client;
     }
 
