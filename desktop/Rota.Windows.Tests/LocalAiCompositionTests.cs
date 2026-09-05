@@ -21,6 +21,7 @@ public static class LocalAiCompositionTests
                 Require(services.RootDirectory == Path.GetFullPath(aiRoot));
                 Require(services.ConfigurationStore.ConfigurationPath == Path.Combine(aiRoot, "config.json"));
                 Require(services.ProposalStore.StorePath == Path.Combine(aiRoot, "proposals.json"));
+                Require(services.ConversationStore.StorePath == Path.Combine(aiRoot, "conversation.json"));
                 Require(services.ModelManager.RootDirectory == aiRoot);
                 Require(services.RuntimeHost.Status.State == AiRuntimeState.Stopped);
                 Require(services.RuntimeHost.Connection is null);

@@ -25,12 +25,21 @@ public sealed class AiPlanningService : IAiPlanningService
     public async Task<AiProposalGeneration> CreateGenerationAsync(
         AiAssistantInput input,
         AiProposalKind kind,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await CreateGenerationAsync(input, kind, null, cancellationToken).ConfigureAwait(false);
+
+    public async Task<AiProposalGeneration> CreateGenerationAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        AiConversationContext? conversationContext,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         AiContractValidator.ValidateInput(input);
         if (!Enum.IsDefined(kind))
             throw new AiContractValidationException("O tipo de proposta solicitado é inválido.");
+        if (conversationContext is not null)
+            AiContractValidator.ValidateConversationContext(conversationContext);
 
         var configuration = await _configurationStore.LoadAsync(cancellationToken).ConfigureAwait(false);
         AiContractValidator.ValidateConfiguration(configuration);
@@ -43,7 +52,13 @@ public sealed class AiPlanningService : IAiPlanningService
                 ? _contextProvider?.Capture()
                 : null;
             proposal = await _backend
-                .CreateProposalAsync(input, kind, configuration, planningContext, cancellationToken)
+                .CreateProposalAsync(
+                    input,
+                    kind,
+                    configuration,
+                    planningContext,
+                    conversationContext,
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

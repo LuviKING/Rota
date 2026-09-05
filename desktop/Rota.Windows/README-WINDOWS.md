@@ -11,7 +11,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - cards de contexto mostram plano ativo, objetivo, carga do mês e progresso mensal usando dados reais do calendário;
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;
 - os blocos do dia mostram matéria, duração, tipo, tópico, meta e ação de conclusão.
-- o menu **Assistente IA** abre a área local com perfil, estado offline, ações rápidas e histórico de propostas;
+- o menu **Assistente IA** abre a área local com perfil, estado offline, ações rápidas, conversa contínua e histórico de propostas;
 - a configuração da IA oferece perfis Automático, Leve, Equilibrado e Desempenho, mostrando modelo, download e espaço antes de pedir confirmação;
 - instalação e download podem ser cancelados e só ficam ativos depois da verificação de integridade;
 - propostas prontas são recalculadas sobre o calendário atual e só podem ser aplicadas após uma confirmação final explícita;

@@ -7,6 +7,7 @@ public static class AiContractValidator
     private const int MaxSubjectCount = 100;
     private const int MaxOperationCount = 500;
     private const int MaxPlanningSessions = 200;
+    private const int MaxConversationTurns = 12;
 
     public static void ValidateConfiguration(AiConfiguration configuration)
     {
@@ -179,6 +180,32 @@ public static class AiContractValidator
                 throw new AiContractValidationException("O contexto da IA contém uma origem de sessão inválida.");
             }
         }
+    }
+
+    public static void ValidateConversationContext(AiConversationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.SchemaVersion != AiConversationContext.CurrentSchemaVersion)
+            throw new AiContractValidationException($"Versão de conversa da IA não suportada: {context.SchemaVersion}.");
+        if (context.ConversationId == Guid.Empty)
+            throw new AiContractValidationException("O contexto da conversa precisa de um ID válido.");
+        if (context.Turns is null || context.Turns.Count > MaxConversationTurns || context.Turns.Count % 2 != 0)
+            throw new AiContractValidationException("O contexto da conversa está incompleto ou contém turnos demais.");
+
+        var totalLength = 0;
+        for (var index = 0; index < context.Turns.Count; index++)
+        {
+            var turn = context.Turns[index] ??
+                throw new AiContractValidationException("O contexto da conversa contém um turno nulo.");
+            ValidateEnum(turn.Role, "papel do turno da conversa");
+            var expectedRole = index % 2 == 0 ? AiConversationRole.User : AiConversationRole.Assistant;
+            if (turn.Role != expectedRole)
+                throw new AiContractValidationException("O contexto da conversa precisa alternar usuário e assistente.");
+            ValidateText(turn.Text, "Texto do contexto da conversa", 500, allowEmpty: false, allowLineBreaks: false);
+            totalLength = checked(totalLength + turn.Text.Length);
+        }
+        if (totalLength > 6_000)
+            throw new AiContractValidationException("O contexto da conversa excede o limite seguro.");
     }
 
     public static void ValidatePreview(AiProposalPreview preview)

@@ -5,6 +5,8 @@ namespace Rota.Desktop.Tests;
 public static class AiAssistantControllerTests
 {
     private static readonly Guid ProposalId = Guid.Parse("cccccccc-0000-0000-0000-000000000001");
+    private static readonly Guid ConversationId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
+    private static readonly Guid RequestId = Guid.Parse("cccccccc-0000-0000-0000-000000000003");
 
     public static IEnumerable<(string Name, Action Body)> Cases => new (string, Action)[]
     {
@@ -67,6 +69,9 @@ public static class AiAssistantControllerTests
         Require(result?.Proposal.Id == ProposalId);
         Require(workflow.CallCount == 1);
         Require(fixture.Controller.State.History.Single().Proposal.Id == ProposalId);
+        Require(fixture.Controller.State.Conversation.Count == 2);
+        Require(fixture.Controller.State.Conversation.Last().ProposalId == ProposalId);
+        Require(workflow.LastConversationContext?.Turns.Count == 0);
         Require(fixture.Controller.State.StatusMessage.Contains("Nada foi aplicado", StringComparison.Ordinal));
     }
 
@@ -107,6 +112,7 @@ public static class AiAssistantControllerTests
         Require(result is null);
         Require(fixture.Controller.State.Activity == AiAssistantActivity.Idle);
         Require(fixture.Controller.State.StatusMessage.Contains("cancelada", StringComparison.OrdinalIgnoreCase));
+        Require(fixture.Controller.State.Conversation.Single().Status == AiConversationTurnStatus.Cancelled);
     }
 
     private static void ControllerContainsFailure()
@@ -123,6 +129,7 @@ public static class AiAssistantControllerTests
         Require(fixture.Controller.State.Activity == AiAssistantActivity.Error);
         Require(fixture.Controller.State.Warnings.Last().Contains("conteve", StringComparison.OrdinalIgnoreCase));
         Require(!fixture.Controller.State.Warnings.Any(item => item.Contains("secret", StringComparison.Ordinal)));
+        Require(fixture.Controller.State.Conversation.Single().Status == AiConversationTurnStatus.Failed);
     }
 
     private static ControllerFixture Controller(
@@ -134,8 +141,9 @@ public static class AiAssistantControllerTests
         workflow ??= new StubWorkflow((_, _, _) => Task.FromResult(StoredProposal()));
         var configuration = new StubConfigurationStore();
         var modelManager = new StubModelManager(installationState);
+        var conversation = new StubConversationStore();
         return new ControllerFixture(
-            new AiAssistantController(configuration, modelManager, store, workflow));
+            new AiAssistantController(configuration, modelManager, store, workflow, conversation));
     }
 
     private static AiStoredProposal StoredProposal() => new()
@@ -253,6 +261,7 @@ public static class AiAssistantControllerTests
         public StubWorkflow(Func<AiAssistantInput, AiProposalKind, CancellationToken, Task<AiStoredProposal>> handler) =>
             _handler = handler;
         public int CallCount { get; private set; }
+        public AiConversationContext? LastConversationContext { get; private set; }
         public Task<AiStoredProposal> PrepareAsync(
             AiAssistantInput input,
             AiProposalKind kind,
@@ -261,5 +270,86 @@ public static class AiAssistantControllerTests
             CallCount++;
             return _handler(input, kind, cancellationToken);
         }
+
+        public async Task<AiStoredProposal> PrepareAsync(
+            AiAssistantInput input,
+            AiProposalKind kind,
+            Guid requestTurnId,
+            AiConversationContext? conversationContext,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            LastConversationContext = conversationContext;
+            var stored = await _handler(input, kind, cancellationToken).ConfigureAwait(false);
+            return stored with { RequestTurnId = requestTurnId };
+        }
+    }
+
+    private sealed class StubConversationStore : IAiConversationStore
+    {
+        private List<AiConversationTurn> _turns = new();
+        public string StorePath => Path.Combine(Path.GetTempPath(), "stub-conversation.json");
+        public string LastLoadWarning => "";
+
+        public Task<AiConversationSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot());
+
+        public Task<AiConversationSnapshot> ReconcileAsync(
+            IReadOnlyList<AiStoredProposal> proposals,
+            CancellationToken cancellationToken = default) => Task.FromResult(Snapshot());
+
+        public Task<AiConversationSnapshot> BeginRequestAsync(
+            string text,
+            AiProposalKind kind,
+            CancellationToken cancellationToken = default)
+        {
+            _turns.Add(new AiConversationTurn
+            {
+                RequestId = RequestId,
+                Role = AiConversationRole.User,
+                Status = AiConversationTurnStatus.Pending,
+                ProposalKind = kind,
+                CreatedAtUtc = new DateTimeOffset(2031, 2, 3, 11, 59, 0, TimeSpan.Zero),
+                Text = text
+            });
+            return Task.FromResult(Snapshot());
+        }
+
+        public Task<AiConversationSnapshot> CompleteRequestAsync(
+            Guid requestId,
+            AiStoredProposal proposal,
+            CancellationToken cancellationToken = default)
+        {
+            var user = _turns.Single(turn => turn.RequestId == requestId);
+            _turns[_turns.IndexOf(user)] = user with { Status = AiConversationTurnStatus.Completed };
+            _turns.Add(new AiConversationTurn
+            {
+                RequestId = requestId,
+                Role = AiConversationRole.Assistant,
+                Status = AiConversationTurnStatus.Completed,
+                ProposalKind = proposal.Proposal.Kind,
+                ProposalId = proposal.Proposal.Id,
+                CreatedAtUtc = proposal.UpdatedAtUtc,
+                Text = proposal.Proposal.Summary
+            });
+            return Task.FromResult(Snapshot());
+        }
+
+        public Task<AiConversationSnapshot> MarkRequestAsync(
+            Guid requestId,
+            AiConversationTurnStatus status,
+            CancellationToken cancellationToken = default)
+        {
+            var user = _turns.Single(turn => turn.RequestId == requestId);
+            _turns[_turns.IndexOf(user)] = user with { Status = status };
+            return Task.FromResult(Snapshot());
+        }
+
+        private AiConversationSnapshot Snapshot() => new()
+        {
+            ConversationId = ConversationId,
+            UpdatedAtUtc = new DateTimeOffset(2031, 2, 3, 12, 1, 0, TimeSpan.Zero),
+            Turns = _turns.ToList()
+        };
     }
 }

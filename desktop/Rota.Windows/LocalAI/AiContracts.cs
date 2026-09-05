@@ -100,6 +100,20 @@ public enum AiAssistantQuickAction
     ReviewDelays
 }
 
+public enum AiConversationRole
+{
+    User,
+    Assistant
+}
+
+public enum AiConversationTurnStatus
+{
+    Pending,
+    Completed,
+    Cancelled,
+    Failed
+}
+
 public sealed record AiPlanningContext
 {
     public const int CurrentSchemaVersion = 1;
@@ -204,6 +218,40 @@ public sealed record AiStoredProposal
     public AiProposal Proposal { get; init; } = new();
     public AiProposalPreview Preview { get; init; } = new();
     public DateTimeOffset UpdatedAtUtc { get; init; }
+    public Guid RequestTurnId { get; init; }
+}
+
+public sealed record AiConversationTurn
+{
+    public Guid RequestId { get; init; }
+    public AiConversationRole Role { get; init; }
+    public AiConversationTurnStatus Status { get; init; }
+    public AiProposalKind ProposalKind { get; init; }
+    public Guid ProposalId { get; init; }
+    public DateTimeOffset CreatedAtUtc { get; init; }
+    public string Text { get; init; } = "";
+}
+
+public sealed record AiConversationSnapshot
+{
+    public Guid ConversationId { get; init; }
+    public DateTimeOffset UpdatedAtUtc { get; init; }
+    public IReadOnlyList<AiConversationTurn> Turns { get; init; } = Array.Empty<AiConversationTurn>();
+}
+
+public sealed record AiConversationContext
+{
+    public const int CurrentSchemaVersion = 1;
+
+    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
+    public Guid ConversationId { get; init; }
+    public List<AiConversationContextTurn> Turns { get; init; } = new();
+}
+
+public sealed record AiConversationContextTurn
+{
+    public AiConversationRole Role { get; init; }
+    public string Text { get; init; } = "";
 }
 
 public sealed record AiPreparedApplication
@@ -242,6 +290,7 @@ public sealed record AiAssistantState
     public string StatusMessage { get; init; } = "Assistente local não carregado.";
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public IReadOnlyList<AiStoredProposal> History { get; init; } = Array.Empty<AiStoredProposal>();
+    public IReadOnlyList<AiConversationTurn> Conversation { get; init; } = Array.Empty<AiConversationTurn>();
 
     public bool IsBusy => Activity is AiAssistantActivity.Loading or AiAssistantActivity.Generating;
     public bool IsOfflineReady => InstallationState == AiInstallationState.Ready;
@@ -284,6 +333,15 @@ public interface ILocalAiBackend
         AiConfiguration configuration,
         AiPlanningContext? planningContext = null,
         CancellationToken cancellationToken = default);
+
+    Task<AiProposal> CreateProposalAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        AiConfiguration configuration,
+        AiPlanningContext? planningContext,
+        AiConversationContext? conversationContext,
+        CancellationToken cancellationToken) =>
+        CreateProposalAsync(input, kind, configuration, planningContext, cancellationToken);
 }
 
 public interface IAiPlanningContextProvider
@@ -332,6 +390,13 @@ public interface IAiPlanningService
         AiAssistantInput input,
         AiProposalKind kind,
         CancellationToken cancellationToken = default);
+
+    Task<AiProposalGeneration> CreateGenerationAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        AiConversationContext? conversationContext,
+        CancellationToken cancellationToken) =>
+        CreateGenerationAsync(input, kind, cancellationToken);
 }
 
 public interface IAiProposalPreviewService
@@ -349,6 +414,12 @@ public interface IAiProposalStore
         AiProposal proposal,
         AiProposalPreview preview,
         CancellationToken cancellationToken = default);
+    Task<AiStoredProposal> SavePreviewAsync(
+        AiProposal proposal,
+        AiProposalPreview preview,
+        Guid requestTurnId,
+        CancellationToken cancellationToken) =>
+        SavePreviewAsync(proposal, preview, cancellationToken);
     Task<AiStoredProposal> AcceptAsync(Guid proposalId, CancellationToken cancellationToken = default);
     Task<AiStoredProposal> MarkAppliedAsync(Guid proposalId, CancellationToken cancellationToken = default);
     Task<AiStoredProposal> MarkUndoneAsync(Guid proposalId, CancellationToken cancellationToken = default);
@@ -370,6 +441,37 @@ public interface IAiProposalWorkflowService
     Task<AiStoredProposal> PrepareAsync(
         AiAssistantInput input,
         AiProposalKind kind,
+        CancellationToken cancellationToken = default);
+
+    Task<AiStoredProposal> PrepareAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        Guid requestTurnId,
+        AiConversationContext? conversationContext,
+        CancellationToken cancellationToken) =>
+        PrepareAsync(input, kind, cancellationToken);
+}
+
+public interface IAiConversationStore
+{
+    string StorePath { get; }
+    string LastLoadWarning { get; }
+
+    Task<AiConversationSnapshot> LoadAsync(CancellationToken cancellationToken = default);
+    Task<AiConversationSnapshot> ReconcileAsync(
+        IReadOnlyList<AiStoredProposal> proposals,
+        CancellationToken cancellationToken = default);
+    Task<AiConversationSnapshot> BeginRequestAsync(
+        string text,
+        AiProposalKind kind,
+        CancellationToken cancellationToken = default);
+    Task<AiConversationSnapshot> CompleteRequestAsync(
+        Guid requestId,
+        AiStoredProposal proposal,
+        CancellationToken cancellationToken = default);
+    Task<AiConversationSnapshot> MarkRequestAsync(
+        Guid requestId,
+        AiConversationTurnStatus status,
         CancellationToken cancellationToken = default);
 }
 

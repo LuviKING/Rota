@@ -19,6 +19,7 @@ public partial class AiAssistantWindow : Window
     private string _applicationWarning = "";
 
     public ObservableCollection<AiProposalCardView> HistoryItems { get; } = new();
+    public ObservableCollection<AiConversationTurnView> ConversationItems { get; } = new();
 
     public AiAssistantWindow(
         IAiAssistantController controller,
@@ -87,6 +88,16 @@ public partial class AiAssistantWindow : Window
             : _applicationWarning;
         WarningNotice.Visibility = warning.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         WarningText.Text = warning;
+
+        ConversationItems.Clear();
+        foreach (var turn in state.Conversation)
+            ConversationItems.Add(new AiConversationTurnView(turn));
+        EmptyConversationPanel.Visibility = ConversationItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ConversationCountText.Text = ConversationItems.Count == 1
+            ? "1 mensagem"
+            : $"{ConversationItems.Count} mensagens";
+        if (ConversationItems.Count > 0)
+            _ = Dispatcher.BeginInvoke(ConversationScroll.ScrollToEnd);
 
         HistoryItems.Clear();
         foreach (var item in state.History.OrderByDescending(item => item.UpdatedAtUtc))
@@ -299,6 +310,47 @@ public partial class AiAssistantWindow : Window
             foreach (var descendant in FindVisualChildren<T>(child)) yield return descendant;
         }
     }
+}
+
+public sealed class AiConversationTurnView
+{
+    private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
+
+    public AiConversationTurnView(AiConversationTurn turn)
+    {
+        var isUser = turn.Role == AiConversationRole.User;
+        RoleDisplay = isUser ? "VOCÊ" : "ROTA IA";
+        Text = turn.Text;
+        BubbleAlignment = isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        Background = ThemeManager.ResourceBrush(isUser ? "PrimarySoftBrush" : "BackgroundBrush");
+        CreatedAtDisplay = turn.CreatedAtUtc.ToLocalTime().ToString("dd/MM 'às' HH:mm", PtBr);
+        ProposalVisibility = !isUser && turn.ProposalId != Guid.Empty
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ProposalDisplay = turn.ProposalId == Guid.Empty
+            ? ""
+            : turn.ProposalKind == AiProposalKind.StudyPlan
+                ? "Proposta de plano vinculada"
+                : "Proposta de ajuste vinculada";
+        StatusDisplay = turn.Status switch
+        {
+            AiConversationTurnStatus.Pending => "GERANDO…",
+            AiConversationTurnStatus.Cancelled => "CANCELADA",
+            AiConversationTurnStatus.Failed => "NÃO CONCLUÍDA",
+            _ => ""
+        };
+        StatusVisibility = StatusDisplay.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public string RoleDisplay { get; }
+    public string Text { get; }
+    public HorizontalAlignment BubbleAlignment { get; }
+    public Brush Background { get; }
+    public string CreatedAtDisplay { get; }
+    public string ProposalDisplay { get; }
+    public string StatusDisplay { get; }
+    public Visibility ProposalVisibility { get; }
+    public Visibility StatusVisibility { get; }
 }
 
 public sealed class AiProposalCardView

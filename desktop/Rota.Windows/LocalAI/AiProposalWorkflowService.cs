@@ -21,14 +21,26 @@ public sealed class AiProposalWorkflowService : IAiProposalWorkflowService, IDis
     public async Task<AiStoredProposal> PrepareAsync(
         AiAssistantInput input,
         AiProposalKind kind,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await PrepareAsync(input, kind, Guid.Empty, null, cancellationToken).ConfigureAwait(false);
+
+    public async Task<AiStoredProposal> PrepareAsync(
+        AiAssistantInput input,
+        AiProposalKind kind,
+        Guid requestTurnId,
+        AiConversationContext? conversationContext,
+        CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if ((requestTurnId == Guid.Empty) != (conversationContext is null))
+            throw new AiContractValidationException("O vínculo entre conversa e proposta está incompleto.");
+        if (conversationContext is not null)
+            AiContractValidator.ValidateConversationContext(conversationContext);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var generation = await _planningService
-                .CreateGenerationAsync(input, kind, cancellationToken)
+                .CreateGenerationAsync(input, kind, conversationContext, cancellationToken)
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (generation.Proposal.Kind != kind)
@@ -42,7 +54,7 @@ public sealed class AiProposalWorkflowService : IAiProposalWorkflowService, IDis
             AiContractValidator.ValidatePreview(preview);
             cancellationToken.ThrowIfCancellationRequested();
             return await _proposalStore
-                .SavePreviewAsync(generation.Proposal, preview, cancellationToken)
+                .SavePreviewAsync(generation.Proposal, preview, requestTurnId, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

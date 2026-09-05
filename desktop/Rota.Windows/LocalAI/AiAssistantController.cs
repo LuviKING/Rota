@@ -6,6 +6,7 @@ public sealed class AiAssistantController : IAiAssistantController, IAsyncDispos
     private readonly IAiModelManager _modelManager;
     private readonly IAiProposalStore _proposalStore;
     private readonly IAiProposalWorkflowService _workflow;
+    private readonly IAiConversationStore _conversationStore;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private readonly object _stateSync = new();
     private CancellationTokenSource? _activeOperation;
@@ -16,12 +17,14 @@ public sealed class AiAssistantController : IAiAssistantController, IAsyncDispos
         IAiConfigurationStore configurationStore,
         IAiModelManager modelManager,
         IAiProposalStore proposalStore,
-        IAiProposalWorkflowService workflow)
+        IAiProposalWorkflowService workflow,
+        IAiConversationStore conversationStore)
     {
         _configurationStore = configurationStore ?? throw new ArgumentNullException(nameof(configurationStore));
         _modelManager = modelManager ?? throw new ArgumentNullException(nameof(modelManager));
         _proposalStore = proposalStore ?? throw new ArgumentNullException(nameof(proposalStore));
         _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
+        _conversationStore = conversationStore ?? throw new ArgumentNullException(nameof(conversationStore));
     }
 
     public AiAssistantState State
@@ -41,9 +44,13 @@ public sealed class AiAssistantController : IAiAssistantController, IAsyncDispos
                 .GetInstallationInfoAsync(configuration, operation.Token)
                 .ConfigureAwait(false);
             var history = await _proposalStore.LoadAsync(operation.Token).ConfigureAwait(false);
+            var conversation = await _conversationStore
+                .ReconcileAsync(history, operation.Token)
+                .ConfigureAwait(false);
             var warnings = installation.Warnings.ToList();
             AddWarning(warnings, _configurationStore.LastLoadWarning);
             AddWarning(warnings, _proposalStore.LastLoadWarning);
+            AddWarning(warnings, _conversationStore.LastLoadWarning);
             UpdateState(new AiAssistantState
             {
                 IsInitialized = true,
@@ -52,7 +59,8 @@ public sealed class AiAssistantController : IAiAssistantController, IAsyncDispos
                 InstallationState = installation.State,
                 StatusMessage = InstallationMessage(installation.State),
                 Warnings = warnings.TakeLast(50).ToList(),
-                History = history.ToList()
+                History = history.ToList(),
+                Conversation = conversation.Turns
             });
         }
         catch (OperationCanceledException) when (operation.IsCancellationRequested)
@@ -92,9 +100,33 @@ public sealed class AiAssistantController : IAiAssistantController, IAsyncDispos
         }
 
         var operation = await BeginOperationAsync(AiAssistantActivity.Generating, cancellationToken).ConfigureAwait(false);
+        var requestId = Guid.Empty;
         try
         {
-            var stored = await _workflow.PrepareAsync(input, kind, operation.Token).ConfigureAwait(false);
+            AiContractValidator.ValidateInput(input);
+            var started = await _conversationStore
+                .BeginRequestAsync(AiConversationContextFactory.UserText(input), kind, operation.Token)
+                .ConfigureAwait(false);
+            requestId = started.Turns.Last(turn => turn.Role == AiConversationRole.User &&
+                turn.Status == AiConversationTurnStatus.Pending).RequestId;
+            UpdateState(State with { Conversation = started.Turns });
+            var context = AiConversationContextFactory.Create(started);
+            var stored = await _workflow
+                .PrepareAsync(input, kind, requestId, context, operation.Token)
+                .ConfigureAwait(false);
+            var conversationTurns = State.Conversation;
+            var warnings = State.Warnings.ToList();
+            try
+            {
+                var completed = await _conversationStore
+                    .CompleteRequestAsync(requestId, stored, CancellationToken.None)
+                    .ConfigureAwait(false);
+                conversationTurns = completed.Turns;
+            }
+            catch
+            {
+                warnings.Add("A proposta foi salva, mas a conversa será sincronizada na próxima abertura.");
+            }
             var history = State.History
                 .Where(item => item.Proposal.Id != stored.Proposal.Id)
                 .Prepend(stored)
@@ -106,21 +138,31 @@ public sealed class AiAssistantController : IAiAssistantController, IAsyncDispos
                 StatusMessage = stored.Preview.CanProceed
                     ? "Proposta pronta para revisão. Nada foi aplicado."
                     : "A proposta foi bloqueada pela validação. Nada foi aplicado.",
-                History = history
+                History = history,
+                Conversation = conversationTurns,
+                Warnings = warnings.TakeLast(50).ToList()
             });
             return stored;
         }
         catch (OperationCanceledException) when (operation.IsCancellationRequested)
         {
+            var conversation = await TryMarkRequestAsync(
+                requestId,
+                AiConversationTurnStatus.Cancelled).ConfigureAwait(false);
             UpdateState(State with
             {
                 Activity = AiAssistantActivity.Idle,
-                StatusMessage = "Geração cancelada. Nenhuma proposta parcial foi salva."
+                StatusMessage = "Geração cancelada. Nenhuma proposta parcial foi salva.",
+                Conversation = conversation
             });
             return null;
         }
         catch (Exception ex)
         {
+            var conversation = await TryMarkRequestAsync(
+                requestId,
+                AiConversationTurnStatus.Failed).ConfigureAwait(false);
+            UpdateState(State with { Conversation = conversation });
             SetError("A proposta local não pôde ser preparada.", ex);
             return null;
         }
@@ -216,6 +258,27 @@ public sealed class AiAssistantController : IAiAssistantController, IAsyncDispos
             StatusMessage = message,
             Warnings = warnings.TakeLast(50).ToList()
         });
+    }
+
+    private async Task<IReadOnlyList<AiConversationTurn>> TryMarkRequestAsync(
+        Guid requestId,
+        AiConversationTurnStatus status)
+    {
+        if (requestId == Guid.Empty) return State.Conversation;
+        try
+        {
+            var snapshot = await _conversationStore
+                .MarkRequestAsync(requestId, status, CancellationToken.None)
+                .ConfigureAwait(false);
+            return snapshot.Turns;
+        }
+        catch
+        {
+            var warnings = State.Warnings.ToList();
+            warnings.Add("O estado final do último pedido não pôde ser salvo na conversa local.");
+            UpdateState(State with { Warnings = warnings.TakeLast(50).ToList() });
+            return State.Conversation;
+        }
     }
 
     private void UpdateState(AiAssistantState state)

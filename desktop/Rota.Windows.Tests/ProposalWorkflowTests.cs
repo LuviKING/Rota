@@ -6,6 +6,7 @@ public static class ProposalWorkflowTests
 {
     private static readonly Guid ProposalId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
     private static readonly Guid OperationId = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000001");
+    private static readonly Guid RequestId = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000002");
     private static readonly DateTimeOffset CreatedAt = new(2031, 2, 3, 12, 0, 0, TimeSpan.Zero);
 
     public static IEnumerable<(string Name, Action Body)> Cases => new (string, Action)[]
@@ -13,7 +14,8 @@ public static class ProposalWorkflowTests
         ("AI workflow reuses the exact generation context for preview and storage", WorkflowReusesExactContext),
         ("AI workflow stores a blocked preview as failed", WorkflowStoresBlockedPreview),
         ("AI workflow cancellation leaves no partial proposal", WorkflowCancellationLeavesNoPartialRecord),
-        ("AI workflow contains failures and leaves no partial proposal", WorkflowContainsFailureWithoutPartialRecord)
+        ("AI workflow contains failures and leaves no partial proposal", WorkflowContainsFailureWithoutPartialRecord),
+        ("AI workflow preserves the bounded conversation link", WorkflowPreservesConversationLink)
     };
 
     private static void WorkflowReusesExactContext()
@@ -103,6 +105,37 @@ public static class ProposalWorkflowTests
                 return;
             }
             throw new InvalidOperationException("Expected AiProposalWorkflowException.");
+        });
+    }
+
+    private static void WorkflowPreservesConversationLink()
+    {
+        WithStore(store =>
+        {
+            var conversation = new AiConversationContext
+            {
+                ConversationId = Guid.Parse("cccccccc-0000-0000-0000-000000000001")
+            };
+            var planning = new StubPlanningService(new AiProposalGeneration
+            {
+                Proposal = Proposal(),
+                PlanningContext = Context()
+            });
+            using var workflow = new AiProposalWorkflowService(
+                planning,
+                new StubPreviewService((_, _) => ReadyPreview()),
+                store);
+
+            var stored = workflow.PrepareAsync(
+                Input(),
+                AiProposalKind.PlanChanges,
+                RequestId,
+                conversation,
+                CancellationToken.None).GetAwaiter().GetResult();
+
+            Require(ReferenceEquals(conversation, planning.LastConversationContext));
+            Require(stored.RequestTurnId == RequestId);
+            Require(store.LoadAsync().GetAwaiter().GetResult().Single().RequestTurnId == RequestId);
         });
     }
 
@@ -231,6 +264,8 @@ public static class ProposalWorkflowTests
 
         public StubPlanningService(AiProposalGeneration generation) => _generation = generation;
 
+        public AiConversationContext? LastConversationContext { get; private set; }
+
         public Task<AiProposal> CreateProposalAsync(
             AiAssistantInput input,
             AiProposalKind kind,
@@ -243,6 +278,16 @@ public static class ProposalWorkflowTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(_generation);
+        }
+
+        public Task<AiProposalGeneration> CreateGenerationAsync(
+            AiAssistantInput input,
+            AiProposalKind kind,
+            AiConversationContext? conversationContext,
+            CancellationToken cancellationToken)
+        {
+            LastConversationContext = conversationContext;
+            return CreateGenerationAsync(input, kind, cancellationToken);
         }
     }
 

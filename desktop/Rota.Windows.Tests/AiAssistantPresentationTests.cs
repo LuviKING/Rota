@@ -7,7 +7,8 @@ public static class AiAssistantPresentationTests
     public static IEnumerable<(string Name, Action Body)> Cases => new (string, Action)[]
     {
         ("AI assistant presentation distinguishes validated and blocked previews", PresentationMapsSafetyState),
-        ("AI assistant presentation summarizes preview changes", PresentationSummarizesChanges)
+        ("AI assistant presentation summarizes preview changes", PresentationSummarizesChanges),
+        ("AI assistant presentation maps persistent conversation turns", PresentationMapsConversation)
     };
 
     private static void PresentationMapsSafetyState()
@@ -39,6 +40,35 @@ public static class AiAssistantPresentationTests
         Require(card.MetricsDisplay.Contains("4 → 5 sessões", StringComparison.Ordinal));
         Require(card.MetricsDisplay.Contains("+2 sessões", StringComparison.Ordinal));
         Require(card.MetricsDisplay.Contains("1 movidas", StringComparison.Ordinal));
+    }
+
+    private static void PresentationMapsConversation()
+    {
+        var pending = new AiConversationTurnView(new AiConversationTurn
+        {
+            RequestId = Guid.NewGuid(),
+            Role = AiConversationRole.User,
+            Status = AiConversationTurnStatus.Pending,
+            ProposalKind = AiProposalKind.StudyPlan,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            Text = "Monte um plano."
+        });
+        var response = new AiConversationTurnView(new AiConversationTurn
+        {
+            RequestId = Guid.NewGuid(),
+            Role = AiConversationRole.Assistant,
+            Status = AiConversationTurnStatus.Completed,
+            ProposalKind = AiProposalKind.PlanChanges,
+            ProposalId = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            Text = "Proposta preparada."
+        });
+
+        Require(pending.RoleDisplay == "VOCÊ" && pending.StatusDisplay == "GERANDO…");
+        Require(pending.BubbleAlignment == System.Windows.HorizontalAlignment.Right);
+        Require(response.RoleDisplay == "ROTA IA");
+        Require(response.ProposalVisibility == System.Windows.Visibility.Visible);
+        Require(response.ProposalDisplay.Contains("ajuste", StringComparison.OrdinalIgnoreCase));
     }
 
     private static AiStoredProposal Stored(AiProposalPreviewState previewState, AiProposalStatus status)

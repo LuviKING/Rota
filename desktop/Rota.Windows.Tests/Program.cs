@@ -96,6 +96,7 @@ tests = tests.Concat(Rota.Desktop.Tests.AiAssistantControllerTests.Cases).ToArra
 tests = tests.Concat(Rota.Desktop.Tests.AiAssistantPresentationTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiInstallationControllerTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiProposalApplicationTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.AiConversationTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 

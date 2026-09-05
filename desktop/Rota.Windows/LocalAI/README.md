@@ -85,6 +85,12 @@ Uma resposta de plano ainda passa pelo `StudyPlanImporter` 0.2. Uma resposta de 
 
 O contexto é copiado para contratos próprios antes de chegar ao backend. O modelo não recebe `StudyRepository`, caminho do arquivo de estado ou qualquer função de escrita. Revisões automáticas futuras continuam visíveis apenas com os dados necessários para calcular carga e são marcadas como protegidas contra remoção direta. A validação rejeita datas passadas, identidades duplicadas, limites inválidos e inconsistência nessa proteção. Pedidos de plano novo não recebem a fotografia do plano existente.
 
+## Conversa local contínua
+
+`AiConversationStore` mantém em `%LOCALAPPDATA%\Rota\AI\conversation.json` uma única conversa local que sobrevive ao reinício do aplicativo. Cada pedido recebe identidade própria, começa como `Pending` e termina como `Completed`, `Cancelled` ou `Failed`. Uma resposta concluída guarda o ID da proposta correspondente; o mesmo vínculo também é persistido em `proposals.json`, permitindo reparar automaticamente uma interrupção ocorrida entre as duas gravações.
+
+O arquivo aceita no máximo 200 turnos e 2 MiB, rejeita propriedades duplicadas e campos desconhecidos, grava por substituição atômica e recupera a última cópia íntegra. O modelo recebe somente até seis trocas concluídas, com 500 caracteres por turno e 6.000 caracteres no total. Pedidos incompletos, cancelados ou com falha não entram no contexto. O texto é neutralizado junto com o restante do payload e continua sendo dado não confiável; nenhuma função, caminho local, recibo ou capacidade de escrita acompanha a conversa.
+
 ## Prévia isolada
 
 `AiProposalPreviewService` transforma uma proposta pendente em uma prévia `Ready` ou `Blocked`, sem aplicar a proposta. Planos novos reutilizam a validação já existente do repositório. Alterações trabalham sobre uma cópia do contexto: mover, adicionar e remover sessões, mudar disponibilidade e redistribuir carga produzem contagens e itens de comparação determinísticos.
@@ -105,19 +111,19 @@ O histórico só é chamado depois que geração e prévia terminam e depois de 
 
 ## Composição de produção
 
-`LocalAiServices` monta configuração, detecção de hardware, catálogo, instalador, runtime, backend, contexto, prévia, histórico, fluxo e aplicação confirmada usando uma única raiz `%LOCALAPPDATA%\Rota\AI`. O aplicativo cria esse contêiner depois do repositório e o descarta ao sair, encerrando primeiro os controladores e fluxos e, em seguida, qualquer processo de runtime pertencente ao Rota.
+`LocalAiServices` monta configuração, detecção de hardware, catálogo, instalador, runtime, backend, contexto do plano, conversa, prévia, histórico, fluxo e aplicação confirmada usando uma única raiz `%LOCALAPPDATA%\Rota\AI`. O aplicativo cria esse contêiner depois do repositório e o descarta ao sair, encerrando primeiro os controladores e fluxos e, em seguida, qualquer processo de runtime pertencente ao Rota.
 
 A composição é deliberadamente inerte: seus construtores não criam a pasta de IA, não leem hardware, não baixam arquivos, não iniciam `llama-server` e não geram respostas. Essas ações só acontecem quando um comando explícito chamar o serviço correspondente. A abertura normal e os smoke tests comprovam que o calendário continua independente.
 
 ## Controlador da interface
 
-`AiAssistantController` concentra o estado consumido pela tela do assistente, sem depender de XAML. Somente ao abrir essa área ele carrega perfil efetivo, estado da instalação e até 100 propostas do histórico. Os cinco comandos rápidos são transformados em entradas estruturadas e escolhem criação de `StudyPlan` ou alteração conforme o caso.
+`AiAssistantController` concentra o estado consumido pela tela do assistente, sem depender de XAML. Somente ao abrir essa área ele carrega perfil efetivo, estado da instalação, até 100 propostas e os turnos persistidos. A inicialização reconcilia um pedido interrompido com a proposta já salva ou o encerra como falha quando nenhuma proposta existe. Os cinco comandos rápidos são transformados em entradas estruturadas e escolhem criação de `StudyPlan` ou alteração conforme o caso.
 
 O envio só é liberado quando runtime e modelo estão prontos. Durante a geração, o controlador publica estado ocupado e mantém um cancelamento próprio; cancelar encerra a operação e informa que nenhuma proposta parcial foi salva. Sucesso acrescenta a prévia ao histórico visível com o aviso de que nada foi aplicado. Erros inesperados são contidos sem expor detalhes internos. O descarte central espera uma operação ativa terminar após cancelá-la, antes de desmontar os serviços.
 
 ## Tela do Assistente IA
 
-`AiAssistantWindow` integra o controlador ao visual já existente do Rota. Ela mostra estado local/offline, perfil efetivo, disponibilidade da instalação, avisos, cinco ações rápidas, escolha entre plano novo e ajuste do plano atual, envio, cancelamento e o histórico de prévias validadas ou bloqueadas. Propostas prontas oferecem ações explícitas de revisar/aplicar e rejeitar; uma aplicação ainda elegível oferece desfazer. O layout preserva os alvos de clique, ícones e estados visuais compartilhados e mantém as duas colunas utilizáveis na menor janela suportada.
+`AiAssistantWindow` integra o controlador ao visual já existente do Rota. Ela mostra estado local/offline, perfil efetivo, disponibilidade da instalação, avisos, cinco ações rápidas, escolha entre plano novo e ajuste do plano atual, envio, cancelamento, a conversa contínua e o histórico de prévias validadas ou bloqueadas. Os balões distinguem pessoa e Rota IA, mostram pedidos em geração, cancelados ou não concluídos e identificam respostas vinculadas a propostas. Propostas prontas oferecem ações explícitas de revisar/aplicar e rejeitar; uma aplicação ainda elegível oferece desfazer. O layout preserva os alvos de clique, ícones e estados visuais compartilhados e mantém as duas colunas utilizáveis na menor janela suportada.
 
 `AiProposalConfirmationWindow` reapresenta a avaliação feita sobre o calendário atual, as contagens antes/depois, operações e avisos. Somente o botão final "Aplicar no calendário" consome a confirmação descartável. O gerador anterior de prompt para outra IA continua acessível como opção secundária, preservando a funcionalidade já existente.
 
@@ -153,10 +159,10 @@ Os hashes dos modelos vieram dos metadados LFS oficiais e os endereços/tamanhos
 
 `FakeLocalAiBackend` está somente no projeto `Rota.Windows.Tests`. Ele devolve respostas determinísticas, não faz inferência, não usa rede e não aparece na interface do usuário.
 
-A suíte padrão contém 159 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados dos controladores e carga real das janelas WPF. A aplicação confirmada testa preparação sem escrita, expiração por mudança ou virada do dia, clique duplicado, recibo persistente, reinício, falha de gravação, reconciliação do histórico, recuperação atômica, operações estruturadas, carga concluída protegida e desfazer seguro. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 160º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
+A suíte padrão contém 168 testes offline, incluindo falhas de rede simuladas, limites de resposta, cancelamento, rollback de atualização, exclusão mútua entre instaladores, comandos CPU/Vulkan, vínculo loopback, health check, timeout, encerramento, verificação pré-execução, autenticação da inferência, rejeição de respostas inválidas, isolamento do contexto atual, prévias sem escrita, recuperação do histórico, fluxo sem gravações parciais, composição inerte, estados dos controladores e carga real das janelas WPF. A conversa contínua testa persistência, limites do contexto, cancelamento, vínculo com propostas, recuperação atômica e reconciliação após interrupção. A aplicação confirmada testa preparação sem escrita, expiração por mudança ou virada do dia, clique duplicado, recibo persistente, reinício, falha de gravação, reconciliação do histórico, recuperação atômica, operações estruturadas, carga concluída protegida e desfazer seguro. Para conferir os ZIPs oficiais já baixados, definir `ROTA_TEST_RUNTIME_ARCHIVES` para a pasta que os contém habilita o 169º teste, que verifica todos os arquivos extraídos byte a byte por hash e inicia ambos os executáveis com `--version`. As gravações dos testes usam diretórios temporários exclusivos.
 
 A branch `feat/windows-local-ai` agora dispara o Windows CI automaticamente em cada push relevante. Os checkpoints permanecem nessa branch até autorização de integração.
 
 ## Próximo bloco
 
-Construir a conversa local contínua do Assistente IA. A etapa deve manter um histórico de turnos local, limitado e atômico, vincular cada pedido à proposta correspondente e permitir continuar ou retomar a conversa sem incluir funções de escrita no contexto do modelo.
+Construir o catálogo interno estruturado do ENEM. A etapa deve fixar áreas, matérias e conteúdos validados, fornecer somente uma seleção limitada e relevante ao modelo e impedir que a IA trate assuntos inventados como parte oficial do currículo.

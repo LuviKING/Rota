@@ -53,7 +53,14 @@ public sealed class AiProposalStore : IAiProposalStore, IDisposable
     public async Task<AiStoredProposal> SavePreviewAsync(
         AiProposal proposal,
         AiProposalPreview preview,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await SavePreviewAsync(proposal, preview, Guid.Empty, cancellationToken).ConfigureAwait(false);
+
+    public async Task<AiStoredProposal> SavePreviewAsync(
+        AiProposal proposal,
+        AiProposalPreview preview,
+        Guid requestTurnId,
+        CancellationToken cancellationToken)
     {
         ValidatePair(proposal, preview);
         if (proposal.Status != AiProposalStatus.Pending)
@@ -75,7 +82,8 @@ public sealed class AiProposalStore : IAiProposalStore, IDisposable
                     Status = preview.CanProceed ? AiProposalStatus.Validated : AiProposalStatus.Failed
                 },
                 Preview = preview,
-                UpdatedAtUtc = Now()
+                UpdatedAtUtc = Now(),
+                RequestTurnId = requestTurnId
             };
             ValidateRecord(stored);
             state.Records.Add(stored);
@@ -260,10 +268,13 @@ public sealed class AiProposalStore : IAiProposalStore, IDisposable
         if (state.Records is null || state.Records.Count > MaximumRecords)
             throw new InvalidDataException("O histórico da IA contém registros demais ou está incompleto.");
         var ids = new HashSet<Guid>();
+        var requestIds = new HashSet<Guid>();
         foreach (var record in state.Records)
         {
             if (record is null || !ids.Add(record.Proposal.Id))
                 throw new InvalidDataException("O histórico da IA contém propostas nulas ou duplicadas.");
+            if (record.RequestTurnId != Guid.Empty && !requestIds.Add(record.RequestTurnId))
+                throw new InvalidDataException("O histórico da IA contém vínculos de conversa duplicados.");
             ValidateRecord(record);
         }
     }

@@ -161,6 +161,81 @@
                         </StackPanel>
                     </Border>
 
+                    <Border Style="{StaticResource AssistantCard}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Conversa local" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="Os últimos turnos continuam disponíveis ao reabrir o Rota."
+                                               Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                               TextWrapping="Wrap" Margin="0,3,8,0" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="{DynamicResource SubtleBrush}"
+                                        CornerRadius="8" Padding="8,4" VerticalAlignment="Top">
+                                    <TextBlock x:Name="ConversationCountText" Text="0 mensagens"
+                                               Foreground="{DynamicResource MutedBrush}" FontSize="9" />
+                                </Border>
+                            </Grid>
+
+                            <Grid Grid.Row="2">
+                                <ScrollViewer x:Name="ConversationScroll" MaxHeight="230" VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding ConversationItems}" Margin="0,0,5,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border HorizontalAlignment="{Binding BubbleAlignment}"
+                                                        MaxWidth="285" Background="{Binding Background}"
+                                                        BorderBrush="{DynamicResource BorderBrush}"
+                                                        BorderThickness="1" CornerRadius="11" Padding="10,8"
+                                                        Margin="0,0,0,8">
+                                                    <StackPanel>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding RoleDisplay}"
+                                                                       Foreground="{DynamicResource PrimaryBrush}"
+                                                                       FontSize="8.5" FontWeight="SemiBold" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding StatusDisplay}"
+                                                                       Visibility="{Binding StatusVisibility}"
+                                                                       Foreground="{DynamicResource AssessmentBrush}"
+                                                                       FontSize="8" FontWeight="SemiBold" Margin="8,0,0,0" />
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding Text}" FontSize="10"
+                                                                   TextWrapping="Wrap" Margin="0,5,0,0" />
+                                                        <TextBlock Text="{Binding ProposalDisplay}"
+                                                                   Visibility="{Binding ProposalVisibility}"
+                                                                   Foreground="{DynamicResource PrimaryBrush}"
+                                                                   FontSize="8.5" FontWeight="SemiBold" Margin="0,6,0,0" />
+                                                        <TextBlock Text="{Binding CreatedAtDisplay}"
+                                                                   Foreground="{DynamicResource MutedBrush}"
+                                                                   FontSize="8" Margin="0,4,0,0" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                                <StackPanel x:Name="EmptyConversationPanel" HorizontalAlignment="Center"
+                                            Margin="10,12,10,8">
+                                    <TextBlock Text="A conversa começará no primeiro pedido."
+                                               Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                               TextAlignment="Center" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
                     <TextBlock Text="AÇÕES RÁPIDAS" Style="{StaticResource SectionLabel}" Margin="2,0,0,7" />
                     <WrapPanel Margin="0,0,0,6">
                         <Button x:Name="QuickBuildPlanButton" Style="{StaticResource QuickActionButton}"

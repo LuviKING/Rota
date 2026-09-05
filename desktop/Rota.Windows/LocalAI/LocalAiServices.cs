@@ -17,9 +17,15 @@ public sealed class LocalAiServices : IAsyncDisposable
         PlanningService = new AiPlanningService(Backend, ConfigurationStore, ContextProvider);
         PreviewService = new AiProposalPreviewService(repository, ContextProvider);
         ProposalStore = new AiProposalStore(Path.Combine(rootDirectory, "proposals.json"));
+        ConversationStore = new AiConversationStore(Path.Combine(rootDirectory, "conversation.json"));
         Workflow = new AiProposalWorkflowService(PlanningService, PreviewService, ProposalStore);
         ApplicationService = new AiProposalApplicationService(repository, PreviewService, ProposalStore);
-        AssistantController = new AiAssistantController(ConfigurationStore, ModelManager, ProposalStore, Workflow);
+        AssistantController = new AiAssistantController(
+            ConfigurationStore,
+            ModelManager,
+            ProposalStore,
+            Workflow,
+            ConversationStore);
         InstallationController = new AiInstallationController(
             rootDirectory,
             ConfigurationStore,
@@ -38,6 +44,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     public AiPlanningService PlanningService { get; }
     public AiProposalPreviewService PreviewService { get; }
     public AiProposalStore ProposalStore { get; }
+    public AiConversationStore ConversationStore { get; }
     public AiProposalWorkflowService Workflow { get; }
     public AiProposalApplicationService ApplicationService { get; }
     public AiAssistantController AssistantController { get; }
@@ -71,6 +78,7 @@ public sealed class LocalAiServices : IAsyncDisposable
         finally
         {
             Installer.Dispose();
+            ConversationStore.Dispose();
             ProposalStore.Dispose();
             ConfigurationStore.Dispose();
         }
