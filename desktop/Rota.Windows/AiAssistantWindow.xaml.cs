@@ -129,6 +129,7 @@ public partial class AiAssistantWindow : Window
             ? "Propor mudanças somente nas sessões futuras do plano atual."
             : "Crie e aplique um plano antes de tentar ajustá-lo.";
         QuickBuildPlanButton.IsEnabled = enabled;
+        OpenAiDiagnosticsButton.IsEnabled = enabled;
         var canAdjust = enabled && hasAdjustablePlan;
         QuickReorganizeWeekButton.IsEnabled = canAdjust;
         QuickAdjustLoadButton.IsEnabled = canAdjust;
@@ -303,6 +304,13 @@ public partial class AiAssistantWindow : Window
     {
         var dialog = new AiPromptWindow(_repository) { Owner = this };
         dialog.ShowDialog();
+    }
+
+    private void OpenAiDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AiDiagnosticsWindow(_controller) { Owner = this };
+        dialog.ShowDialog();
+        if (IsLoaded) RefreshState();
     }
 
     private async void ConfigureLocalAi_Click(object sender, RoutedEventArgs e)

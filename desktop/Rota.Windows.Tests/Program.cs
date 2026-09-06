@@ -450,6 +450,7 @@ static void DesktopWindowsLoad()
             AssertThemeContrast();
             var repo = new StudyRepository(Path.Combine(dir, "state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var assistant = new TestAiAssistantController();
+            var diagnostics = new TestAiAssistantController();
             var installation = new TestAiInstallationController();
             var application = new TestAiProposalApplicationService();
             var assistantWindow = new AiAssistantWindow(assistant, installation, application, repo);
@@ -459,6 +460,7 @@ static void DesktopWindowsLoad()
             {
                 new MainWindow(repo, assistant, installation, application),
                 assistantWindow,
+                new AiDiagnosticsWindow(diagnostics),
                 new AiProposalConfirmationWindow(new AiPreparedApplication
                 {
                     ConfirmationId = Guid.NewGuid(),
@@ -543,6 +545,8 @@ static void DesktopWindowsLoad()
                         ?? throw new InvalidOperationException("AI reorganize action was not created");
                     var externalPrompt = localAssistant.FindName("OpenExternalPromptButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("existing external AI prompt entry point was not preserved");
+                    var diagnosticsButton = localAssistant.FindName("OpenAiDiagnosticsButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI diagnostics entry point was not created");
                     True(!send.IsEnabled, "empty AI request must not be sent");
                     Eq(8_000, request.MaxLength);
                     True(!changePlan.IsEnabled, "change-plan choice must stay disabled without a future plan");
@@ -555,9 +559,36 @@ static void DesktopWindowsLoad()
                     quickAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     Contains(request.Text, "Monte um plano");
                     True(externalPrompt.MinHeight >= 36, "external AI prompt action is too small");
+                    True(diagnosticsButton.IsEnabled && diagnosticsButton.MinHeight >= 38,
+                        "AI diagnostics action is unavailable or too small");
                     True(!VisualDescendants<System.Windows.Controls.Button>(localAssistant)
                         .Any(button => (button.Content?.ToString() ?? "").Contains("Aplicar", StringComparison.OrdinalIgnoreCase)),
                         "AI preview screen must not expose an apply action");
+                }
+                if (window is AiDiagnosticsWindow diagnosticsWindow)
+                {
+                    Eq(1, diagnostics.InitializeCalls);
+                    var badge = diagnosticsWindow.FindName("OverallBadgeText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI diagnostics summary badge was not created");
+                    var profile = diagnosticsWindow.FindName("ProfileText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI diagnostics profile was not created");
+                    var installationStatus = diagnosticsWindow.FindName("InstallationStatusText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI diagnostics installation status was not created");
+                    var hardwareStatus = diagnosticsWindow.FindName("HardwareStatusText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI diagnostics hardware stage was not created");
+                    var performanceStatus = diagnosticsWindow.FindName("PerformanceStatusText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI diagnostics performance stage was not created");
+                    var refresh = diagnosticsWindow.FindName("RefreshButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI diagnostics refresh action was not created");
+                    Eq("PRONTA", badge.Text);
+                    Eq("Desempenho", profile.Text);
+                    Contains(installationStatus.Text, "disponíveis");
+                    Eq("Ainda não analisado.", hardwareStatus.Text);
+                    Eq("Ainda não medido.", performanceStatus.Text);
+                    True(refresh.IsEnabled && refresh.MinHeight >= 40,
+                        "AI diagnostics refresh action is unavailable or too small");
+                    refresh.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Eq(2, diagnostics.InitializeCalls);
                 }
                 if (window is AiInstallationWindow installationWindow)
                 {
@@ -574,6 +605,7 @@ static void DesktopWindowsLoad()
                 window.Close();
             }
             Eq(1, assistant.CancelCalls);
+            Eq(1, diagnostics.CancelCalls);
 
             ThemeManager.Apply(ThemeManager.Light);
             AssertThemeContrast();
@@ -598,6 +630,26 @@ static void DesktopWindowsLoad()
             Eq(Visibility.Visible, installationNotice.Visibility);
             SaveWindowSnapshot(unavailableWindow, "light-AiAssistantWindow");
             unavailableWindow.Close();
+
+            var lightDiagnosticsController = new TestAiAssistantController();
+            var lightDiagnosticsWindow = new AiDiagnosticsWindow(lightDiagnosticsController)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            lightDiagnosticsWindow.Show();
+            lightDiagnosticsWindow.Width = lightDiagnosticsWindow.MinWidth;
+            lightDiagnosticsWindow.Height = lightDiagnosticsWindow.MinHeight;
+            lightDiagnosticsWindow.UpdateLayout();
+            var lightBackground = lightDiagnosticsWindow.Background as SolidColorBrush
+                ?? throw new InvalidOperationException("AI diagnostics light background was not created");
+            Eq((ThemeManager.ResourceBrush("BackgroundBrush") as SolidColorBrush)!.Color, lightBackground.Color);
+            SaveWindowSnapshot(lightDiagnosticsWindow, "light-AiDiagnosticsWindow");
+            lightDiagnosticsWindow.Close();
+            Eq(1, lightDiagnosticsController.InitializeCalls);
+            Eq(1, lightDiagnosticsController.CancelCalls);
             ThemeManager.Apply(ThemeManager.Dark);
         }
         catch (Exception ex)

@@ -1,0 +1,187 @@
+<Window x:Class="Rota.Desktop.AiDiagnosticsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Testar minha IA · Rota"
+        Width="760" Height="640" MinWidth="600" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Background="{DynamicResource BackgroundBrush}">
+    <Window.Resources>
+        <Style x:Key="DiagnosticCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="15" />
+            <Setter Property="Padding" Value="15" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Border Width="44" Height="44" CornerRadius="13"
+                        Background="{DynamicResource PrimarySoftBrush}" Margin="0,0,12,0">
+                    <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyphText}"
+                               Foreground="{DynamicResource PrimaryTextBrush}" FontSize="21"
+                               Width="28" Height="28" LineHeight="28" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Testar minha IA" FontSize="22" FontWeight="Bold" />
+                    <TextBlock Text="Confira se a IA local está pronta para trabalhar"
+                               Foreground="{DynamicResource MutedBrush}" FontSize="10.5" Margin="0,3,0,0" />
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Background="{DynamicResource SuccessSoftBrush}"
+                    CornerRadius="9" Padding="9,5" VerticalAlignment="Center">
+                <TextBlock Text="LOCAL · PRIVADO" Foreground="{DynamicResource SuccessBrush}"
+                           FontSize="9" FontWeight="SemiBold" />
+            </Border>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
+            <StackPanel>
+                <Border Style="{StaticResource DiagnosticCard}" Margin="0,0,0,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="48" Height="48" CornerRadius="14"
+                                Background="{DynamicResource PrimarySoftBrush}" Margin="0,0,13,0">
+                            <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource PrimaryTextBrush}" FontSize="22"
+                                       Width="30" Height="30" LineHeight="30" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Name="OverallTitle" Text="Lendo estado da IA…"
+                                       FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock x:Name="OverallDescription" Text="Aguarde enquanto o Rota verifica a instalação local."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="10"
+                                       TextWrapping="Wrap" Margin="0,5,12,0" />
+                        </StackPanel>
+                        <Border x:Name="OverallBadge" Grid.Column="2"
+                                Background="{DynamicResource SubtleBrush}"
+                                CornerRadius="9" Padding="9,5" VerticalAlignment="Top">
+                            <TextBlock x:Name="OverallBadgeText" Text="CARREGANDO"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       FontSize="9" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <TextBlock Text="ETAPAS DO DIAGNÓSTICO" Style="{StaticResource SectionLabel}" Margin="2,0,0,8" />
+                <UniformGrid Columns="3" Margin="0,0,0,12">
+                    <Border Style="{StaticResource DiagnosticCard}" Margin="0,0,8,0">
+                        <StackPanel>
+                            <Border Width="40" Height="40" CornerRadius="12"
+                                    Background="{DynamicResource PrimarySoftBrush}" HorizontalAlignment="Left">
+                                <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyphText}"
+                                           Foreground="{DynamicResource PrimaryTextBrush}" FontSize="18" />
+                            </Border>
+                            <TextBlock Text="1. Instalação local" FontSize="12" FontWeight="SemiBold"
+                                       TextWrapping="Wrap" Margin="0,11,0,0" />
+                            <TextBlock x:Name="InstallationStatusText" Text="Verificando…"
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                       TextWrapping="Wrap" Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource DiagnosticCard}" Margin="4,0">
+                        <StackPanel>
+                            <Border Width="40" Height="40" CornerRadius="12"
+                                    Background="{DynamicResource SubtleBrush}" HorizontalAlignment="Left">
+                                <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyphText}"
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="18" />
+                            </Border>
+                            <TextBlock Text="2. Computador" FontSize="12" FontWeight="SemiBold"
+                                       TextWrapping="Wrap" Margin="0,11,0,0" />
+                            <TextBlock x:Name="HardwareStatusText" Text="Ainda não analisado."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                       TextWrapping="Wrap" Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource DiagnosticCard}" Margin="8,0,0,0">
+                        <StackPanel>
+                            <Border Width="40" Height="40" CornerRadius="12"
+                                    Background="{DynamicResource SubtleBrush}" HorizontalAlignment="Left">
+                                <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyphText}"
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="18" />
+                            </Border>
+                            <TextBlock Text="3. Desempenho" FontSize="12" FontWeight="SemiBold"
+                                       TextWrapping="Wrap" Margin="0,11,0,0" />
+                            <TextBlock x:Name="PerformanceStatusText" Text="Ainda não medido."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                       TextWrapping="Wrap" Margin="0,5,0,0" />
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <Border Style="{StaticResource DiagnosticCard}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Perfil ativo" FontSize="12" FontWeight="SemiBold" />
+                            <TextBlock Text="O perfil define o tamanho do modelo e o uso do computador."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                       TextWrapping="Wrap" Margin="0,4,12,0" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="{DynamicResource PrimarySoftBrush}"
+                                CornerRadius="9" Padding="10,6" VerticalAlignment="Center">
+                            <TextBlock x:Name="ProfileText" Text="Automático"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                       FontSize="10" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="WarningNotice" Visibility="Collapsed"
+                        Background="{DynamicResource ErrorSoftBrush}"
+                        BorderBrush="{DynamicResource ErrorBrush}" BorderThickness="1"
+                        CornerRadius="11" Padding="12,10" Margin="0,12,0,0">
+                    <TextBlock x:Name="WarningText" Foreground="{DynamicResource ErrorBrush}"
+                               FontSize="9.5" TextWrapping="Wrap" />
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Esta verificação não envia dados e não altera seu calendário."
+                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                       TextWrapping="Wrap" VerticalAlignment="Center" Margin="2,0,14,0" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="RefreshButton" Style="{StaticResource PrimaryButton}"
+                        Click="Refresh_Click" MinWidth="150" Margin="0,0,8,0"
+                        AutomationProperties.Name="Verificar novamente o estado da IA local">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyphText}"
+                                   Foreground="White" FontSize="15" Width="20" Height="20" LineHeight="20" />
+                        <TextBlock Text="Verificar novamente" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource SecondaryButton}" Click="Close_Click"
+                        IsCancel="True" MinWidth="86">Fechar</Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
