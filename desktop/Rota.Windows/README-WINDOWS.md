@@ -5,6 +5,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 ## Estado da edição Windows
 
 - Versão: **0.3.2**
+- novos perfis recebem uma tela de boas-vindas responsiva antes da configuração inicial; **Agora não** adia a etapa sem marcar como concluída;
 - interface principal **calendar-first**, com o mês completo em grade e a agenda detalhada do dia selecionado logo abaixo;
 - navegação rápida entre meses, dias e retorno para hoje;
 - tema **escuro e claro**, com troca imediata pela interface e preferência preservada localmente;
@@ -20,7 +21,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - aplicações ficam registradas no próprio estado do calendário, não podem se repetir e podem ser desfeitas enquanto nenhuma alteração posterior tiver ocorrido;
 - o gerador de prompt para usar com outra IA permanece disponível dentro do assistente.
 
-A preferência de tema fica separada do estado de estudos em `%LOCALAPPDATA%\Rota\theme.txt`. O calendário e o histórico continuam em `%LOCALAPPDATA%\Rota\desktop-state.json`.
+A preferência de tema fica separada do estado de estudos em `%LOCALAPPDATA%\Rota\theme.txt`. O calendário, o histórico e o progresso da configuração inicial continuam em `%LOCALAPPDATA%\Rota\desktop-state.json`.
 
 ## O que esta versão faz
 

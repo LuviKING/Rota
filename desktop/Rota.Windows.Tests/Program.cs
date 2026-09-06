@@ -38,6 +38,11 @@ var tests = new (string Name, Action Body)[]
     ("Repository preserves corrupt state without a backup", RepositoryPreservesCorruptState),
     ("Preferences reject unsafe text without mutation", PreferencesRejectUnsafeText),
     ("Preferences persist and reload", PreferencesPersistAndReload),
+    ("Fresh repository starts at the onboarding welcome", OnboardingStartsAtWelcome),
+    ("Onboarding progress persists and stays idempotent", OnboardingProgressPersists),
+    ("Onboarding steps reject invalid or skipped progress", OnboardingRejectsInvalidProgress),
+    ("Existing study state adopts onboarding without migration", ExistingStateAdoptsOnboarding),
+    ("Onboarding persistence failure leaves progress unchanged", OnboardingPersistenceIsTransactional),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -412,6 +417,87 @@ static void PreferencesPersistAndReload()
     });
 }
 
+static void OnboardingStartsAtWelcome()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        Eq(0, repo.CompletedOnboardingStep);
+        True(repo.CompletedOnboardingStep < OnboardingSteps.Welcome,
+            "a fresh profile must still require the welcome step");
+    });
+}
+
+static void OnboardingProgressPersists()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "onboarding-existing-plan",
+            1,
+            "2026-09-30",
+            SessionJson("protected-session", "2026-09-02", 60)))).Success);
+        True(repo.CompleteOnboardingStep(OnboardingSteps.Welcome),
+            "the first welcome completion was ignored");
+        Eq(OnboardingSteps.Welcome, repo.CompletedOnboardingStep);
+
+        var afterFirstCompletion = File.ReadAllText(path);
+        True(!repo.CompleteOnboardingStep(OnboardingSteps.Welcome),
+            "repeating a completed onboarding step must be idempotent");
+        Eq(afterFirstCompletion, File.ReadAllText(path));
+
+        var loaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq(OnboardingSteps.Welcome, loaded.CompletedOnboardingStep);
+        Eq("onboarding-existing-plan", loaded.Settings.ActivePlanId);
+        Eq(1, loaded.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+    });
+}
+
+static void OnboardingRejectsInvalidProgress()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        var before = File.ReadAllText(path);
+        ThrowsType<ArgumentOutOfRangeException>(() => repo.CompleteOnboardingStep(0));
+        ThrowsType<ArgumentOutOfRangeException>(() => repo.CompleteOnboardingStep(OnboardingSteps.Last + 1));
+        ThrowsType<InvalidOperationException>(() => repo.CompleteOnboardingStep(OnboardingSteps.Routine));
+        Eq(0, repo.CompletedOnboardingStep);
+        Eq(before, File.ReadAllText(path));
+    });
+}
+
+static void ExistingStateAdoptsOnboarding()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        var json = File.ReadAllText(path);
+        var oldState = System.Text.Json.Nodes.JsonNode.Parse(json)?.AsObject()
+            ?? throw new InvalidOperationException("test fixture did not contain a JSON object");
+        True(oldState.Remove("CompletedOnboardingStep"),
+            "test fixture did not remove the additive onboarding field");
+        File.WriteAllText(path, oldState.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        var loaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq(0, loaded.CompletedOnboardingStep);
+        True(loaded.CompleteOnboardingStep(OnboardingSteps.Welcome));
+        Eq(OnboardingSteps.Welcome, new StudyRepository(path).CompletedOnboardingStep);
+    });
+}
+
+static void OnboardingPersistenceIsTransactional()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        var before = File.ReadAllText(path);
+        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            ThrowsType<IOException>(() => repo.CompleteOnboardingStep(OnboardingSteps.Welcome));
+        }
+        Eq(0, repo.CompletedOnboardingStep);
+        Eq(before, File.ReadAllText(path));
+        Eq(0, Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp").Length);
+    });
+}
+
 static void StoredStateRejectsUnknownProperties()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
@@ -483,7 +569,8 @@ static void DesktopWindowsLoad()
                 new AiInstallationWindow(installation),
                 new AiPromptWindow(repo),
                 new ImportPlanWindow(repo),
-                new SettingsWindow(repo)
+                new SettingsWindow(repo),
+                new WelcomeWindow(repo)
             };
             foreach (var window in windows)
             {
@@ -656,6 +743,20 @@ static void DesktopWindowsLoad()
                     True(installButton.IsEnabled, "reviewed AI installation should be ready for explicit confirmation");
                     True(installButton.MinHeight >= 40, "AI install click target is too small");
                 }
+                if (window is WelcomeWindow welcomeWindow)
+                {
+                    var continueButton = welcomeWindow.FindName("ContinueButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("welcome continue action was not created");
+                    var notNowButton = welcomeWindow.FindName("NotNowButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("welcome defer action was not created");
+                    True(continueButton.IsDefault && continueButton.MinHeight >= 40,
+                        "welcome primary action is unavailable or too small");
+                    True(notNowButton.MinHeight >= 40, "welcome defer action is too small");
+                    Eq(0, repo.CompletedOnboardingStep);
+                    continueButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    True(welcomeWindow.WelcomeCompleted, "welcome action did not report completion");
+                    Eq(OnboardingSteps.Welcome, repo.CompletedOnboardingStep);
+                }
                 window.Close();
             }
             Eq(1, assistant.CancelCalls);
@@ -663,6 +764,25 @@ static void DesktopWindowsLoad()
 
             ThemeManager.Apply(ThemeManager.Light);
             AssertThemeContrast();
+            var deferredRepo = new StudyRepository(Path.Combine(dir, "deferred-state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
+            var lightWelcomeWindow = new WelcomeWindow(deferredRepo)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            lightWelcomeWindow.Show();
+            lightWelcomeWindow.Width = lightWelcomeWindow.MinWidth;
+            lightWelcomeWindow.Height = lightWelcomeWindow.MinHeight;
+            lightWelcomeWindow.UpdateLayout();
+            SaveWindowSnapshot(lightWelcomeWindow, "light-WelcomeWindow");
+            var deferWelcome = lightWelcomeWindow.FindName("NotNowButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("welcome defer action was not created in the light theme");
+            deferWelcome.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            True(!lightWelcomeWindow.WelcomeCompleted, "deferring welcome unexpectedly completed onboarding");
+            Eq(0, deferredRepo.CompletedOnboardingStep);
+
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
             var unavailableWindow = new AiAssistantWindow(unavailable, installation, application, repo)
             {

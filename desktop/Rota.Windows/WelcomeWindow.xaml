@@ -1,0 +1,154 @@
+<Window x:Class="Rota.Desktop.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Boas-vindas · Rota"
+        Width="760" Height="640" MinWidth="640" MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Background="{DynamicResource BackgroundBrush}">
+    <Window.Resources>
+        <Style x:Key="WelcomeFeatureCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="15" />
+            <Setter Property="Padding" Value="15" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="26">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Border Width="52" Height="52" CornerRadius="16"
+                        Background="{DynamicResource PrimaryBrush}" Margin="0,0,14,0">
+                    <TextBlock Text="R" Foreground="White" FontSize="25" FontWeight="Bold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Bem-vindo ao Rota" FontSize="25" FontWeight="Bold" />
+                    <TextBlock Text="Seu calendário de estudos, com IA local e você no controle"
+                               Foreground="{DynamicResource MutedBrush}" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Background="{DynamicResource PrimarySoftBrush}"
+                    CornerRadius="9" Padding="10,6" VerticalAlignment="Center" Margin="12,0,0,0">
+                <TextBlock Text="BOAS-VINDAS" Foreground="{DynamicResource PrimaryTextBrush}"
+                           FontSize="9" FontWeight="SemiBold" />
+            </Border>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
+            <StackPanel>
+                <TextBlock Text="Um plano que cabe na sua rotina"
+                           FontSize="19" FontWeight="SemiBold" Margin="1,0,0,5" />
+                <TextBlock Text="O Rota ajuda você a organizar o que estudar, acompanhar o progresso e ajustar o caminho sem perder o histórico já concluído."
+                           Foreground="{DynamicResource MutedBrush}" FontSize="11"
+                           TextWrapping="Wrap" Margin="1,0,0,16" />
+
+                <Border Style="{StaticResource WelcomeFeatureCard}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="48" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="40" Height="40" CornerRadius="12"
+                                Background="{DynamicResource PrimarySoftBrush}" VerticalAlignment="Top">
+                            <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource PrimaryTextBrush}" FontSize="19" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Comece pelo seu objetivo" FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="Nas próximas etapas, você informa prazo e disponibilidade para o plano respeitar sua vida real."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="10"
+                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource WelcomeFeatureCard}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="48" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="40" Height="40" CornerRadius="12"
+                                Background="{DynamicResource ReviewSoftBrush}" VerticalAlignment="Top">
+                            <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource ReviewBrush}" FontSize="19" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="IA privada no seu computador" FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="Quando instalada, a assistente funciona localmente. Suas conversas e seu calendário não precisam sair do PC."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="10"
+                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource WelcomeFeatureCard}" Margin="0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="48" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="40" Height="40" CornerRadius="12"
+                                Background="{DynamicResource SuccessSoftBrush}" VerticalAlignment="Top">
+                            <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource SuccessBrush}" FontSize="19" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Nada muda sem sua confirmação" FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="Você confere as propostas antes de aplicar e o Rota protege sessões concluídas e revisões."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="10"
+                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="CONFIGURAÇÃO INICIAL · ETAPA 1 DE 3"
+                           Foreground="{DynamicResource MutedBrush}" FontSize="9" FontWeight="SemiBold" />
+                <TextBlock Text="Você pode continuar depois, na próxima abertura."
+                           Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,3,0,0" />
+            </StackPanel>
+            <Button x:Name="NotNowButton" Grid.Column="1" Style="{StaticResource SecondaryButton}"
+                    Click="NotNow_Click" MinWidth="112" MinHeight="42"
+                    AutomationProperties.Name="Adiar boas-vindas">Agora não</Button>
+            <Button x:Name="ContinueButton" Grid.Column="3" Style="{StaticResource PrimaryButton}"
+                    Click="Continue_Click" MinWidth="164" MinHeight="42"
+                    IsDefault="True" AutomationProperties.Name="Concluir boas-vindas e entrar no Rota">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Entrar no Rota" VerticalAlignment="Center" />
+                    <TextBlock Text="&#xE72A;" Style="{StaticResource IconGlyphText}"
+                               Foreground="White" FontSize="15" Width="20" Height="20"
+                               LineHeight="20" Margin="7,0,0,0" />
+                </StackPanel>
+            </Button>
+        </Grid>
+    </Grid>
+</Window>

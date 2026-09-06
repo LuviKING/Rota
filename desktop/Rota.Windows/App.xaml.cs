@@ -55,6 +55,15 @@ public partial class App : Application
                     Shutdown(0);
                 });
             }
+            else if (repository.CompletedOnboardingStep < OnboardingSteps.Welcome)
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
+                {
+                    if (!window.IsVisible || repository.CompletedOnboardingStep >= OnboardingSteps.Welcome) return;
+                    var welcome = new WelcomeWindow(repository) { Owner = window };
+                    welcome.ShowDialog();
+                });
+            }
         }
         catch (Exception) when (_isSmokeTest)
         {

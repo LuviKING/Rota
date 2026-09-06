@@ -75,10 +75,19 @@ public sealed class AppState
 {
     public int StateVersion { get; set; } = 1;
     public long MutationVersion { get; set; }
+    public int CompletedOnboardingStep { get; set; }
     public AppSettings Settings { get; set; } = new();
     public List<SessionItem> Sessions { get; set; } = new();
     public List<CalendarApplicationReceipt> AiApplications { get; set; } = new();
     public CalendarUndoCheckpoint? AiUndoCheckpoint { get; set; }
+}
+
+public static class OnboardingSteps
+{
+    public const int Welcome = 1;
+    public const int Routine = 2;
+    public const int FirstPlan = 3;
+    public const int Last = FirstPlan;
 }
 
 public sealed class CalendarApplicationReceipt

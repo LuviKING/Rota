@@ -46,6 +46,32 @@ public sealed class StudyRepository
         }
     }
 
+    public int CompletedOnboardingStep
+    {
+        get
+        {
+            lock (_gate) return _state.CompletedOnboardingStep;
+        }
+    }
+
+    public bool CompleteOnboardingStep(int step)
+    {
+        if (step is < OnboardingSteps.Welcome or > OnboardingSteps.Last)
+            throw new ArgumentOutOfRangeException(nameof(step), "A etapa da configuração inicial é inválida.");
+
+        lock (_gate)
+        {
+            if (_state.CompletedOnboardingStep >= step) return false;
+            if (step != _state.CompletedOnboardingStep + 1)
+                throw new InvalidOperationException("As etapas da configuração inicial precisam ser concluídas em ordem.");
+
+            var next = CloneState(_state);
+            next.CompletedOnboardingStep = step;
+            Commit(next);
+            return true;
+        }
+    }
+
     public IReadOnlyList<SessionItem> SessionsForDate(DateOnly date)
     {
         var iso = Iso(date);
@@ -697,6 +723,7 @@ public sealed class StudyRepository
     {
         StateVersion = CurrentStateVersion,
         MutationVersion = 0,
+        CompletedOnboardingStep = 0,
         Settings = new AppSettings(),
         Sessions = new List<SessionItem>(),
         AiApplications = new List<CalendarApplicationReceipt>()
@@ -708,6 +735,8 @@ public sealed class StudyRepository
             throw new InvalidDataException($"Versão de estado não suportada: {state.StateVersion}.");
         if (state.MutationVersion < 0)
             throw new InvalidDataException("A versão de alteração do estado é inválida.");
+        if (state.CompletedOnboardingStep is < 0 or > OnboardingSteps.Last)
+            throw new InvalidDataException("A etapa da configuração inicial é inválida.");
         if (state.Settings is null || state.Sessions is null || state.AiApplications is null)
             throw new InvalidDataException("O estado local está incompleto.");
 
@@ -851,6 +880,7 @@ public sealed class StudyRepository
     {
         StateVersion = source.StateVersion,
         MutationVersion = source.MutationVersion,
+        CompletedOnboardingStep = source.CompletedOnboardingStep,
         Settings = CopySettings(source.Settings),
         Sessions = source.Sessions.Select(session => session.Copy()).ToList(),
         AiApplications = source.AiApplications.Select(receipt => receipt.Copy()).ToList(),
