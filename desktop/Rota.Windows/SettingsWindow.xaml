@@ -1,7 +1,7 @@
 <Window x:Class="Rota.Desktop.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Configurações · Rota" Width="760" Height="720" MinWidth="640" MinHeight="460"
+        Title="Configurações · Rota" Width="760" Height="760" MinWidth="640" MinHeight="500"
         WindowStartupLocation="CenterOwner" Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
         Background="{DynamicResource BackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -60,6 +60,25 @@
                     <Slider x:Name="BlockSlider" Minimum="30" Maximum="180" TickFrequency="15" IsSnapToTickEnabled="True" ValueChanged="BlockSlider_ValueChanged" />
                     <TextBlock Text="Esse valor entra no prompt para a IA; sessões individuais ainda podem variar entre 10 e 360 minutos." Foreground="{DynamicResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap" />
                 </StackPanel>
+            </Border>
+
+            <TextBlock Text="LEMBRETE DO WINDOWS" Style="{StaticResource SectionLabel}" Margin="2,0,0,7" />
+            <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="18" Padding="16" Margin="0,0,0,16">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="124"/></Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,18,0">
+                        <CheckBox x:Name="ReminderEnabled" Content="Lembrar de estudar todos os dias" FontWeight="SemiBold" />
+                        <TextBlock Text="O Windows abre um resumo curto da agenda no horário escolhido, mesmo quando o Rota estiver fechado."
+                                   Foreground="{DynamicResource MutedBrush}" FontSize="9.5" TextWrapping="Wrap" Margin="24,6,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Horário (HH:mm)" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,5" />
+                        <TextBox x:Name="ReminderTimeBox" Style="{StaticResource InputTextBox}" MaxLength="5"
+                                 IsEnabled="{Binding IsChecked, ElementName=ReminderEnabled}"
+                                 ToolTip="Horário diário no formato de 24 horas, por exemplo 19:00"
+                                 AutomationProperties.Name="Horário diário do lembrete" />
+                    </StackPanel>
+                </Grid>
             </Border>
 
             <TextBlock Text="REVISÕES AUTOMÁTICAS" Style="{StaticResource SectionLabel}" Margin="2,0,0,7" />

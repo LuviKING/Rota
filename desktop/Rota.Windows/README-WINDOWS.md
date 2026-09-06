@@ -12,6 +12,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - navegação rápida entre meses, dias e retorno para hoje;
 - um aviso discreto identifica blocos atrasados e sua carga total sem alterar datas; a análise ignora sessões concluídas, distingue revisões automáticas protegidas e devolve apenas uma visão limitada dos dados;
 - a tela **Recuperar estudos atrasados** detalha uma amostra segura dos blocos, leva ao mais antigo e pode preparar um pedido limitado para a IA reorganizar somente datas futuras; o calendário só muda após prévia e confirmação final;
+- um lembrete diário opcional pode ser ativado nas Configurações; o Agendador de Tarefas do Windows abre no horário escolhido um resumo somente leitura dos blocos de hoje e atrasados, mesmo com o aplicativo fechado;
 - tema **escuro e claro**, com troca imediata pela interface e preferência preservada localmente;
 - cards de contexto mostram plano ativo, objetivo, carga do mês e progresso mensal usando dados reais do calendário;
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;
@@ -25,7 +26,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - aplicações ficam registradas no próprio estado do calendário, não podem se repetir e podem ser desfeitas enquanto nenhuma alteração posterior tiver ocorrido;
 - o gerador de prompt para usar com outra IA permanece disponível dentro do assistente.
 
-A preferência de tema fica separada do estado de estudos em `%LOCALAPPDATA%\Rota\theme.txt`. O calendário, o histórico e o progresso da configuração inicial continuam em `%LOCALAPPDATA%\Rota\desktop-state.json`.
+A preferência de tema fica separada do estado de estudos em `%LOCALAPPDATA%\Rota\theme.txt`. O calendário, o histórico, o lembrete e o progresso da configuração inicial continuam em `%LOCALAPPDATA%\Rota\desktop-state.json`. Quando ativado, o Rota cria somente a tarefa diária **Rota - Lembrete de estudos** no Agendador de Tarefas do usuário; ao desativar, remove apenas essa tarefa.
 
 ## O que esta versão faz
 

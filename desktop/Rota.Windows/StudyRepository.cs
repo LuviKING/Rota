@@ -206,7 +206,9 @@ public sealed class StudyRepository
         bool d1,
         bool d3,
         bool d7,
-        IEnumerable<DayOfWeek>? availableStudyDays = null)
+        IEnumerable<DayOfWeek>? availableStudyDays = null,
+        bool reminderEnabled = false,
+        string reminderTime = StudyReminderConfiguration.DefaultTime)
     {
         objectiveDate = (objectiveDate ?? "").Trim();
         if (objectiveDate.Length > 0 && !DateOnly.TryParseExact(objectiveDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
@@ -215,6 +217,7 @@ public sealed class StudyRepository
             throw new ArgumentException("O limite diário precisa ficar entre 1 e 12 horas.");
         var cleanObjectiveName = CleanText(objectiveName, "Meu objetivo", 120, "Nome do objetivo");
         var normalizedDays = availableStudyDays is null ? null : NormalizeAvailableStudyDays(availableStudyDays);
+        var reminder = StudyReminderConfiguration.Parse(reminderEnabled, reminderTime);
 
         lock (_gate)
         {
@@ -226,6 +229,8 @@ public sealed class StudyRepository
             next.Settings.ReviewD1 = d1;
             next.Settings.ReviewD3 = d3;
             next.Settings.ReviewD7 = d7;
+            next.Settings.ReminderEnabled = reminder.Enabled;
+            next.Settings.ReminderTime = reminder.TimeText;
             if (normalizedDays is not null)
                 next.Settings.AvailableStudyDays = normalizedDays;
             Commit(next);
@@ -851,6 +856,14 @@ public sealed class StudyRepository
         {
             throw new InvalidDataException("Os dias disponíveis armazenados são inválidos.");
         }
+        try
+        {
+            _ = StudyReminderConfiguration.Parse(settings.ReminderEnabled, settings.ReminderTime);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new InvalidDataException("O horário de lembrete armazenado é inválido.", ex);
+        }
         if (settings.SubjectPriorities is null || settings.SubjectPriorities.Count > 500)
             throw new InvalidDataException("As prioridades de matérias armazenadas são inválidas.");
         var prioritySubjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -957,6 +970,8 @@ public sealed class StudyRepository
         ReviewD1 = source.ReviewD1,
         ReviewD3 = source.ReviewD3,
         ReviewD7 = source.ReviewD7,
+        ReminderEnabled = source.ReminderEnabled,
+        ReminderTime = source.ReminderTime,
         AvailableStudyDays = source.AvailableStudyDays.ToList(),
         SubjectPriorities = new Dictionary<string, int>(source.SubjectPriorities, StringComparer.OrdinalIgnoreCase),
         ActivePlanId = source.ActivePlanId,

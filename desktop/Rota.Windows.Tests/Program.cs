@@ -39,6 +39,9 @@ var tests = new (string Name, Action Body)[]
     ("Preferences reject unsafe text without mutation", PreferencesRejectUnsafeText),
     ("Preferences persist and reload", PreferencesPersistAndReload),
     ("Available study days persist in weekday order", AvailableStudyDaysPersistAndValidate),
+    ("Windows reminder preferences persist and validate", ReminderPreferencesPersistAndValidate),
+    ("Windows reminder scheduler creates a bounded daily task", ReminderSchedulerCreatesDailyTask),
+    ("Windows reminder scheduler removes only its own task", ReminderSchedulerRemovesOwnedTask),
     ("Fresh repository starts at the onboarding welcome", OnboardingStartsAtWelcome),
     ("Onboarding progress persists and stays idempotent", OnboardingProgressPersists),
     ("Onboarding steps reject invalid or skipped progress", OnboardingRejectsInvalidProgress),
@@ -451,6 +454,73 @@ static void AvailableStudyDaysPersistAndValidate()
         Eq(before, File.ReadAllText(path));
         Eq("Monday,Wednesday,Sunday", string.Join(',', repo.Settings.AvailableStudyDays));
     });
+}
+
+static void ReminderPreferencesPersistAndValidate()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        repo.SavePreferences(
+            "Vestibular", "2026-12-15", 6, 60, true, true, true,
+            new[] { DayOfWeek.Monday, DayOfWeek.Friday },
+            reminderEnabled: true,
+            reminderTime: "07:30");
+
+        var loaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        True(loaded.Settings.ReminderEnabled, "enabled reminder was not persisted");
+        Eq("07:30", loaded.Settings.ReminderTime);
+
+        var before = File.ReadAllText(path);
+        Throws(() => repo.SavePreferences(
+            "Vestibular", "2026-12-15", 6, 60, true, true, true,
+            reminderEnabled: true,
+            reminderTime: "25:99"), "horário válido");
+        Eq(before, File.ReadAllText(path));
+    });
+}
+
+static void ReminderSchedulerCreatesDailyTask()
+{
+    var dir = Path.Combine(Path.GetTempPath(), "RotaReminderTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    try
+    {
+        var executable = Path.Combine(dir, "Rota.exe");
+        File.WriteAllBytes(executable, Array.Empty<byte>());
+        var runner = new RecordingReminderTaskRunner(new ReminderTaskResult(0, "SUCCESS"));
+        var scheduler = new WindowsStudyReminderScheduler(runner);
+
+        scheduler.Apply(StudyReminderConfiguration.Parse(true, "19:45"), executable);
+
+        Eq(1, runner.Calls.Count);
+        var arguments = runner.Calls.Single();
+        Eq("/Create", arguments[0]);
+        Contains(string.Join('|', arguments), "/SC|DAILY");
+        Contains(string.Join('|', arguments), "/ST|19:45");
+        Contains(string.Join('|', arguments), $"\"{Path.GetFullPath(executable)}\" --reminder");
+        True(!arguments.Any(argument => argument.Contains('\n') || argument.Contains('\r')),
+            "reminder command contains an unsafe control character");
+    }
+    finally
+    {
+        Directory.Delete(dir, recursive: true);
+    }
+}
+
+static void ReminderSchedulerRemovesOwnedTask()
+{
+    var runner = new RecordingReminderTaskRunner(
+        new ReminderTaskResult(0, "task exists"),
+        new ReminderTaskResult(0, "deleted"));
+    var scheduler = new WindowsStudyReminderScheduler(runner);
+
+    scheduler.Apply(StudyReminderConfiguration.Parse(false, "19:00"), @"C:\Program Files\Rota\Rota.exe");
+
+    Eq(2, runner.Calls.Count);
+    Eq("/Query", runner.Calls[0][0]);
+    Eq("/Delete", runner.Calls[1][0]);
+    Eq(runner.Calls[0][2], runner.Calls[1][2]);
+    True(runner.Calls[1].Contains("/F"), "reminder deletion must be explicit and non-interactive");
 }
 
 static void OnboardingStartsAtWelcome()
@@ -917,11 +987,12 @@ static void DesktopWindowsLoad()
                 new AiInstallationWindow(installation),
                 new AiPromptWindow(repo),
                 new ImportPlanWindow(repo),
-                new SettingsWindow(repo),
+                new SettingsWindow(repo, new RecordingStudyReminderScheduler()),
                 new WelcomeWindow(repo),
                 new OnboardingRoutineWindow(repo),
                 new OnboardingFirstPlanWindow(repo, firstPlanAssistant, installation, firstPlanApplication),
-                new OverdueRecoveryWindow(recoveryWindowSnapshot)
+                new OverdueRecoveryWindow(recoveryWindowSnapshot),
+                new ReminderWindow(repo)
             };
             foreach (var window in windows)
             {
@@ -1094,6 +1165,28 @@ static void DesktopWindowsLoad()
                     Eq(Visibility.Visible, planPanel.Visibility);
                     True(installButton.IsEnabled, "reviewed AI installation should be ready for explicit confirmation");
                     True(installButton.MinHeight >= 40, "AI install click target is too small");
+                }
+                if (window is SettingsWindow settingsWindow)
+                {
+                    var reminderEnabled = settingsWindow.FindName("ReminderEnabled") as System.Windows.Controls.CheckBox
+                        ?? throw new InvalidOperationException("Windows reminder option was not created");
+                    var reminderTime = settingsWindow.FindName("ReminderTimeBox") as System.Windows.Controls.TextBox
+                        ?? throw new InvalidOperationException("Windows reminder time was not created");
+                    Eq("19:00", reminderTime.Text);
+                    True(reminderTime.MaxLength == 5, "reminder time input is not bounded");
+                    reminderEnabled.IsChecked = true;
+                    reminderTime.Text = "19:45";
+                    reminderTime.BringIntoView();
+                    settingsWindow.UpdateLayout();
+                    SaveWindowSnapshot(settingsWindow, "dark-SettingsWindow-reminder");
+                }
+                if (window is ReminderWindow reminderWindow)
+                {
+                    var openCalendar = reminderWindow.FindName("OpenRotaButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("reminder open-calendar action was not created");
+                    True(openCalendar.IsDefault && openCalendar.MinHeight >= 40,
+                        "reminder open-calendar action is unavailable or too small");
+                    Contains(reminderWindow.TodaySummary, "Nenhum bloco");
                 }
                 if (window is WelcomeWindow welcomeWindow)
                 {
@@ -2930,6 +3023,30 @@ sealed class TestAiPerformanceDiagnosticsService : IAiPerformanceDiagnosticsServ
             AiPerformanceRating.Excellent,
             new DateTimeOffset(2026, 9, 6, 15, 0, 0, TimeSpan.Zero)));
     }
+}
+
+sealed class RecordingReminderTaskRunner : IReminderTaskRunner
+{
+    private readonly Queue<ReminderTaskResult> _results;
+
+    public RecordingReminderTaskRunner(params ReminderTaskResult[] results) =>
+        _results = new Queue<ReminderTaskResult>(results);
+
+    public List<IReadOnlyList<string>> Calls { get; } = new();
+
+    public ReminderTaskResult Run(IReadOnlyList<string> arguments)
+    {
+        Calls.Add(arguments.ToArray());
+        return _results.Count == 0 ? new ReminderTaskResult(0, "") : _results.Dequeue();
+    }
+}
+
+sealed class RecordingStudyReminderScheduler : IStudyReminderScheduler
+{
+    public List<StudyReminderConfiguration> Configurations { get; } = new();
+
+    public void Apply(StudyReminderConfiguration configuration, string executablePath) =>
+        Configurations.Add(configuration);
 }
 
 sealed class TestAiAssistantController : IAiAssistantController

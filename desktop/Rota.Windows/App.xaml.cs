@@ -9,6 +9,7 @@ public partial class App : Application
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
     private bool _isSmokeTest;
+    private bool _isReminder;
     private LocalAiServices? _localAiServices;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -16,12 +17,15 @@ public partial class App : Application
         base.OnStartup(e);
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         _isSmokeTest = e.Args.Any(argument => string.Equals(argument, "--smoke-test", StringComparison.Ordinal));
+        _isReminder = e.Args.Any(argument => string.Equals(argument, "--reminder", StringComparison.Ordinal));
 
-        var mutexName = _isSmokeTest ? @"Local\Rota.Desktop.SmokeTest" : @"Local\Rota.Desktop.SingleInstance";
+        var mutexName = _isSmokeTest
+            ? @"Local\Rota.Desktop.SmokeTest"
+            : _isReminder ? @"Local\Rota.Desktop.Reminder" : @"Local\Rota.Desktop.SingleInstance";
         _singleInstanceMutex = new Mutex(initiallyOwned: true, mutexName, out _ownsSingleInstanceMutex);
         if (!_ownsSingleInstanceMutex)
         {
-            if (!_isSmokeTest)
+            if (!_isSmokeTest && !_isReminder)
             {
                 MessageBox.Show(
                     "O Rota já está aberto. Use a janela existente para evitar alterações concorrentes no calendário.",
@@ -37,6 +41,21 @@ public partial class App : Application
         {
             var smokeDataPath = _isSmokeTest ? Environment.GetEnvironmentVariable("ROTA_SMOKE_DATA_PATH") : null;
             var repository = new StudyRepository(string.IsNullOrWhiteSpace(smokeDataPath) ? null : smokeDataPath);
+            if (_isReminder)
+            {
+                var reminderWindow = new ReminderWindow(repository);
+                MainWindow = reminderWindow;
+                reminderWindow.Show();
+                if (_isSmokeTest)
+                {
+                    Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+                    {
+                        reminderWindow.UpdateLayout();
+                        Shutdown(0);
+                    });
+                }
+                return;
+            }
             _localAiServices = LocalAiServices.Create(repository);
             var window = new MainWindow(
                 repository,

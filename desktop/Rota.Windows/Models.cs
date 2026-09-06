@@ -63,6 +63,8 @@ public sealed class AppSettings
     public bool ReviewD1 { get; set; } = true;
     public bool ReviewD3 { get; set; } = true;
     public bool ReviewD7 { get; set; } = true;
+    public bool ReminderEnabled { get; set; }
+    public string ReminderTime { get; set; } = StudyReminderConfiguration.DefaultTime;
     public List<DayOfWeek> AvailableStudyDays { get; set; } = Enum.GetValues<DayOfWeek>().ToList();
     public Dictionary<string, int> SubjectPriorities { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string ActivePlanId { get; set; } = "";

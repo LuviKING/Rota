@@ -9,10 +9,17 @@ namespace Rota.Desktop;
 public partial class SettingsWindow : Window
 {
     private readonly StudyRepository _repository;
+    private readonly IStudyReminderScheduler _reminderScheduler;
+    private readonly string _executablePath;
 
-    public SettingsWindow(StudyRepository repository)
+    public SettingsWindow(
+        StudyRepository repository,
+        IStudyReminderScheduler? reminderScheduler = null,
+        string? executablePath = null)
     {
         _repository = repository;
+        _reminderScheduler = reminderScheduler ?? new WindowsStudyReminderScheduler();
+        _executablePath = executablePath ?? Environment.ProcessPath ?? "Rota.exe";
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         var settings = repository.Settings;
@@ -23,6 +30,8 @@ public partial class SettingsWindow : Window
         ReviewD1.IsChecked = settings.ReviewD1;
         ReviewD3.IsChecked = settings.ReviewD3;
         ReviewD7.IsChecked = settings.ReviewD7;
+        ReminderEnabled.IsChecked = settings.ReminderEnabled;
+        ReminderTimeBox.Text = settings.ReminderTime;
         var availableDays = settings.AvailableStudyDays.ToHashSet();
         foreach (var (choice, day) in DayChoices())
             choice.IsChecked = availableDays.Contains(day);
@@ -42,8 +51,10 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        var previous = StudyRepository.CopySettings(_repository.Settings);
         try
         {
+            var reminder = StudyReminderConfiguration.Parse(ReminderEnabled.IsChecked == true, ReminderTimeBox.Text);
             _repository.SavePreferences(
                 ObjectiveBox.Text,
                 ObjectiveDateBox.Text.Trim(),
@@ -52,20 +63,46 @@ public partial class SettingsWindow : Window
                 ReviewD1.IsChecked == true,
                 ReviewD3.IsChecked == true,
                 ReviewD7.IsChecked == true,
-                SelectedDays());
+                SelectedDays(),
+                reminder.Enabled,
+                reminder.TimeText);
+            try
+            {
+                _reminderScheduler.Apply(reminder, _executablePath);
+            }
+            catch (Exception scheduleError)
+            {
+                try
+                {
+                    RestorePreferences(previous);
+                }
+                catch (Exception rollbackError) when (rollbackError is IOException or UnauthorizedAccessException)
+                {
+                    throw new IOException(
+                        "O lembrete falhou e o Rota também não conseguiu restaurar as preferências anteriores.",
+                        new AggregateException(scheduleError, rollbackError));
+                }
+                throw;
+            }
             DialogResult = true;
         }
         catch (ArgumentException ex)
         {
             MessageBox.Show(ex.Message, "Configurações", MessageBoxButton.OK, MessageBoxImage.Warning);
-            if (ex.Message.Contains("dia de estudo", StringComparison.OrdinalIgnoreCase))
+            if (ex.ParamName == "time" || ex.Message.Contains("horário", StringComparison.OrdinalIgnoreCase))
+                ReminderTimeBox.Focus();
+            else if (ex.Message.Contains("dia de estudo", StringComparison.OrdinalIgnoreCase))
                 MondayChoice.Focus();
             else
                 (ex.Message.Contains("Nome do objetivo", StringComparison.Ordinal) ? ObjectiveBox : ObjectiveDateBox).Focus();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
         {
-            MessageBox.Show("Não foi possível salvar as configurações. Os valores anteriores foram mantidos.\n\n" + ex.Message, "Configurações", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show("Não foi possível concluir o salvamento das configurações.\n\n" + ex.Message, "Configurações", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            MessageBox.Show("As configurações anteriores foram mantidas porque o lembrete não pôde ser atualizado.\n\n" + ex.Message, "Configurações", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -109,6 +146,18 @@ public partial class SettingsWindow : Window
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private void RestorePreferences(AppSettings settings) => _repository.SavePreferences(
+        settings.ObjectiveName,
+        settings.ObjectiveDate,
+        settings.DailyHours,
+        settings.BlockMinutes,
+        settings.ReviewD1,
+        settings.ReviewD3,
+        settings.ReviewD7,
+        settings.AvailableStudyDays,
+        settings.ReminderEnabled,
+        settings.ReminderTime);
 
     private List<DayOfWeek> SelectedDays() => DayChoices()
         .Where(choice => choice.Button.IsChecked == true)
