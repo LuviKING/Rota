@@ -57,6 +57,8 @@ var tests = new (string Name, Action Body)[]
     ("Overdue analysis stays bounded without losing totals", OverdueAnalysisBoundsDetails),
     ("Overdue analysis never mutates repository state", OverdueAnalysisIsReadOnly),
     ("Overdue recovery request is bounded and requires a preview", OverdueRecoveryRequestIsSafe),
+    ("Weekly summary counts completed minutes and sessions", WeeklySummaryCountsProgress),
+    ("Weekly summary uses Monday boundaries without mutation", WeeklySummaryIsReadOnlyAndMondayBased),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -523,6 +525,61 @@ static void ReminderSchedulerRemovesOwnedTask()
     True(runner.Calls[1].Contains("/F"), "reminder deletion must be explicit and non-interactive");
 }
 
+static void WeeklySummaryCountsProgress()
+{
+    var sessions = new[]
+    {
+        WeeklySession("outside-before", "2026-08-30", 120, completed: true),
+        WeeklySession("monday", "2026-08-31", 60, completed: true),
+        WeeklySession("tuesday", "2026-09-01", 45),
+        WeeklySession("sunday", "2026-09-06", 30, completed: true),
+        WeeklySession("outside-after", "2026-09-07", 90, completed: true)
+    };
+    var summary = WeeklyProgressAnalyzer.Analyze(new RepositoryApplicationSnapshot(
+        7, "2026-09-02", new AppSettings(), sessions));
+
+    Eq(new DateOnly(2026, 8, 31), summary.WeekStart);
+    Eq(new DateOnly(2026, 9, 6), summary.WeekEnd);
+    Eq(3, summary.PlannedSessions);
+    Eq(2, summary.CompletedSessions);
+    Eq(135, summary.PlannedMinutes);
+    Eq(90, summary.CompletedMinutes);
+    Eq(1, summary.RemainingSessions);
+    Eq(45, summary.RemainingMinutes);
+    Eq(67, summary.CompletionPercent);
+    Eq(7, summary.Days.Count);
+}
+
+static void WeeklySummaryIsReadOnlyAndMondayBased()
+{
+    var sessions = new[] { WeeklySession("sunday", "2026-09-06", 30, completed: true) };
+    var snapshot = new RepositoryApplicationSnapshot(4, "2026-09-06", new AppSettings(), sessions);
+    var before = JsonSerializer.Serialize(snapshot);
+
+    var summary = WeeklyProgressAnalyzer.Analyze(snapshot);
+
+    Eq(new DateOnly(2026, 8, 31), summary.WeekStart);
+    Eq(new DateOnly(2026, 9, 6), summary.WeekEnd);
+    Eq(1, summary.Days[^1].CompletedSessions);
+    Eq(before, JsonSerializer.Serialize(snapshot));
+}
+
+static SessionItem WeeklySession(string id, string date, int minutes, bool completed = false) => new()
+{
+    Id = id,
+    PlanId = "weekly-plan",
+    PlanRevision = 1,
+    Date = date,
+    Subject = "Matemática",
+    Topic = id,
+    Minutes = minutes,
+    Target = "Estudar",
+    Kind = "study",
+    Status = completed ? "completed" : "planned",
+    Origin = "plan",
+    CompletedAtUnixMs = completed ? 1_788_200_000_000 : 0
+};
+
 static void OnboardingStartsAtWelcome()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
@@ -964,6 +1021,15 @@ static void DesktopWindowsLoad()
                     OverdueSession("recovery-window-study", "2026-09-01", 60),
                     OverdueSession("recovery-window-review", "2026-09-02", 30, "review", "runtime")
                 }));
+            var weeklyWindowSnapshot = new RepositoryApplicationSnapshot(
+                5,
+                "2026-09-02",
+                new AppSettings(),
+                new[]
+                {
+                    WeeklySession("weekly-complete", "2026-08-31", 60, completed: true),
+                    WeeklySession("weekly-pending", "2026-09-02", 45)
+                });
             Eq(0, assistant.InitializeCalls);
             Eq(0, installation.PrepareCalls);
             var windows = new Window[]
@@ -992,7 +1058,8 @@ static void DesktopWindowsLoad()
                 new OnboardingRoutineWindow(repo),
                 new OnboardingFirstPlanWindow(repo, firstPlanAssistant, installation, firstPlanApplication),
                 new OverdueRecoveryWindow(recoveryWindowSnapshot),
-                new ReminderWindow(repo)
+                new ReminderWindow(repo),
+                new WeeklySummaryWindow(weeklyWindowSnapshot)
             };
             foreach (var window in windows)
             {
@@ -1030,6 +1097,9 @@ static void DesktopWindowsLoad()
                     var aiNavigation = mainWindow.FindName("AiNavigationButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("AI assistant sidebar button was not created");
                     True(aiNavigation.MinHeight >= 44, "AI assistant sidebar click target is too small");
+                    var weeklySummary = mainWindow.FindName("WeeklySummaryButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("weekly summary entry point was not created");
+                    True(weeklySummary.MinHeight >= 36, "weekly summary click target is too small");
 
                     var iconStyle = app.FindResource("IconGlyphText") as Style
                         ?? throw new InvalidOperationException("shared icon style was not loaded");
@@ -1188,6 +1258,17 @@ static void DesktopWindowsLoad()
                         "reminder open-calendar action is unavailable or too small");
                     Contains(reminderWindow.TodaySummary, "Nenhum bloco");
                 }
+                if (window is WeeklySummaryWindow weeklySummaryWindow)
+                {
+                    var close = weeklySummaryWindow.FindName("CloseButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("weekly summary close action was not created");
+                    True(close.IsDefault && close.MinHeight >= 40,
+                        "weekly summary close action is unavailable or too small");
+                    Eq("60 min", weeklySummaryWindow.CompletedMinutesLabel);
+                    Eq("1", weeklySummaryWindow.CompletedSessionsLabel);
+                    Eq("50%", weeklySummaryWindow.CompletionLabel);
+                    Eq(7, weeklySummaryWindow.Days.Count);
+                }
                 if (window is WelcomeWindow welcomeWindow)
                 {
                     var continueButton = welcomeWindow.FindName("ContinueButton") as System.Windows.Controls.Button
@@ -1295,6 +1376,20 @@ static void DesktopWindowsLoad()
 
             ThemeManager.Apply(ThemeManager.Light);
             AssertThemeContrast();
+            var lightWeeklyWindow = new WeeklySummaryWindow(weeklyWindowSnapshot)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            lightWeeklyWindow.Show();
+            lightWeeklyWindow.Width = lightWeeklyWindow.MinWidth;
+            lightWeeklyWindow.Height = lightWeeklyWindow.MinHeight;
+            lightWeeklyWindow.UpdateLayout();
+            SaveWindowSnapshot(lightWeeklyWindow, "light-WeeklySummaryWindow");
+            lightWeeklyWindow.Close();
+
             var deferredRepo = new StudyRepository(Path.Combine(dir, "deferred-state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var lightWelcomeWindow = new WelcomeWindow(deferredRepo)
             {

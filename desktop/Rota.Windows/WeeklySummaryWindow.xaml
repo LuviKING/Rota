@@ -1,0 +1,104 @@
+<Window x:Class="Rota.Desktop.WeeklySummaryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Resumo semanal · Rota" Width="860" Height="700" MinWidth="720" MinHeight="560"
+        WindowStartupLocation="CenterOwner" Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        Background="{DynamicResource BackgroundBrush}">
+    <Window.Resources>
+        <Style x:Key="WeeklyProgressBar" TargetType="ProgressBar">
+            <Setter Property="Height" Value="8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Border Background="{DynamicResource SubtleBrush}" CornerRadius="4" ClipToBounds="True">
+                            <Grid x:Name="PART_Track">
+                                <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                        Background="{DynamicResource PrimaryBrush}" CornerRadius="4" />
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Width="52" Height="52" CornerRadius="15" Background="{DynamicResource PrimarySoftBrush}">
+                <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyphText}" FontSize="24"
+                           Foreground="{DynamicResource PrimaryTextBrush}" />
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,1,0,0">
+                <TextBlock Text="Resumo semanal" FontSize="24" FontWeight="Bold" />
+                <TextBlock Text="{Binding WeekRangeLabel}" Foreground="{DynamicResource MutedBrush}"
+                           FontSize="10.5" Margin="0,5,0,0" />
+            </StackPanel>
+        </Grid>
+
+        <UniformGrid Grid.Row="1" Columns="4" Margin="0,20,0,14">
+            <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="14,12" Margin="0,0,8,0">
+                <StackPanel><TextBlock Text="MINUTOS CONCLUÍDOS" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding CompletedMinutesLabel}" FontSize="18" FontWeight="Bold" Margin="0,5,0,0"/><TextBlock Text="{Binding PlannedMinutesLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,3,0,0"/></StackPanel>
+            </Border>
+            <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="14,12" Margin="0,0,8,0">
+                <StackPanel><TextBlock Text="SESSÕES CONCLUÍDAS" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding CompletedSessionsLabel}" FontSize="18" FontWeight="Bold" Margin="0,5,0,0"/><TextBlock Text="{Binding PlannedSessionsLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,3,0,0"/></StackPanel>
+            </Border>
+            <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="14,12" Margin="0,0,8,0">
+                <StackPanel><TextBlock Text="PROGRESSO" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding CompletionLabel}" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="18" FontWeight="Bold" Margin="0,5,0,0"/><TextBlock Text="pela quantidade de sessões" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,3,0,0"/></StackPanel>
+            </Border>
+            <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="14,12">
+                <StackPanel><TextBlock Text="FALTA" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding RemainingMinutesLabel}" FontSize="18" FontWeight="Bold" Margin="0,5,0,0"/><TextBlock Text="{Binding RemainingSessionsLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,3,0,0"/></StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Border Grid.Row="2" Background="{DynamicResource PrimarySoftBrush}" BorderBrush="{DynamicResource PrimaryBrush}" BorderThickness="1" CornerRadius="13" Padding="14,11" Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <ProgressBar Style="{StaticResource WeeklyProgressBar}" Maximum="100" Value="{Binding CompletionPercent, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                <TextBlock Grid.Column="1" Text="{Binding ProgressMessage}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryTextBrush}" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="3" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="16" Padding="16">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="DIA A DIA" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Days}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="92"/><ColumnDefinition Width="*"/><ColumnDefinition Width="104"/><ColumnDefinition Width="88"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DayName}" FontSize="11.5" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding DateLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <ProgressBar Grid.Column="1" Style="{StaticResource WeeklyProgressBar}"
+                                             Maximum="{Binding ProgressMaximum, Mode=OneWay}" Value="{Binding CompletedMinutes, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,18,0" />
+                                <TextBlock Grid.Column="2" Text="{Binding MinutesLabel}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="{Binding SessionsLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="4" Margin="0,16,0,0">
+            <TextBlock Text="Resumo somente leitura calculado pelas datas planejadas."
+                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5" VerticalAlignment="Center" />
+            <Button x:Name="CloseButton" Style="{StaticResource PrimaryButton}" Click="Close_Click"
+                    Width="130" HorizontalAlignment="Right" IsDefault="True" IsCancel="True">Fechar</Button>
+        </Grid>
+    </Grid>
+</Window>

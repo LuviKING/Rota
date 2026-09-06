@@ -13,6 +13,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - um aviso discreto identifica blocos atrasados e sua carga total sem alterar datas; a análise ignora sessões concluídas, distingue revisões automáticas protegidas e devolve apenas uma visão limitada dos dados;
 - a tela **Recuperar estudos atrasados** detalha uma amostra segura dos blocos, leva ao mais antigo e pode preparar um pedido limitado para a IA reorganizar somente datas futuras; o calendário só muda após prévia e confirmação final;
 - um lembrete diário opcional pode ser ativado nas Configurações; o Agendador de Tarefas do Windows abre no horário escolhido um resumo somente leitura dos blocos de hoje e atrasados, mesmo com o aplicativo fechado;
+- o botão **Resumo** mostra a semana atual de segunda a domingo, com minutos e sessões planejados, concluídos e restantes, percentual geral e andamento diário, sem alterar o calendário;
 - tema **escuro e claro**, com troca imediata pela interface e preferência preservada localmente;
 - cards de contexto mostram plano ativo, objetivo, carga do mês e progresso mensal usando dados reais do calendário;
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;

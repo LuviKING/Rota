@@ -471,6 +471,16 @@
                     </ScrollViewer>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="WeeklySummaryButton"
+                                Style="{StaticResource SecondaryButton}"
+                                Click="WeeklySummary_Click" Padding="12,8"
+                                Margin="0,0,7,0" ToolTip="Ver minutos e sessões concluídas nesta semana">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE9D2;" Style="{StaticResource IconGlyphText}"
+                                           FontSize="14" Width="18" Height="18" LineHeight="18" />
+                                <TextBlock Text="Resumo" Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Button Style="{StaticResource SecondaryButton}"
                                 Click="TodayNav_Click" Padding="13,8"
                                 Margin="0,0,7,0">

@@ -334,6 +334,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RefreshAll();
     }
 
+    private void WeeklySummary_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new WeeklySummaryWindow(_repository.CaptureApplicationSnapshot()) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private void OverdueRecovery_Click(object sender, RoutedEventArgs e)
     {
         var overdue = OverdueStudyAnalyzer.Analyze(_repository.CaptureApplicationSnapshot());
