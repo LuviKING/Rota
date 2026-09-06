@@ -8,17 +8,25 @@ public partial class AiDiagnosticsWindow : Window
 {
     private readonly IAiAssistantController _controller;
     private readonly IAiHardwareDiagnosticsService _diagnosticsService;
+    private readonly IAiPerformanceDiagnosticsService? _performanceService;
     private CancellationTokenSource? _refreshCancellation;
+    private CancellationTokenSource? _performanceCancellation;
     private bool _initializationStarted;
     private bool _refreshing;
-    private string _diagnosticWarning = "";
+    private bool _performanceRunning;
+    private string _hardwareWarning = "";
+    private string _performanceWarning = "";
+    private AiPerformanceDiagnosticReport? _performanceReport;
+    private (string Status, string Background, string Foreground)? _performanceStageOverride;
 
     public AiDiagnosticsWindow(
         IAiAssistantController controller,
-        IAiHardwareDiagnosticsService? diagnosticsService = null)
+        IAiHardwareDiagnosticsService? diagnosticsService = null,
+        IAiPerformanceDiagnosticsService? performanceService = null)
     {
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
         _diagnosticsService = diagnosticsService ?? new AiHardwareDiagnosticsService();
+        _performanceService = performanceService;
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         _controller.StateChanged += Controller_StateChanged;
@@ -37,6 +45,7 @@ public partial class AiDiagnosticsWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         _refreshCancellation?.Cancel();
+        _performanceCancellation?.Cancel();
         _controller.CancelCurrentOperation();
         _controller.StateChanged -= Controller_StateChanged;
         Loaded -= Window_Loaded;
@@ -51,11 +60,18 @@ public partial class AiDiagnosticsWindow : Window
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAsync();
 
+    private async void RunPerformanceTest_Click(object sender, RoutedEventArgs e) =>
+        await RunPerformanceTestAsync();
+
     private async Task RefreshAsync()
     {
-        if (_refreshing) return;
+        if (_refreshing || _performanceRunning) return;
         _refreshing = true;
-        _diagnosticWarning = "";
+        _hardwareWarning = "";
+        _performanceWarning = "";
+        _performanceReport = null;
+        _performanceStageOverride = null;
+        PerformanceDetailsPanel.Visibility = Visibility.Collapsed;
         HardwareStatusText.Text = "Analisando CPU, memória e placa de vídeo…";
         HardwareDetailsPanel.Visibility = Visibility.Collapsed;
         HardwareStageIcon.Background = ThemeManager.ResourceBrush("SubtleBrush");
@@ -83,7 +99,7 @@ public partial class AiDiagnosticsWindow : Window
                 HardwareStatusText.Text = "Não foi possível analisar este computador.";
                 HardwareStageIcon.Background = ThemeManager.ResourceBrush("ErrorSoftBrush");
                 HardwareStageGlyph.Foreground = ThemeManager.ResourceBrush("ErrorBrush");
-                _diagnosticWarning = "O Rota conteve uma falha ao consultar o hardware. Tente verificar novamente.";
+                _hardwareWarning = "O Rota conteve uma falha ao consultar o hardware. Tente verificar novamente.";
             }
         }
         finally
@@ -98,7 +114,7 @@ public partial class AiDiagnosticsWindow : Window
     {
         var state = _controller.State;
         ProfileText.Text = ProfileName(state.EffectiveProfile);
-        RefreshButton.IsEnabled = !_refreshing && !state.IsBusy;
+        RefreshButton.IsEnabled = !_refreshing && !_performanceRunning && !state.IsBusy;
 
         if (!state.IsInitialized || state.Activity == AiAssistantActivity.Loading)
         {
@@ -125,11 +141,123 @@ public partial class AiDiagnosticsWindow : Window
                 "AssessmentSoftBrush", "AssessmentBrush");
         }
 
-        var warning = string.IsNullOrWhiteSpace(_diagnosticWarning)
-            ? state.Warnings.LastOrDefault() ?? ""
-            : _diagnosticWarning;
+        var warning = !string.IsNullOrWhiteSpace(_performanceWarning)
+            ? _performanceWarning
+            : !string.IsNullOrWhiteSpace(_hardwareWarning)
+                ? _hardwareWarning
+                : state.Warnings.LastOrDefault() ?? "";
         WarningNotice.Visibility = warning.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         WarningText.Text = warning;
+        RefreshPerformanceState(state);
+    }
+
+    private async Task RunPerformanceTestAsync()
+    {
+        var state = _controller.State;
+        if (_performanceService is null || _performanceRunning || _refreshing || state.IsBusy ||
+            !state.IsInitialized || state.InstallationState != AiInstallationState.Ready)
+        {
+            return;
+        }
+
+        _performanceRunning = true;
+        _performanceReport = null;
+        _performanceStageOverride = null;
+        _performanceWarning = "";
+        PerformanceDetailsPanel.Visibility = Visibility.Collapsed;
+        _performanceCancellation?.Dispose();
+        using var cancellation = new CancellationTokenSource();
+        _performanceCancellation = cancellation;
+        RefreshState();
+        try
+        {
+            var report = await _performanceService.MeasureAsync(cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (IsLoaded)
+            {
+                _performanceReport = report;
+                ApplyPerformanceReport(report);
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            if (IsLoaded)
+            {
+                _performanceStageOverride =
+                    ("Teste cancelado.", "SubtleBrush", "MutedBrush");
+            }
+        }
+        catch (AiPerformanceDiagnosticsException ex)
+        {
+            if (IsLoaded)
+            {
+                _performanceStageOverride =
+                    ("Não foi possível medir.", "ErrorSoftBrush", "ErrorBrush");
+                _performanceWarning = ex.Message;
+            }
+        }
+        catch
+        {
+            if (IsLoaded)
+            {
+                _performanceStageOverride =
+                    ("Não foi possível medir.", "ErrorSoftBrush", "ErrorBrush");
+                _performanceWarning = "O Rota conteve uma falha durante o teste local. Tente medir novamente.";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_performanceCancellation, cancellation)) _performanceCancellation = null;
+            _performanceRunning = false;
+            if (IsLoaded) RefreshState();
+        }
+    }
+
+    private void RefreshPerformanceState(AiAssistantState state)
+    {
+        var available = _performanceService is not null && state.IsInitialized &&
+                        state.InstallationState == AiInstallationState.Ready;
+        RunPerformanceTestButton.IsEnabled = available && !_refreshing &&
+                                             !_performanceRunning && !state.IsBusy;
+        PerformanceButtonText.Text = _performanceRunning ? "Medindo…" : "Medir agora";
+
+        if (_performanceRunning)
+        {
+            SetPerformanceStage(
+                "Carregando e gerando uma resposta curta…",
+                "PrimarySoftBrush",
+                "PrimaryTextBrush");
+        }
+        else if (_performanceReport is not null)
+        {
+            SetPerformanceStage(
+                $"{FormatTokenRate(_performanceReport.TokensPerSecond)} · resposta em {FormatDuration(_performanceReport.ResponseDuration)}.",
+                "SuccessSoftBrush",
+                "SuccessBrush");
+        }
+        else if (!state.IsInitialized || state.Activity == AiAssistantActivity.Loading)
+        {
+            SetPerformanceStage("Aguardando a instalação…", "SubtleBrush", "MutedBrush");
+        }
+        else if (state.InstallationState != AiInstallationState.Ready)
+        {
+            SetPerformanceStage("Instale a IA para medir.", "SubtleBrush", "MutedBrush");
+        }
+        else if (_performanceStageOverride is { } stageOverride)
+        {
+            SetPerformanceStage(
+                stageOverride.Status,
+                stageOverride.Background,
+                stageOverride.Foreground);
+        }
+        else if (_performanceService is null)
+        {
+            SetPerformanceStage("Teste indisponível nesta sessão.", "SubtleBrush", "MutedBrush");
+        }
+        else
+        {
+            SetPerformanceStage("Pronto para medir.", "SubtleBrush", "MutedBrush");
+        }
     }
 
     private void ApplyHardwareReport(AiHardwareDiagnosticReport report)
@@ -169,8 +297,46 @@ public partial class AiDiagnosticsWindow : Window
             StorageDetailText.Text = "A instalação continuará protegida pela checagem de espaço";
         }
 
-        _diagnosticWarning = report.Warnings.LastOrDefault() ?? "";
+        _hardwareWarning = report.Warnings.LastOrDefault() ?? "";
         HardwareDetailsPanel.Visibility = Visibility.Visible;
+    }
+
+    private void ApplyPerformanceReport(AiPerformanceDiagnosticReport report)
+    {
+        StartupValueText.Text = report.RuntimeWasAlreadyReady
+            ? "Já estava pronta"
+            : FormatDuration(report.StartupDuration);
+        ResponseValueText.Text = FormatDuration(report.ResponseDuration);
+        TokenRateValueText.Text = FormatTokenRate(report.TokensPerSecond);
+        GeneratedTokensText.Text = report.GeneratedTokens == 1
+            ? "1 token gerado no teste"
+            : $"{report.GeneratedTokens} tokens gerados no teste";
+        ComputeValueText.Text = report.ComputePreference switch
+        {
+            AiComputePreference.Gpu => "Placa de vídeo",
+            AiComputePreference.Cpu => "Processador",
+            _ => "Automático"
+        };
+        PerformanceProfileText.Text = $"Perfil {ProfileName(report.EffectiveProfile)}";
+
+        var (label, background, foreground) = report.Rating switch
+        {
+            AiPerformanceRating.Excellent => ("EXCELENTE", "SuccessSoftBrush", "SuccessBrush"),
+            AiPerformanceRating.Good => ("BOM", "PrimarySoftBrush", "PrimaryTextBrush"),
+            AiPerformanceRating.Functional => ("FUNCIONAL", "AssessmentSoftBrush", "AssessmentBrush"),
+            _ => ("LENTO", "ErrorSoftBrush", "ErrorBrush")
+        };
+        PerformanceRatingText.Text = label;
+        PerformanceRatingBadge.Background = ThemeManager.ResourceBrush(background);
+        PerformanceRatingText.Foreground = ThemeManager.ResourceBrush(foreground);
+        PerformanceDetailsPanel.Visibility = Visibility.Visible;
+    }
+
+    private void SetPerformanceStage(string status, string background, string foreground)
+    {
+        PerformanceStatusText.Text = status;
+        PerformanceStageIcon.Background = ThemeManager.ResourceBrush(background);
+        PerformanceStageGlyph.Foreground = ThemeManager.ResourceBrush(foreground);
     }
 
     private void SetOverall(
@@ -197,6 +363,17 @@ public partial class AiDiagnosticsWindow : Window
         var format = value >= 100 ? "0" : value >= 10 ? "0.#" : "0.##";
         return value.ToString(format, CultureInfo.CurrentCulture) + " GB";
     }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration < TimeSpan.FromMilliseconds(100)) return "menos de 0,1 s";
+        var format = duration.TotalSeconds < 10 ? "0.0" : "0";
+        return duration.TotalSeconds.ToString(format, CultureInfo.CurrentCulture) + " s";
+    }
+
+    private static string FormatTokenRate(double tokensPerSecond) =>
+        tokensPerSecond.ToString(tokensPerSecond >= 100 ? "0" : "0.0", CultureInfo.CurrentCulture) +
+        " tokens/s";
 
     private static string ProfileName(AiProfile profile) => profile switch
     {

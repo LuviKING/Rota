@@ -12,7 +12,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;
 - os blocos do dia mostram matéria, duração, tipo, tópico, meta e ação de conclusão.
 - o menu **Assistente IA** abre a área local com perfil, estado offline, ações rápidas, conversa contínua e histórico de propostas;
-- a opção **Testar minha IA** abre um diagnóstico local com instalação, perfil ativo, processador, memória, placa de vídeo, armazenamento e a etapa futura de desempenho;
+- a opção **Testar minha IA** verifica instalação, perfil, processador, memória, placa de vídeo e armazenamento, além de medir carregamento, resposta e velocidade real da IA local por ação explícita;
 - pedidos do ENEM usam um catálogo local versionado, com quatro áreas oficiais, redação separada e matérias/conteúdos validados antes de qualquer prévia;
 - a configuração da IA oferece perfis Automático, Leve, Equilibrado e Desempenho, mostrando modelo, download e espaço antes de pedir confirmação;
 - instalação e download podem ser cancelados e só ficam ativos depois da verificação de integridade;

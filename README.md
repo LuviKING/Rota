@@ -27,7 +27,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal
 - Contexto mensal: plano ativo, objetivo, carga e progresso calculados dos dados reais
 - Importação: editor, arquivo `.json` e arrastar/soltar StudyPlan na janela
-- IA: assistente local/offline com perfis Leve, Equilibrado e Desempenho, instalação verificada, conversa persistente, prévia, confirmação e desfazer seguro
+- IA: assistente local/offline com perfis Leve, Equilibrado e Desempenho, instalação verificada, diagnóstico real de hardware/desempenho, conversa persistente, prévia, confirmação e desfazer seguro
 - Backup: exportação do estado local pelas Configurações e proteção contra duas instâncias simultâneas
 
 ### Comportamento compartilhado

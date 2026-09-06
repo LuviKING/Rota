@@ -13,6 +13,7 @@ public partial class AiAssistantWindow : Window
     private readonly IAiInstallationController _installationController;
     private readonly IAiProposalApplicationService _applicationService;
     private readonly IAiHardwareDiagnosticsService _hardwareDiagnosticsService;
+    private readonly IAiPerformanceDiagnosticsService? _performanceDiagnosticsService;
     private readonly StudyRepository _repository;
     private AiProposalKind _proposalKind = AiProposalKind.StudyPlan;
     private bool _initializationStarted;
@@ -27,13 +28,15 @@ public partial class AiAssistantWindow : Window
         IAiInstallationController installationController,
         IAiProposalApplicationService applicationService,
         StudyRepository repository,
-        IAiHardwareDiagnosticsService? hardwareDiagnosticsService = null)
+        IAiHardwareDiagnosticsService? hardwareDiagnosticsService = null,
+        IAiPerformanceDiagnosticsService? performanceDiagnosticsService = null)
     {
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
         _installationController = installationController ?? throw new ArgumentNullException(nameof(installationController));
         _applicationService = applicationService ?? throw new ArgumentNullException(nameof(applicationService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _hardwareDiagnosticsService = hardwareDiagnosticsService ?? new AiHardwareDiagnosticsService();
+        _performanceDiagnosticsService = performanceDiagnosticsService;
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         DataContext = this;
@@ -311,7 +314,10 @@ public partial class AiAssistantWindow : Window
 
     private void OpenAiDiagnostics_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new AiDiagnosticsWindow(_controller, _hardwareDiagnosticsService) { Owner = this };
+        var dialog = new AiDiagnosticsWindow(
+            _controller,
+            _hardwareDiagnosticsService,
+            _performanceDiagnosticsService) { Owner = this };
         dialog.ShowDialog();
         if (IsLoaded) RefreshState();
     }

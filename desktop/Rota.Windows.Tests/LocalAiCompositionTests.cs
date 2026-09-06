@@ -25,6 +25,7 @@ public static class LocalAiCompositionTests
                 Require(services.EnemCatalog.CatalogVersion == EnemCatalogService.CurrentCatalogVersion);
                 Require(services.ModelManager.RootDirectory == aiRoot);
                 Require(services.HardwareDiagnostics is not null);
+                Require(services.PerformanceDiagnostics is not null);
                 Require(services.RuntimeHost.Status.State == AiRuntimeState.Stopped);
                 Require(services.RuntimeHost.Connection is null);
                 Require(!Directory.Exists(aiRoot));

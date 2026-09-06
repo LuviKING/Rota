@@ -15,6 +15,10 @@ public sealed class LocalAiServices : IAsyncDisposable
         ModelManager = new LocalAiModelManager(rootDirectory, AiModelCatalog.Default, HardwareDetector);
         Installer = new LocalAiInstaller(rootDirectory, ConfigurationStore, ModelManager);
         RuntimeHost = new LocalAiRuntimeHost(ModelManager);
+        PerformanceDiagnostics = new AiPerformanceDiagnosticsService(
+            ConfigurationStore,
+            ModelManager,
+            RuntimeHost);
         Backend = new LlamaServerBackend(RuntimeHost);
         ContextProvider = new StudyPlanningContextProvider(repository);
         EnemCatalog = EnemCatalogService.Default;
@@ -44,6 +48,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     public LocalAiModelManager ModelManager { get; }
     public LocalAiInstaller Installer { get; }
     public LocalAiRuntimeHost RuntimeHost { get; }
+    public AiPerformanceDiagnosticsService PerformanceDiagnostics { get; }
     public LlamaServerBackend Backend { get; }
     public StudyPlanningContextProvider ContextProvider { get; }
     public EnemCatalogService EnemCatalog { get; }
@@ -77,6 +82,7 @@ public sealed class LocalAiServices : IAsyncDisposable
         ApplicationService.Dispose();
         Workflow.Dispose();
         Backend.Dispose();
+        PerformanceDiagnostics.Dispose();
         try
         {
             await RuntimeHost.DisposeAsync().ConfigureAwait(false);

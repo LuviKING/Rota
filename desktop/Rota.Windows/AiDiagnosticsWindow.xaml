@@ -121,9 +121,9 @@
                     </Border>
                     <Border Style="{StaticResource DiagnosticCard}" Margin="8,0,0,0">
                         <StackPanel>
-                            <Border Width="40" Height="40" CornerRadius="12"
+                            <Border x:Name="PerformanceStageIcon" Width="40" Height="40" CornerRadius="12"
                                     Background="{DynamicResource SubtleBrush}" HorizontalAlignment="Left">
-                                <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyphText}"
+                                <TextBlock x:Name="PerformanceStageGlyph" Text="&#xE9D9;" Style="{StaticResource IconGlyphText}"
                                            Foreground="{DynamicResource MutedBrush}" FontSize="18" />
                             </Border>
                             <TextBlock Text="3. Desempenho" FontSize="12" FontWeight="SemiBold"
@@ -131,6 +131,18 @@
                             <TextBlock x:Name="PerformanceStatusText" Text="Ainda não medido."
                                        Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
                                        TextWrapping="Wrap" Margin="0,5,0,0" />
+                            <Button x:Name="RunPerformanceTestButton" Style="{StaticResource SecondaryButton}"
+                                    Click="RunPerformanceTest_Click" MinHeight="38" Margin="0,10,0,0"
+                                    HorizontalAlignment="Stretch"
+                                    AutomationProperties.Name="Medir desempenho da IA local"
+                                    AutomationProperties.HelpText="Executa uma resposta curta sem criar nem salvar um plano">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="&#xE768;" Style="{StaticResource IconGlyphText}"
+                                               FontSize="14" Width="19" Height="19" LineHeight="19" />
+                                    <TextBlock x:Name="PerformanceButtonText" Text="Medir agora"
+                                               Margin="5,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Border>
                 </UniformGrid>
@@ -226,6 +238,106 @@
                                         <TextBlock x:Name="StorageValueText" Text="—" FontSize="10.5"
                                                    FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0" />
                                         <TextBlock x:Name="StorageDetailText" Text="" Foreground="{DynamicResource MutedBrush}"
+                                                   FontSize="9" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="PerformanceDetailsPanel" Style="{StaticResource DiagnosticCard}"
+                        Visibility="Collapsed" Margin="0,0,0,12">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,11">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Resposta da IA local" FontSize="13" FontWeight="SemiBold" />
+                                <TextBlock Text="Uma resposta curta e descartável, sem criar proposta nem alterar o calendário."
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                           TextWrapping="Wrap" Margin="0,4,12,0" />
+                            </StackPanel>
+                            <Border x:Name="PerformanceRatingBadge" Grid.Column="1"
+                                    Background="{DynamicResource SuccessSoftBrush}"
+                                    CornerRadius="9" Padding="9,5" VerticalAlignment="Center">
+                                <TextBlock x:Name="PerformanceRatingText" Text="BOM"
+                                           Foreground="{DynamicResource SuccessBrush}"
+                                           FontSize="9" FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+
+                        <UniformGrid Columns="2">
+                            <Border Style="{StaticResource HardwareMetricCard}" Margin="0,0,5,5">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE823;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}" FontSize="16"
+                                               Width="24" Height="24" LineHeight="24" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="INICIALIZAÇÃO" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="StartupValueText" Text="—" FontSize="10.5"
+                                                   FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                        <TextBlock Text="Tempo para deixar o modelo pronto" Foreground="{DynamicResource MutedBrush}"
+                                                   FontSize="9" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource HardwareMetricCard}" Margin="5,0,0,5">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE916;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}" FontSize="16"
+                                               Width="24" Height="24" LineHeight="24" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="RESPOSTA" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="ResponseValueText" Text="—" FontSize="10.5"
+                                                   FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                        <TextBlock Text="Duração da resposta de teste" Foreground="{DynamicResource MutedBrush}"
+                                                   FontSize="9" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource HardwareMetricCard}" Margin="0,5,5,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}" FontSize="16"
+                                               Width="24" Height="24" LineHeight="24" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="VELOCIDADE" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="TokenRateValueText" Text="—" FontSize="10.5"
+                                                   FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                        <TextBlock x:Name="GeneratedTokensText" Text="" Foreground="{DynamicResource MutedBrush}"
+                                                   FontSize="9" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource HardwareMetricCard}" Margin="5,5,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="30" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE950;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource PrimaryTextBrush}" FontSize="16"
+                                               Width="24" Height="24" LineHeight="24" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="EXECUÇÃO" Style="{StaticResource SectionLabel}" />
+                                        <TextBlock x:Name="ComputeValueText" Text="—" FontSize="10.5"
+                                                   FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                        <TextBlock x:Name="PerformanceProfileText" Text="" Foreground="{DynamicResource MutedBrush}"
                                                    FontSize="9" TextWrapping="Wrap" Margin="0,2,0,0" />
                                     </StackPanel>
                                 </Grid>

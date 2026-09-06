@@ -102,8 +102,11 @@ tests = tests.Concat(Rota.Desktop.Tests.AiConversationTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.EnemCatalogTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiProfileResourceBudgetTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiHardwareDiagnosticsTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.AiPerformanceDiagnosticsTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
+if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_LOCAL_AI_PERFORMANCE")))
+    tests = tests.Append(("Installed local AI completes a disposable real performance diagnostic", (Action)InstalledLocalAiPerformanceDiagnostic)).ToArray();
 
 var failed = 0;
 foreach (var test in tests)
@@ -453,6 +456,7 @@ static void DesktopWindowsLoad()
             var assistant = new TestAiAssistantController();
             var diagnostics = new TestAiAssistantController();
             var hardwareDiagnostics = new TestAiHardwareDiagnosticsService();
+            var performanceDiagnostics = new TestAiPerformanceDiagnosticsService();
             var installation = new TestAiInstallationController();
             var application = new TestAiProposalApplicationService();
             var assistantWindow = new AiAssistantWindow(assistant, installation, application, repo);
@@ -462,7 +466,7 @@ static void DesktopWindowsLoad()
             {
                 new MainWindow(repo, assistant, installation, application),
                 assistantWindow,
-                new AiDiagnosticsWindow(diagnostics, hardwareDiagnostics),
+                new AiDiagnosticsWindow(diagnostics, hardwareDiagnostics, performanceDiagnostics),
                 new AiProposalConfirmationWindow(new AiPreparedApplication
                 {
                     ConfirmationId = Guid.NewGuid(),
@@ -582,8 +586,12 @@ static void DesktopWindowsLoad()
                         ?? throw new InvalidOperationException("AI diagnostics performance stage was not created");
                     var refresh = diagnosticsWindow.FindName("RefreshButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("AI diagnostics refresh action was not created");
+                    var runPerformance = diagnosticsWindow.FindName("RunPerformanceTestButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("AI performance test action was not created");
                     var hardwareDetails = diagnosticsWindow.FindName("HardwareDetailsPanel") as System.Windows.Controls.Border
                         ?? throw new InvalidOperationException("AI hardware details were not created");
+                    var performanceDetails = diagnosticsWindow.FindName("PerformanceDetailsPanel") as System.Windows.Controls.Border
+                        ?? throw new InvalidOperationException("AI performance details were not created");
                     var processor = diagnosticsWindow.FindName("CpuValueText") as System.Windows.Controls.TextBlock
                         ?? throw new InvalidOperationException("AI processor details were not created");
                     var memory = diagnosticsWindow.FindName("MemoryValueText") as System.Windows.Controls.TextBlock
@@ -598,8 +606,9 @@ static void DesktopWindowsLoad()
                     Eq("Desempenho", profile.Text);
                     Contains(installationStatus.Text, "disponíveis");
                     Contains(hardwareStatus.Text, "perfil Desempenho");
-                    Eq("Ainda não medido.", performanceStatus.Text);
+                    Eq("Pronto para medir.", performanceStatus.Text);
                     Eq(Visibility.Visible, hardwareDetails.Visibility);
+                    Eq(Visibility.Collapsed, performanceDetails.Visibility);
                     Contains(processor.Text, "Ryzen 7 5700X");
                     Contains(memory.Text, "16 GB");
                     Contains(gpu.Text, "RTX 3070");
@@ -612,9 +621,28 @@ static void DesktopWindowsLoad()
                     SaveWindowSnapshot(diagnosticsWindow, "dark-AiDiagnosticsWindow-expanded");
                     True(refresh.IsEnabled && refresh.MinHeight >= 40,
                         "AI diagnostics refresh action is unavailable or too small");
+                    True(runPerformance.IsEnabled && runPerformance.MinHeight >= 38,
+                        "AI performance test action is unavailable or too small");
+                    runPerformance.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    diagnosticsWindow.UpdateLayout();
+                    Eq(1, performanceDiagnostics.MeasureCalls);
+                    Eq(Visibility.Visible, performanceDetails.Visibility);
+                    Contains(performanceStatus.Text, "20");
+                    Contains(performanceStatus.Text, "tokens/s");
+                    var tokenRate = diagnosticsWindow.FindName("TokenRateValueText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI token-rate result was not created");
+                    var performanceRating = diagnosticsWindow.FindName("PerformanceRatingText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI performance rating was not created");
+                    Contains(tokenRate.Text, "20");
+                    Contains(tokenRate.Text, "tokens/s");
+                    Eq("EXCELENTE", performanceRating.Text);
+                    performanceDetails.BringIntoView();
+                    diagnosticsWindow.UpdateLayout();
+                    SaveWindowSnapshot(diagnosticsWindow, "dark-AiDiagnosticsWindow-performance");
                     refresh.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     Eq(2, diagnostics.InitializeCalls);
                     Eq(2, hardwareDiagnostics.AnalyzeCalls);
+                    Eq(Visibility.Collapsed, performanceDetails.Visibility);
                 }
                 if (window is AiInstallationWindow installationWindow)
                 {
@@ -659,7 +687,11 @@ static void DesktopWindowsLoad()
 
             var lightDiagnosticsController = new TestAiAssistantController();
             var lightHardwareDiagnostics = new TestAiHardwareDiagnosticsService();
-            var lightDiagnosticsWindow = new AiDiagnosticsWindow(lightDiagnosticsController, lightHardwareDiagnostics)
+            var lightPerformanceDiagnostics = new TestAiPerformanceDiagnosticsService();
+            var lightDiagnosticsWindow = new AiDiagnosticsWindow(
+                lightDiagnosticsController,
+                lightHardwareDiagnostics,
+                lightPerformanceDiagnostics)
             {
                 WindowStartupLocation = WindowStartupLocation.Manual,
                 Left = -20_000,
@@ -674,10 +706,45 @@ static void DesktopWindowsLoad()
                 ?? throw new InvalidOperationException("AI diagnostics light background was not created");
             Eq((ThemeManager.ResourceBrush("BackgroundBrush") as SolidColorBrush)!.Color, lightBackground.Color);
             SaveWindowSnapshot(lightDiagnosticsWindow, "light-AiDiagnosticsWindow");
+            var lightPerformanceButton = lightDiagnosticsWindow.FindName("RunPerformanceTestButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("AI performance test action was not created in the light theme");
+            var lightPerformanceDetails = lightDiagnosticsWindow.FindName("PerformanceDetailsPanel") as System.Windows.Controls.Border
+                ?? throw new InvalidOperationException("AI performance result was not created in the light theme");
+            True(lightPerformanceButton.IsEnabled, "AI performance test must be enabled in the light theme");
+            lightPerformanceButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            lightPerformanceDetails.BringIntoView();
+            lightDiagnosticsWindow.UpdateLayout();
+            Eq(Visibility.Visible, lightPerformanceDetails.Visibility);
+            SaveWindowSnapshot(lightDiagnosticsWindow, "light-AiDiagnosticsWindow-performance");
             lightDiagnosticsWindow.Close();
             Eq(1, lightDiagnosticsController.InitializeCalls);
             Eq(1, lightDiagnosticsController.CancelCalls);
             Eq(1, lightHardwareDiagnostics.AnalyzeCalls);
+            Eq(1, lightPerformanceDiagnostics.MeasureCalls);
+
+            var unavailableDiagnosticsController = new TestAiAssistantController(AiInstallationState.NotInstalled);
+            var unavailableDiagnosticsPerformance = new TestAiPerformanceDiagnosticsService();
+            var unavailableDiagnosticsWindow = new AiDiagnosticsWindow(
+                unavailableDiagnosticsController,
+                new TestAiHardwareDiagnosticsService(),
+                unavailableDiagnosticsPerformance)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            unavailableDiagnosticsWindow.Show();
+            unavailableDiagnosticsWindow.UpdateLayout();
+            var unavailablePerformanceButton = unavailableDiagnosticsWindow.FindName("RunPerformanceTestButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("unavailable AI performance action was not created");
+            var unavailablePerformanceStatus = unavailableDiagnosticsWindow.FindName("PerformanceStatusText") as System.Windows.Controls.TextBlock
+                ?? throw new InvalidOperationException("unavailable AI performance status was not created");
+            True(!unavailablePerformanceButton.IsEnabled,
+                "AI performance test must stay disabled without a local installation");
+            Contains(unavailablePerformanceStatus.Text, "Instale a IA");
+            Eq(0, unavailableDiagnosticsPerformance.MeasureCalls);
+            unavailableDiagnosticsWindow.Close();
             ThemeManager.Apply(ThemeManager.Dark);
         }
         catch (Exception ex)
@@ -1889,6 +1956,62 @@ static void ThrowsType<T>(Action action) where T : Exception
     throw new InvalidOperationException($"expected {typeof(T).Name} was not thrown");
 }
 
+static void InstalledLocalAiPerformanceDiagnostic()
+{
+    var aiRoot = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Rota",
+        "AI");
+    var protectedFiles = new[] { "config.json", "conversation.json", "proposals.json" }
+        .Select(name => Path.Combine(aiRoot, name))
+        .Where(File.Exists)
+        .ToDictionary(path => path, FileSha256, StringComparer.OrdinalIgnoreCase);
+    var testDirectory = Path.Combine(
+        Path.GetTempPath(),
+        "RotaRealPerformanceTests",
+        Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(testDirectory);
+    try
+    {
+        var repository = new StudyRepository(Path.Combine(testDirectory, "state.json"));
+        var services = LocalAiServices.Create(repository, aiRoot);
+        try
+        {
+            var report = services.PerformanceDiagnostics.MeasureAsync().GetAwaiter().GetResult();
+            True(report.StartupDuration > TimeSpan.Zero, "real local AI startup was not measured");
+            True(report.ResponseDuration > TimeSpan.Zero, "real local AI response was not measured");
+            True(report.GeneratedTokens > 0, "real local AI returned no measured tokens");
+            True(report.TokensPerSecond > 0, "real local AI returned no token rate");
+            True(services.RuntimeHost.Status.State == AiRuntimeState.Stopped,
+                "temporary real local AI runtime was not stopped");
+            Console.WriteLine(
+                $"      Real diagnostic: startup {report.StartupDuration.TotalSeconds:0.0}s, " +
+                $"response {report.ResponseDuration.TotalSeconds:0.0}s, " +
+                $"{report.TokensPerSecond:0.0} tokens/s via {report.ComputePreference}.");
+        }
+        finally
+        {
+            services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+
+        foreach (var protectedFile in protectedFiles)
+        {
+            True(File.Exists(protectedFile.Key), $"protected AI file disappeared: {protectedFile.Key}");
+            Eq(protectedFile.Value, FileSha256(protectedFile.Key));
+        }
+    }
+    finally
+    {
+        try { Directory.Delete(testDirectory, recursive: true); } catch { }
+    }
+}
+
+static string FileSha256(string path)
+{
+    using var stream = File.OpenRead(path);
+    return Convert.ToHexString(SHA256.HashData(stream));
+}
+
 sealed class MutableClock
 {
     public MutableClock(DateTime value) => Value = value;
@@ -1993,6 +2116,28 @@ sealed class TestAiHardwareDiagnosticsService : IAiHardwareDiagnosticsService
                 1_000L * AiProfileRecommendationPolicy.Gibibyte,
                 400L * AiProfileRecommendationPolicy.Gibibyte),
             new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero)));
+    }
+}
+
+sealed class TestAiPerformanceDiagnosticsService : IAiPerformanceDiagnosticsService
+{
+    public int MeasureCalls { get; private set; }
+
+    public Task<AiPerformanceDiagnosticReport> MeasureAsync(
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        MeasureCalls++;
+        return Task.FromResult(new AiPerformanceDiagnosticReport(
+            TimeSpan.FromSeconds(3.4),
+            TimeSpan.FromSeconds(1.2),
+            24,
+            20,
+            AiProfile.Performance,
+            AiComputePreference.Gpu,
+            RuntimeWasAlreadyReady: false,
+            AiPerformanceRating.Excellent,
+            new DateTimeOffset(2026, 9, 6, 15, 0, 0, TimeSpan.Zero)));
     }
 }
 

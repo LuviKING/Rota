@@ -43,7 +43,8 @@ public partial class App : Application
                 _localAiServices.AssistantController,
                 _localAiServices.InstallationController,
                 _localAiServices.ApplicationService,
-                _localAiServices.HardwareDiagnostics);
+                _localAiServices.HardwareDiagnostics,
+                _localAiServices.PerformanceDiagnostics);
             MainWindow = window;
             window.Show();
             if (_isSmokeTest)
