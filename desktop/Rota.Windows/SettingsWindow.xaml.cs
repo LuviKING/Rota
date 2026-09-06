@@ -2,6 +2,7 @@ using Microsoft.Win32;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 
 namespace Rota.Desktop;
 
@@ -22,6 +23,9 @@ public partial class SettingsWindow : Window
         ReviewD1.IsChecked = settings.ReviewD1;
         ReviewD3.IsChecked = settings.ReviewD3;
         ReviewD7.IsChecked = settings.ReviewD7;
+        var availableDays = settings.AvailableStudyDays.ToHashSet();
+        foreach (var (choice, day) in DayChoices())
+            choice.IsChecked = availableDays.Contains(day);
         DataPathText.Text = repository.DataPath;
         UpdateSliderLabels();
     }
@@ -47,13 +51,17 @@ public partial class SettingsWindow : Window
                 (int)Math.Round(BlockSlider.Value / 15.0) * 15,
                 ReviewD1.IsChecked == true,
                 ReviewD3.IsChecked == true,
-                ReviewD7.IsChecked == true);
+                ReviewD7.IsChecked == true,
+                SelectedDays());
             DialogResult = true;
         }
         catch (ArgumentException ex)
         {
             MessageBox.Show(ex.Message, "Configurações", MessageBoxButton.OK, MessageBoxImage.Warning);
-            (ex.Message.Contains("Nome do objetivo", StringComparison.Ordinal) ? ObjectiveBox : ObjectiveDateBox).Focus();
+            if (ex.Message.Contains("dia de estudo", StringComparison.OrdinalIgnoreCase))
+                MondayChoice.Focus();
+            else
+                (ex.Message.Contains("Nome do objetivo", StringComparison.Ordinal) ? ObjectiveBox : ObjectiveDateBox).Focus();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -101,5 +109,21 @@ public partial class SettingsWindow : Window
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private List<DayOfWeek> SelectedDays() => DayChoices()
+        .Where(choice => choice.Button.IsChecked == true)
+        .Select(choice => choice.Day)
+        .ToList();
+
+    private IEnumerable<(ToggleButton Button, DayOfWeek Day)> DayChoices()
+    {
+        yield return (MondayChoice, DayOfWeek.Monday);
+        yield return (TuesdayChoice, DayOfWeek.Tuesday);
+        yield return (WednesdayChoice, DayOfWeek.Wednesday);
+        yield return (ThursdayChoice, DayOfWeek.Thursday);
+        yield return (FridayChoice, DayOfWeek.Friday);
+        yield return (SaturdayChoice, DayOfWeek.Saturday);
+        yield return (SundayChoice, DayOfWeek.Sunday);
+    }
 }
 

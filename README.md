@@ -24,7 +24,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - Dados locais: `%LOCALAPPDATA%\Rota\desktop-state.json`, com troca atômica, cópia íntegra anterior e recuperação de corrupção
 - UI principal: calendário mensal em grade + agenda detalhada do dia selecionado
 - Tema: **escuro e claro**, com preferência local em `%LOCALAPPDATA%\Rota\theme.txt`
-- Primeira abertura: boas-vindas guiadas, responsivas e adiáveis, com progresso local persistente
+- Primeira abertura: boas-vindas e configuração guiada de objetivo, prazo, dias e horas disponíveis; cada etapa é responsiva, adiável e persistida localmente
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal
 - Contexto mensal: plano ativo, objetivo, carga e progresso calculados dos dados reais
 - Importação: editor, arquivo `.json` e arrastar/soltar StudyPlan na janela
@@ -177,7 +177,7 @@ Valida, nesta ordem:
 Valida:
 
 1. restore e build Release em runner Windows;
-2. testes de invariantes do importador, repositório, histórico, revisões, configuração inicial e IA local, além da carga real das nove janelas WPF;
+2. testes de invariantes do importador, repositório, histórico, revisões, configuração inicial e IA local, além da carga real das dez janelas WPF;
 3. publicação `win-x64` self-contained em arquivo executável;
 4. metadados e SHA-256 do executável;
 5. smoke test de inicialização real do `Rota.exe`;

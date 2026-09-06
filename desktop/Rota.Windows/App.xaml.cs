@@ -55,13 +55,11 @@ public partial class App : Application
                     Shutdown(0);
                 });
             }
-            else if (repository.CompletedOnboardingStep < OnboardingSteps.Welcome)
+            else if (repository.CompletedOnboardingStep < OnboardingSteps.Routine)
             {
                 Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
                 {
-                    if (!window.IsVisible || repository.CompletedOnboardingStep >= OnboardingSteps.Welcome) return;
-                    var welcome = new WelcomeWindow(repository) { Owner = window };
-                    welcome.ShowDialog();
+                    ShowPendingOnboarding(window, repository);
                 });
             }
         }
@@ -77,6 +75,24 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown();
+        }
+    }
+
+    private static void ShowPendingOnboarding(MainWindow window, StudyRepository repository)
+    {
+        if (!window.IsVisible) return;
+
+        if (repository.CompletedOnboardingStep < OnboardingSteps.Welcome)
+        {
+            var welcome = new WelcomeWindow(repository) { Owner = window };
+            welcome.ShowDialog();
+            if (!window.IsVisible || repository.CompletedOnboardingStep < OnboardingSteps.Welcome) return;
+        }
+
+        if (repository.CompletedOnboardingStep < OnboardingSteps.Routine)
+        {
+            var routine = new OnboardingRoutineWindow(repository) { Owner = window };
+            routine.ShowDialog();
         }
     }
 

@@ -198,7 +198,15 @@ public sealed class StudyRepository
         }
     }
 
-    public void SavePreferences(string objectiveName, string objectiveDate, double dailyHours, int blockMinutes, bool d1, bool d3, bool d7)
+    public void SavePreferences(
+        string objectiveName,
+        string objectiveDate,
+        double dailyHours,
+        int blockMinutes,
+        bool d1,
+        bool d3,
+        bool d7,
+        IEnumerable<DayOfWeek>? availableStudyDays = null)
     {
         objectiveDate = (objectiveDate ?? "").Trim();
         if (objectiveDate.Length > 0 && !DateOnly.TryParseExact(objectiveDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
@@ -206,6 +214,7 @@ public sealed class StudyRepository
         if (!double.IsFinite(dailyHours) || dailyHours is < 1 or > 12)
             throw new ArgumentException("O limite diário precisa ficar entre 1 e 12 horas.");
         var cleanObjectiveName = CleanText(objectiveName, "Meu objetivo", 120, "Nome do objetivo");
+        var normalizedDays = availableStudyDays is null ? null : NormalizeAvailableStudyDays(availableStudyDays);
 
         lock (_gate)
         {
@@ -217,7 +226,42 @@ public sealed class StudyRepository
             next.Settings.ReviewD1 = d1;
             next.Settings.ReviewD3 = d3;
             next.Settings.ReviewD7 = d7;
+            if (normalizedDays is not null)
+                next.Settings.AvailableStudyDays = normalizedDays;
             Commit(next);
+        }
+    }
+
+    public bool SaveOnboardingRoutine(
+        string objectiveName,
+        string objectiveDate,
+        double dailyHours,
+        IEnumerable<DayOfWeek> availableStudyDays)
+    {
+        var cleanObjectiveName = CleanRequiredText(objectiveName, 120, "Nome do objetivo");
+        objectiveDate = (objectiveDate ?? "").Trim();
+        if (!DateOnly.TryParseExact(objectiveDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var deadline))
+            throw new ArgumentException("Escolha uma data válida para o objetivo.", nameof(objectiveDate));
+        if (deadline <= DateOnly.FromDateTime(_now()))
+            throw new ArgumentException("A data do objetivo precisa ser posterior a hoje.", nameof(objectiveDate));
+        if (!double.IsFinite(dailyHours) || dailyHours is < 1 or > 12)
+            throw new ArgumentException("As horas disponíveis precisam ficar entre 1 e 12 por dia.", nameof(dailyHours));
+        var normalizedDays = NormalizeAvailableStudyDays(availableStudyDays);
+
+        lock (_gate)
+        {
+            if (_state.CompletedOnboardingStep >= OnboardingSteps.Routine) return false;
+            if (_state.CompletedOnboardingStep != OnboardingSteps.Welcome)
+                throw new InvalidOperationException("Conclua as boas-vindas antes de informar sua rotina.");
+
+            var next = CloneState(_state);
+            next.Settings.ObjectiveName = cleanObjectiveName;
+            next.Settings.ObjectiveDate = objectiveDate;
+            next.Settings.DailyHours = NormalizeDailyHours(dailyHours);
+            next.Settings.AvailableStudyDays = normalizedDays;
+            next.CompletedOnboardingStep = OnboardingSteps.Routine;
+            Commit(next);
+            return true;
         }
     }
 
@@ -874,6 +918,23 @@ public sealed class StudyRepository
         if (clean.Length > max) throw new ArgumentException($"{field} deve ter no máximo {max} caracteres.");
         if (clean.Any(char.IsControl)) throw new ArgumentException($"{field} contém caractere de controle não permitido.");
         return clean;
+    }
+
+    private static string CleanRequiredText(string? value, int max, string field)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException($"{field} é obrigatório.", field);
+        return CleanText(value, "", max, field);
+    }
+
+    private static List<DayOfWeek> NormalizeAvailableStudyDays(IEnumerable<DayOfWeek>? days)
+    {
+        if (days is null)
+            throw new ArgumentException("Escolha pelo menos um dia de estudo.", nameof(days));
+        var normalized = days.Distinct().ToList();
+        if (normalized.Count is < 1 or > 7 || normalized.Any(day => !Enum.IsDefined(day)))
+            throw new ArgumentException("Escolha entre um e sete dias de estudo válidos.", nameof(days));
+        return normalized.OrderBy(day => ((int)day + 6) % 7).ToList();
     }
 
     private static AppState CloneState(AppState source) => new()

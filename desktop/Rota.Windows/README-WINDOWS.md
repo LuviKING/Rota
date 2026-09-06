@@ -5,7 +5,8 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 ## Estado da edição Windows
 
 - Versão: **0.3.2**
-- novos perfis recebem uma tela de boas-vindas responsiva antes da configuração inicial; **Agora não** adia a etapa sem marcar como concluída;
+- novos perfis recebem boas-vindas e uma etapa responsiva para informar objetivo, prazo, dias e horas disponíveis; **Agora não** adia cada etapa sem marcar como concluída;
+- os dias disponíveis também podem ser alterados depois em **Configurações**, junto com o limite diário;
 - interface principal **calendar-first**, com o mês completo em grade e a agenda detalhada do dia selecionado logo abaixo;
 - navegação rápida entre meses, dias e retorno para hoje;
 - tema **escuro e claro**, com troca imediata pela interface e preferência preservada localmente;

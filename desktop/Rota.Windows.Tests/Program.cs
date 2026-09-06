@@ -38,11 +38,15 @@ var tests = new (string Name, Action Body)[]
     ("Repository preserves corrupt state without a backup", RepositoryPreservesCorruptState),
     ("Preferences reject unsafe text without mutation", PreferencesRejectUnsafeText),
     ("Preferences persist and reload", PreferencesPersistAndReload),
+    ("Available study days persist in weekday order", AvailableStudyDaysPersistAndValidate),
     ("Fresh repository starts at the onboarding welcome", OnboardingStartsAtWelcome),
     ("Onboarding progress persists and stays idempotent", OnboardingProgressPersists),
     ("Onboarding steps reject invalid or skipped progress", OnboardingRejectsInvalidProgress),
     ("Existing study state adopts onboarding without migration", ExistingStateAdoptsOnboarding),
     ("Onboarding persistence failure leaves progress unchanged", OnboardingPersistenceIsTransactional),
+    ("Onboarding routine saves preferences and progress atomically", OnboardingRoutinePersistsAtomically),
+    ("Onboarding routine rejects invalid input without mutation", OnboardingRoutineRejectsInvalidInput),
+    ("Onboarding routine persistence failure is transactional", OnboardingRoutinePersistenceIsTransactional),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -417,6 +421,31 @@ static void PreferencesPersistAndReload()
     });
 }
 
+static void AvailableStudyDaysPersistAndValidate()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        repo.SavePreferences(
+            "Vestibular",
+            "2026-12-15",
+            6,
+            60,
+            true,
+            true,
+            true,
+            new[] { DayOfWeek.Sunday, DayOfWeek.Wednesday, DayOfWeek.Monday, DayOfWeek.Wednesday });
+
+        var loaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq("Monday,Wednesday,Sunday", string.Join(',', loaded.Settings.AvailableStudyDays));
+
+        var before = File.ReadAllText(path);
+        Throws(() => repo.SavePreferences("Vestibular", "2026-12-15", 6, 60, true, true, true, Array.Empty<DayOfWeek>()), "dia");
+        Throws(() => repo.SavePreferences("Vestibular", "2026-12-15", 6, 60, true, true, true, new[] { (DayOfWeek)99 }), "válidos");
+        Eq(before, File.ReadAllText(path));
+        Eq("Monday,Wednesday,Sunday", string.Join(',', repo.Settings.AvailableStudyDays));
+    });
+}
+
 static void OnboardingStartsAtWelcome()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
@@ -498,6 +527,82 @@ static void OnboardingPersistenceIsTransactional()
     });
 }
 
+static void OnboardingRoutinePersistsAtomically()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "routine-existing-plan",
+            1,
+            "2026-12-20",
+            SessionJson("protected-session", "2026-09-02", 60)))).Success);
+        True(repo.CompleteOnboardingStep(OnboardingSteps.Welcome));
+        True(repo.SaveOnboardingRoutine(
+            "  ENEM 2027  ",
+            "2027-11-07",
+            2.5,
+            new[] { DayOfWeek.Friday, DayOfWeek.Monday, DayOfWeek.Wednesday }));
+
+        Eq(OnboardingSteps.Routine, repo.CompletedOnboardingStep);
+        Eq("ENEM 2027", repo.Settings.ObjectiveName);
+        Eq("2027-11-07", repo.Settings.ObjectiveDate);
+        Eq(2.5, repo.Settings.DailyHours);
+        Eq("Monday,Wednesday,Friday", string.Join(',', repo.Settings.AvailableStudyDays));
+        Eq("routine-existing-plan", repo.Settings.ActivePlanId);
+        Eq(1, repo.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+
+        var afterCompletion = File.ReadAllText(path);
+        True(!repo.SaveOnboardingRoutine("Outro", "2028-01-01", 8, new[] { DayOfWeek.Saturday }));
+        Eq(afterCompletion, File.ReadAllText(path));
+
+        var loaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        Eq(OnboardingSteps.Routine, loaded.CompletedOnboardingStep);
+        Eq("ENEM 2027", loaded.Settings.ObjectiveName);
+        Eq("Monday,Wednesday,Friday", string.Join(',', loaded.Settings.AvailableStudyDays));
+        Eq("routine-existing-plan", loaded.Settings.ActivePlanId);
+    });
+}
+
+static void OnboardingRoutineRejectsInvalidInput()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        ThrowsType<InvalidOperationException>(() => repo.SaveOnboardingRoutine(
+            "ENEM", "2027-11-07", 2, new[] { DayOfWeek.Monday }));
+        True(repo.CompleteOnboardingStep(OnboardingSteps.Welcome));
+        var before = File.ReadAllText(path);
+
+        Throws(() => repo.SaveOnboardingRoutine("", "2027-11-07", 2, new[] { DayOfWeek.Monday }), "obrigatório");
+        Throws(() => repo.SaveOnboardingRoutine("ENEM", "2026-09-01", 2, new[] { DayOfWeek.Monday }), "posterior");
+        Throws(() => repo.SaveOnboardingRoutine("ENEM", "2027-11-07", 0, new[] { DayOfWeek.Monday }), "1 e 12");
+        Throws(() => repo.SaveOnboardingRoutine("ENEM", "2027-11-07", 2, Array.Empty<DayOfWeek>()), "dia");
+        Throws(() => repo.SaveOnboardingRoutine("ENEM", "2027-11-07", 2, new[] { (DayOfWeek)99 }), "válidos");
+
+        Eq(OnboardingSteps.Welcome, repo.CompletedOnboardingStep);
+        Eq("Meu objetivo", repo.Settings.ObjectiveName);
+        Eq(before, File.ReadAllText(path));
+    });
+}
+
+static void OnboardingRoutinePersistenceIsTransactional()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.CompleteOnboardingStep(OnboardingSteps.Welcome));
+        var before = File.ReadAllText(path);
+        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            ThrowsType<IOException>(() => repo.SaveOnboardingRoutine(
+                "ENEM 2027", "2027-11-07", 2.5, new[] { DayOfWeek.Monday, DayOfWeek.Wednesday }));
+        }
+
+        Eq(OnboardingSteps.Welcome, repo.CompletedOnboardingStep);
+        Eq("Meu objetivo", repo.Settings.ObjectiveName);
+        Eq(before, File.ReadAllText(path));
+        Eq(0, Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp").Length);
+    });
+}
+
 static void StoredStateRejectsUnknownProperties()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
@@ -570,7 +675,8 @@ static void DesktopWindowsLoad()
                 new AiPromptWindow(repo),
                 new ImportPlanWindow(repo),
                 new SettingsWindow(repo),
-                new WelcomeWindow(repo)
+                new WelcomeWindow(repo),
+                new OnboardingRoutineWindow(repo)
             };
             foreach (var window in windows)
             {
@@ -590,7 +696,8 @@ static void DesktopWindowsLoad()
                 var undersizedButton = VisualDescendants<System.Windows.Controls.Button>(window)
                     .FirstOrDefault(button => button.IsVisible && button.ActualHeight < 36);
                 True(undersizedButton is null,
-                    $"{window.GetType().Name} contains a visible click target shorter than 36 px");
+                    $"{window.GetType().Name} contains a visible click target shorter than 36 px: " +
+                    $"{undersizedButton?.Name ?? "unnamed"} ({undersizedButton?.ActualWidth:0.#} × {undersizedButton?.ActualHeight:0.#})");
                 SaveWindowSnapshot(window, "dark-" + window.GetType().Name);
                 if (window is MainWindow mainWindow)
                 {
@@ -757,6 +864,40 @@ static void DesktopWindowsLoad()
                     True(welcomeWindow.WelcomeCompleted, "welcome action did not report completion");
                     Eq(OnboardingSteps.Welcome, repo.CompletedOnboardingStep);
                 }
+                if (window is OnboardingRoutineWindow routineWindow)
+                {
+                    var objective = routineWindow.FindName("ObjectiveBox") as System.Windows.Controls.TextBox
+                        ?? throw new InvalidOperationException("routine objective input was not created");
+                    var deadline = routineWindow.FindName("DeadlinePicker") as System.Windows.Controls.DatePicker
+                        ?? throw new InvalidOperationException("routine deadline input was not created");
+                    var hours = routineWindow.FindName("HoursSlider") as System.Windows.Controls.Slider
+                        ?? throw new InvalidOperationException("routine hours input was not created");
+                    var save = routineWindow.FindName("SaveButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("routine save action was not created");
+                    var dayChoices = VisualDescendants<System.Windows.Controls.Primitives.ToggleButton>(routineWindow)
+                        .Where(choice => choice.Name.EndsWith("Choice", StringComparison.Ordinal))
+                        .ToList();
+                    Eq(7, dayChoices.Count);
+                    True(dayChoices.All(choice => choice.MinHeight >= 40), "routine day targets are too small");
+                    True(!save.IsEnabled, "incomplete routine must not be saved");
+
+                    objective.Text = "ENEM 2027";
+                    deadline.SelectedDate = new DateTime(2027, 11, 7);
+                    hours.Value = 2.5;
+                    foreach (var day in dayChoices)
+                        day.IsChecked = day.Name is "MondayChoice" or "WednesdayChoice" or "FridayChoice";
+                    routineWindow.UpdateLayout();
+                    True(save.IsEnabled && save.IsDefault && save.MinHeight >= 40,
+                        "complete routine is not ready for saving");
+                    SaveWindowSnapshot(routineWindow, "dark-OnboardingRoutineWindow-configured");
+                    save.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    True(routineWindow.RoutineCompleted, "routine action did not report completion");
+                    Eq(OnboardingSteps.Routine, repo.CompletedOnboardingStep);
+                    Eq("ENEM 2027", repo.Settings.ObjectiveName);
+                    Eq("2027-11-07", repo.Settings.ObjectiveDate);
+                    Eq(2.5, repo.Settings.DailyHours);
+                    Eq("Monday,Wednesday,Friday", string.Join(',', repo.Settings.AvailableStudyDays));
+                }
                 window.Close();
             }
             Eq(1, assistant.CancelCalls);
@@ -782,6 +923,25 @@ static void DesktopWindowsLoad()
             deferWelcome.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             True(!lightWelcomeWindow.WelcomeCompleted, "deferring welcome unexpectedly completed onboarding");
             Eq(0, deferredRepo.CompletedOnboardingStep);
+
+            True(deferredRepo.CompleteOnboardingStep(OnboardingSteps.Welcome));
+            var lightRoutineWindow = new OnboardingRoutineWindow(deferredRepo)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            lightRoutineWindow.Show();
+            lightRoutineWindow.Width = lightRoutineWindow.MinWidth;
+            lightRoutineWindow.Height = lightRoutineWindow.MinHeight;
+            lightRoutineWindow.UpdateLayout();
+            SaveWindowSnapshot(lightRoutineWindow, "light-OnboardingRoutineWindow");
+            var deferRoutine = lightRoutineWindow.FindName("NotNowButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("routine defer action was not created in the light theme");
+            deferRoutine.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            True(!lightRoutineWindow.RoutineCompleted, "deferring routine unexpectedly completed onboarding");
+            Eq(OnboardingSteps.Welcome, deferredRepo.CompletedOnboardingStep);
 
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
             var unavailableWindow = new AiAssistantWindow(unavailable, installation, application, repo)
