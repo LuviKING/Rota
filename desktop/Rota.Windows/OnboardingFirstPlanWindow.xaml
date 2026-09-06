@@ -1,0 +1,238 @@
+<Window x:Class="Rota.Desktop.OnboardingFirstPlanWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Seu primeiro plano · Rota"
+        Width="820" Height="740" MinWidth="700" MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Background="{DynamicResource BackgroundBrush}"
+        Loaded="Window_Loaded" Closed="Window_Closed">
+    <Window.Resources>
+        <Style x:Key="FirstPlanCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Border Width="48" Height="48" CornerRadius="14"
+                        Background="{DynamicResource PrimarySoftBrush}" Margin="0,0,13,0">
+                    <TextBlock Text="&#xE99A;" Style="{StaticResource IconGlyphText}"
+                               Foreground="{DynamicResource PrimaryTextBrush}"
+                               FontSize="21" Width="28" Height="28" LineHeight="28" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Vamos montar seu primeiro plano" FontSize="23" FontWeight="Bold" />
+                    <TextBlock Text="A IA local prepara uma proposta; você revisa antes de qualquer mudança no calendário"
+                               Foreground="{DynamicResource MutedBrush}" FontSize="10.5"
+                               TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Background="{DynamicResource PrimarySoftBrush}"
+                    CornerRadius="9" Padding="10,6" VerticalAlignment="Center" Margin="12,0,0,0">
+                <TextBlock Text="ETAPA 3 DE 3" Foreground="{DynamicResource PrimaryTextBrush}"
+                           FontSize="9" FontWeight="SemiBold" />
+            </Border>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Padding="0,0,6,0">
+            <StackPanel>
+                <Border Style="{StaticResource FirstPlanCard}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="ROTINA SALVA" Style="{StaticResource SectionLabel}" />
+                            <TextBlock x:Name="ObjectiveSummaryText" FontSize="14" FontWeight="SemiBold" Margin="0,6,0,4" />
+                            <TextBlock x:Name="RoutineSummaryText" Foreground="{DynamicResource MutedBrush}"
+                                       FontSize="10" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="{DynamicResource SuccessSoftBrush}"
+                                CornerRadius="9" Padding="9,5" VerticalAlignment="Center" Margin="14,0,0,0">
+                            <TextBlock Text="PRONTA" Foreground="{DynamicResource SuccessBrush}"
+                                       FontSize="9" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="ExistingPlanPanel" Style="{StaticResource FirstPlanCard}" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="42" Height="42" CornerRadius="12" Background="{DynamicResource SuccessSoftBrush}" Margin="0,0,12,0">
+                            <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource SuccessBrush}" FontSize="18"
+                                       Width="24" Height="24" LineHeight="24" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Você já tem um plano ativo" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock x:Name="ExistingPlanText" Foreground="{DynamicResource MutedBrush}"
+                                       FontSize="9.5" TextWrapping="Wrap" Margin="0,4,14,0" />
+                        </StackPanel>
+                        <Button x:Name="UseExistingPlanButton" Grid.Column="2" Style="{StaticResource PrimaryButton}"
+                                Click="UseExistingPlan_Click" MinWidth="150" MinHeight="42"
+                                AutomationProperties.Name="Concluir usando o plano atual">Usar plano atual</Button>
+                    </Grid>
+                </Border>
+
+                <StackPanel x:Name="NewPlanPanel">
+                    <Border Style="{StaticResource FirstPlanCard}">
+                        <StackPanel>
+                            <TextBlock Text="Onde você sente mais dificuldade?" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Text="Separe matérias ou assuntos por vírgulas. Ex.: matemática, química, interpretação de texto."
+                                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                       TextWrapping="Wrap" Margin="0,4,0,9" />
+                            <TextBox x:Name="DifficultiesBox" Style="{StaticResource InputTextBox}"
+                                     MaxLength="1000" MinHeight="66" AcceptsReturn="True"
+                                     TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                     TextChanged="FormInput_Changed"
+                                     AutomationProperties.Name="Matérias e assuntos com dificuldade" />
+                            <CheckBox x:Name="DifficultiesUnknownCheck" Content="Ainda não sei quais são minhas principais dificuldades"
+                                      Margin="1,10,0,0" Checked="FormInput_Changed" Unchecked="FormInput_Changed"
+                                      AutomationProperties.Name="Ainda não sei minhas dificuldades" />
+
+                            <TextBlock Text="Algo mais que a IA deve considerar? (opcional)"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,14,0,5" />
+                            <TextBox x:Name="NotesBox" Style="{StaticResource InputTextBox}"
+                                     MaxLength="1700" MinHeight="58" AcceptsReturn="True"
+                                     TextWrapping="Wrap" VerticalContentAlignment="Top"
+                                     TextChanged="FormInput_Changed"
+                                     AutomationProperties.Name="Observações para o primeiro plano" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="AiUnavailablePanel" Style="{StaticResource FirstPlanCard}" Visibility="Collapsed"
+                            Background="{DynamicResource PrimarySoftBrush}" BorderBrush="{DynamicResource PrimaryBrush}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE946;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource PrimaryTextBrush}" FontSize="19"
+                                       Width="26" Height="26" LineHeight="26" Margin="0,1,11,0" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="A IA local precisa ser configurada" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="A instalação só começa depois que você revisar o perfil, o download e confirmar."
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                           TextWrapping="Wrap" Margin="0,4,14,0" />
+                            </StackPanel>
+                            <Button x:Name="ConfigureAiButton" Grid.Column="2" Style="{StaticResource SecondaryButton}"
+                                    Click="ConfigureAi_Click" MinWidth="132" MinHeight="42"
+                                    AutomationProperties.Name="Configurar a IA local">Configurar IA</Button>
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="GenerationPanel" Style="{StaticResource FirstPlanCard}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                <TextBlock x:Name="AiStatusText" Text="Carregando o estado da IA local…"
+                                           FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="A geração acontece neste computador e não altera o calendário."
+                                           Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                                           TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                            <Button x:Name="CancelGenerationButton" Grid.Column="1"
+                                    Style="{StaticResource SecondaryButton}" Visibility="Collapsed"
+                                    Click="CancelGeneration_Click" MinWidth="100" MinHeight="42">Cancelar</Button>
+                            <Button x:Name="GenerateButton" Grid.Column="3" Style="{StaticResource PrimaryButton}"
+                                    Click="Generate_Click" MinWidth="190" MinHeight="42" IsEnabled="False"
+                                    AutomationProperties.Name="Gerar o primeiro plano">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE99A;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="White" FontSize="15" Width="20" Height="20" LineHeight="20" Margin="0,0,7,0" />
+                                    <TextBlock Text="Gerar primeiro plano" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="PreviewPanel" Style="{StaticResource FirstPlanCard}" Visibility="Collapsed"
+                            BorderBrush="{DynamicResource SuccessBrush}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="PROPOSTA PREPARADA" Style="{StaticResource SectionLabel}" />
+                                    <TextBlock x:Name="ProposalSummaryText" FontSize="13" FontWeight="SemiBold"
+                                               TextWrapping="Wrap" Margin="0,6,12,3" />
+                                    <TextBlock x:Name="ProposalMetricsText" Foreground="{DynamicResource MutedBrush}"
+                                               FontSize="9.5" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Border x:Name="ProposalStatusBadge" Grid.Column="1"
+                                        Background="{DynamicResource SuccessSoftBrush}"
+                                        CornerRadius="9" Padding="9,5" VerticalAlignment="Top">
+                                    <TextBlock x:Name="ProposalStatusText" Text="PRONTA"
+                                               Foreground="{DynamicResource SuccessBrush}"
+                                               FontSize="9" FontWeight="SemiBold" />
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="ProposalMessageText" Foreground="{DynamicResource MutedBrush}"
+                                       FontSize="9.5" TextWrapping="Wrap" Margin="0,10,0,12" />
+                            <Button x:Name="ReviewAndApplyButton" Style="{StaticResource PrimaryButton}"
+                                    Click="ReviewAndApply_Click" HorizontalAlignment="Right"
+                                    MinWidth="178" MinHeight="42" Visibility="Collapsed"
+                                    AutomationProperties.Name="Revisar e aplicar o primeiro plano">Revisar e aplicar</Button>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+
+                <Border x:Name="ErrorPanel" Visibility="Collapsed"
+                        Background="{DynamicResource ErrorSoftBrush}" CornerRadius="11"
+                        Padding="11,9" Margin="0,0,0,2">
+                    <TextBlock x:Name="ErrorText" Foreground="{DynamicResource ErrorBrush}"
+                               FontSize="10" TextWrapping="Wrap" />
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Você continua no controle: a IA nunca aplica um plano sem sua confirmação."
+                       Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                       TextWrapping="Wrap" VerticalAlignment="Center" Margin="1,0,16,0" />
+            <Button x:Name="NotNowButton" Grid.Column="1" Style="{StaticResource SecondaryButton}"
+                    Click="NotNow_Click" MinWidth="112" MinHeight="42" IsCancel="True"
+                    AutomationProperties.Name="Adiar a criação do primeiro plano">Agora não</Button>
+        </Grid>
+    </Grid>
+</Window>

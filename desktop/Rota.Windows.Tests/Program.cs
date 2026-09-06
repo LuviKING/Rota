@@ -47,6 +47,9 @@ var tests = new (string Name, Action Body)[]
     ("Onboarding routine saves preferences and progress atomically", OnboardingRoutinePersistsAtomically),
     ("Onboarding routine rejects invalid input without mutation", OnboardingRoutineRejectsInvalidInput),
     ("Onboarding routine persistence failure is transactional", OnboardingRoutinePersistenceIsTransactional),
+    ("First-plan input carries the saved routine and difficulties", FirstPlanInputUsesSavedRoutine),
+    ("First-plan input requires difficulties or an explicit unknown choice", FirstPlanInputValidatesDifficulties),
+    ("First-plan onboarding completion persists as the last step", FirstPlanCompletionPersists),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -603,6 +606,85 @@ static void OnboardingRoutinePersistenceIsTransactional()
     });
 }
 
+static void FirstPlanInputUsesSavedRoutine()
+{
+    var settings = new AppSettings
+    {
+        ObjectiveName = "ENEM 2027",
+        ObjectiveDate = "2027-11-07",
+        DailyHours = 2.5,
+        AvailableStudyDays = new List<DayOfWeek>
+        {
+            DayOfWeek.Monday,
+            DayOfWeek.Wednesday,
+            DayOfWeek.Friday
+        }
+    };
+    var input = OnboardingFirstPlanInputBuilder.Build(
+        settings,
+        " matemática, Química; matemática\nInterpretação de texto ",
+        difficultiesUnknown: false,
+        "Começar pela base.");
+
+    Eq("ENEM 2027", input.ObjectiveOrExam);
+    Eq("2027-11-07", input.ExamDate);
+    Eq(2.5, input.AvailableHoursPerDay);
+    Eq("Monday,Wednesday,Friday", string.Join(',', input.AvailableDays));
+    Eq("matemática,Química,Interpretação de texto", string.Join(',', input.WeakSubjects));
+    Eq("Começar pela base.", input.Notes);
+    Contains(input.Goal, "primeiro plano");
+}
+
+static void FirstPlanInputValidatesDifficulties()
+{
+    var settings = new AppSettings
+    {
+        ObjectiveName = "Concurso",
+        ObjectiveDate = "2027-02-20",
+        DailyHours = 3,
+        AvailableStudyDays = new List<DayOfWeek> { DayOfWeek.Saturday }
+    };
+    Throws(
+        () => OnboardingFirstPlanInputBuilder.Build(settings, "  ", difficultiesUnknown: false, ""),
+        "dificuldade");
+    Throws(
+        () => OnboardingFirstPlanInputBuilder.Build(
+            settings,
+            new string('x', OnboardingFirstPlanInputBuilder.MaximumDifficultiesLength + 1),
+            difficultiesUnknown: false,
+            ""),
+        "no máximo");
+
+    var unknown = OnboardingFirstPlanInputBuilder.Build(
+        settings,
+        "",
+        difficultiesUnknown: true,
+        "Prefiro sessões curtas.");
+    Eq(0, unknown.WeakSubjects.Count);
+    Contains(unknown.Notes, "Ainda não identifiquei");
+    Contains(unknown.Notes, "sessões curtas");
+}
+
+static void FirstPlanCompletionPersists()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.CompleteOnboardingStep(OnboardingSteps.Welcome));
+        True(repo.SaveOnboardingRoutine(
+            "ENEM 2027",
+            "2027-11-07",
+            2.5,
+            new[] { DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday }));
+        True(repo.CompleteOnboardingStep(OnboardingSteps.FirstPlan));
+        Eq(OnboardingSteps.Last, repo.CompletedOnboardingStep);
+
+        var completed = File.ReadAllText(path);
+        True(!repo.CompleteOnboardingStep(OnboardingSteps.FirstPlan));
+        Eq(completed, File.ReadAllText(path));
+        Eq(OnboardingSteps.Last, new StudyRepository(path).CompletedOnboardingStep);
+    });
+}
+
 static void StoredStateRejectsUnknownProperties()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
@@ -650,6 +732,45 @@ static void DesktopWindowsLoad()
             var performanceDiagnostics = new TestAiPerformanceDiagnosticsService();
             var installation = new TestAiInstallationController();
             var application = new TestAiProposalApplicationService();
+            var firstPlanProposalId = Guid.Parse("aaaaaaaa-1111-2222-3333-444444444444");
+            var firstPlanStored = new AiStoredProposal
+            {
+                Proposal = new AiProposal
+                {
+                    Id = firstPlanProposalId,
+                    CreatedAtUtc = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero),
+                    Summary = "Primeiro plano equilibrado para o ENEM.",
+                    Kind = AiProposalKind.StudyPlan,
+                    Status = AiProposalStatus.Validated,
+                    StudyPlan = new AiStudyPlanDraft { StudyPlanJson = "{}" }
+                },
+                Preview = new AiProposalPreview
+                {
+                    ProposalId = firstPlanProposalId,
+                    Kind = AiProposalKind.StudyPlan,
+                    State = AiProposalPreviewState.Ready,
+                    Message = "Plano pronto para revisão.",
+                    BeforeSessionCount = 0,
+                    AfterSessionCount = 12,
+                    BeforeMinutes = 0,
+                    AfterMinutes = 900,
+                    AddedSessionCount = 12
+                },
+                UpdatedAtUtc = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero)
+            };
+            var firstPlanAssistant = new TestAiAssistantController(AiInstallationState.Ready, firstPlanStored);
+            var firstPlanPrepared = new AiPreparedApplication
+            {
+                ConfirmationId = Guid.Parse("bbbbbbbb-1111-2222-3333-444444444444"),
+                ProposalId = firstPlanProposalId,
+                Summary = firstPlanStored.Proposal.Summary,
+                Kind = AiProposalKind.StudyPlan,
+                Preview = firstPlanStored.Preview,
+                Message = "Revise o primeiro plano antes de aplicar."
+            };
+            var firstPlanApplication = new TestAiProposalApplicationService(
+                firstPlanPrepared,
+                new AiProposalApplicationResult { Success = true, Message = "Plano aplicado." });
             var assistantWindow = new AiAssistantWindow(assistant, installation, application, repo);
             Eq(0, assistant.InitializeCalls);
             Eq(0, installation.PrepareCalls);
@@ -676,7 +797,8 @@ static void DesktopWindowsLoad()
                 new ImportPlanWindow(repo),
                 new SettingsWindow(repo),
                 new WelcomeWindow(repo),
-                new OnboardingRoutineWindow(repo)
+                new OnboardingRoutineWindow(repo),
+                new OnboardingFirstPlanWindow(repo, firstPlanAssistant, installation, firstPlanApplication)
             };
             foreach (var window in windows)
             {
@@ -898,10 +1020,50 @@ static void DesktopWindowsLoad()
                     Eq(2.5, repo.Settings.DailyHours);
                     Eq("Monday,Wednesday,Friday", string.Join(',', repo.Settings.AvailableStudyDays));
                 }
+                if (window is OnboardingFirstPlanWindow firstPlanWindow)
+                {
+                    var difficulties = firstPlanWindow.FindName("DifficultiesBox") as System.Windows.Controls.TextBox
+                        ?? throw new InvalidOperationException("first-plan difficulties input was not created");
+                    var generate = firstPlanWindow.FindName("GenerateButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("first-plan generation action was not created");
+                    var preview = firstPlanWindow.FindName("PreviewPanel") as System.Windows.Controls.Border
+                        ?? throw new InvalidOperationException("first-plan preview was not created");
+                    var review = firstPlanWindow.FindName("ReviewAndApplyButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("first-plan review action was not created");
+                    Eq(1, firstPlanAssistant.InitializeCalls);
+                    True(!generate.IsEnabled, "first plan must require difficulties or an explicit unknown choice");
+                    difficulties.Text = "Matemática, Química";
+                    True(generate.IsEnabled && generate.MinHeight >= 40, "ready first plan cannot be generated");
+                    generate.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Eq(1, firstPlanAssistant.SendCalls);
+                    Eq(AiProposalKind.StudyPlan, firstPlanAssistant.LastKind);
+                    Eq("ENEM 2027", firstPlanAssistant.LastInput?.ObjectiveOrExam);
+                    Eq("Matemática,Química", string.Join(',', firstPlanAssistant.LastInput?.WeakSubjects ?? new List<string>()));
+                    Eq(Visibility.Visible, preview.Visibility);
+                    Eq(Visibility.Visible, review.Visibility);
+                    preview.BringIntoView();
+                    firstPlanWindow.UpdateLayout();
+                    SaveWindowSnapshot(firstPlanWindow, "dark-OnboardingFirstPlanWindow-preview");
+
+                    _ = firstPlanWindow.Dispatcher.BeginInvoke(() =>
+                    {
+                        var confirmation = app.Windows.OfType<AiProposalConfirmationWindow>()
+                            .Single(candidate => candidate.IsVisible);
+                        var confirmButton = confirmation.FindName("ConfirmButton") as System.Windows.Controls.Button
+                            ?? throw new InvalidOperationException("first-plan final confirmation was not created");
+                        confirmButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    });
+                    review.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    Eq(1, firstPlanApplication.PrepareCalls);
+                    Eq(1, firstPlanApplication.ApplyCalls);
+                    True(firstPlanWindow.FirstPlanCompleted, "first-plan application did not complete onboarding");
+                    Eq(OnboardingSteps.FirstPlan, repo.CompletedOnboardingStep);
+                }
                 window.Close();
             }
             Eq(1, assistant.CancelCalls);
             Eq(1, diagnostics.CancelCalls);
+            Eq(1, firstPlanAssistant.CancelCalls);
 
             ThemeManager.Apply(ThemeManager.Light);
             AssertThemeContrast();
@@ -942,6 +1104,91 @@ static void DesktopWindowsLoad()
             deferRoutine.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             True(!lightRoutineWindow.RoutineCompleted, "deferring routine unexpectedly completed onboarding");
             Eq(OnboardingSteps.Welcome, deferredRepo.CompletedOnboardingStep);
+
+            True(deferredRepo.SaveOnboardingRoutine(
+                "Concurso 2027",
+                "2027-10-10",
+                3,
+                new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday }));
+            var unavailableFirstPlan = new TestAiAssistantController(AiInstallationState.NotInstalled);
+            var lightFirstPlanWindow = new OnboardingFirstPlanWindow(
+                deferredRepo,
+                unavailableFirstPlan,
+                installation,
+                new TestAiProposalApplicationService())
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            lightFirstPlanWindow.Show();
+            lightFirstPlanWindow.Width = lightFirstPlanWindow.MinWidth;
+            lightFirstPlanWindow.Height = lightFirstPlanWindow.MinHeight;
+            lightFirstPlanWindow.UpdateLayout();
+            var unavailablePanel = lightFirstPlanWindow.FindName("AiUnavailablePanel") as System.Windows.Controls.Border
+                ?? throw new InvalidOperationException("first-plan unavailable notice was not created");
+            var unavailableGenerate = lightFirstPlanWindow.FindName("GenerateButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("first-plan generation action was not created in the light theme");
+            Eq(Visibility.Visible, unavailablePanel.Visibility);
+            True(!unavailableGenerate.IsEnabled, "first plan must not generate without a local installation");
+            unavailablePanel.BringIntoView();
+            lightFirstPlanWindow.UpdateLayout();
+            SaveWindowSnapshot(lightFirstPlanWindow, "light-OnboardingFirstPlanWindow-unavailable");
+            var deferFirstPlan = lightFirstPlanWindow.FindName("NotNowButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("first-plan defer action was not created in the light theme");
+            deferFirstPlan.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            True(!lightFirstPlanWindow.FirstPlanCompleted, "deferring first plan unexpectedly completed onboarding");
+            Eq(OnboardingSteps.Routine, deferredRepo.CompletedOnboardingStep);
+
+            var existingPlanRepo = new StudyRepository(
+                Path.Combine(dir, "existing-plan-state.json"),
+                () => new DateTime(2026, 9, 1, 9, 0, 0));
+            True(existingPlanRepo.CompleteOnboardingStep(OnboardingSteps.Welcome));
+            True(existingPlanRepo.SaveOnboardingRoutine(
+                "Concurso 2027",
+                "2027-10-10",
+                3,
+                new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday }));
+            True(existingPlanRepo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+                "existing-plan",
+                1,
+                "2027-10-10",
+                SessionJson("existing-session", "2026-09-01", 60)))).Success);
+            var existingPlanAssistant = new TestAiAssistantController(AiInstallationState.NotInstalled);
+            var existingPlanWindow = new OnboardingFirstPlanWindow(
+                existingPlanRepo,
+                existingPlanAssistant,
+                installation,
+                new TestAiProposalApplicationService())
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            existingPlanWindow.Show();
+            existingPlanWindow.Width = existingPlanWindow.MinWidth;
+            existingPlanWindow.Height = existingPlanWindow.MinHeight;
+            existingPlanWindow.UpdateLayout();
+            var existingPlanPanel = existingPlanWindow.FindName("ExistingPlanPanel") as System.Windows.Controls.Border
+                ?? throw new InvalidOperationException("existing-plan choice was not created");
+            var newPlanPanel = existingPlanWindow.FindName("NewPlanPanel") as System.Windows.Controls.StackPanel
+                ?? throw new InvalidOperationException("new-plan form was not created");
+            var useExistingPlan = existingPlanWindow.FindName("UseExistingPlanButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("use-existing-plan action was not created");
+            Eq(Visibility.Visible, existingPlanPanel.Visibility);
+            Eq(Visibility.Collapsed, newPlanPanel.Visibility);
+            Eq(0, existingPlanAssistant.InitializeCalls);
+            True(useExistingPlan.MinHeight >= 40, "use-existing-plan click target is too small");
+            SaveWindowSnapshot(existingPlanWindow, "light-OnboardingFirstPlanWindow-existing-plan");
+            useExistingPlan.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            True(existingPlanWindow.FirstPlanCompleted, "keeping the current plan did not complete onboarding");
+            Eq(OnboardingSteps.FirstPlan, existingPlanRepo.CompletedOnboardingStep);
+            Eq("existing-plan", existingPlanRepo.Settings.ActivePlanId);
+            True(existingPlanRepo.CaptureApplicationSnapshot().Sessions.Any(session => session.Id == "existing-session"),
+                "keeping the current plan replaced its existing session");
+            Eq(0, existingPlanAssistant.InitializeCalls);
 
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
             var unavailableWindow = new AiAssistantWindow(unavailable, installation, application, repo)
@@ -2356,13 +2603,44 @@ sealed class FailingAiConfigurationStore : IAiConfigurationStore
 
 sealed class TestAiProposalApplicationService : IAiProposalApplicationService
 {
-    public Task ReconcileAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    private readonly AiPreparedApplication? _prepared;
+    private readonly AiProposalApplicationResult? _applicationResult;
 
-    public Task<AiPreparedApplication> PrepareAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
+    public TestAiProposalApplicationService(
+        AiPreparedApplication? prepared = null,
+        AiProposalApplicationResult? applicationResult = null)
+    {
+        _prepared = prepared;
+        _applicationResult = applicationResult;
+    }
 
-    public Task<AiProposalApplicationResult> ApplyAsync(Guid confirmationId, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
+    public int ReconcileCalls { get; private set; }
+    public int PrepareCalls { get; private set; }
+    public int ApplyCalls { get; private set; }
+
+    public Task ReconcileAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ReconcileCalls++;
+        return Task.CompletedTask;
+    }
+
+    public Task<AiPreparedApplication> PrepareAsync(Guid proposalId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        PrepareCalls++;
+        if (_prepared is null || _prepared.ProposalId != proposalId) throw new NotSupportedException();
+        return Task.FromResult(_prepared);
+    }
+
+    public Task<AiProposalApplicationResult> ApplyAsync(Guid confirmationId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ApplyCalls++;
+        if (_prepared is null || _applicationResult is null || _prepared.ConfirmationId != confirmationId)
+            throw new NotSupportedException();
+        return Task.FromResult(_applicationResult);
+    }
 
     public Task<AiProposalApplicationResult> UndoAsync(Guid proposalId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
@@ -2424,15 +2702,22 @@ sealed class TestAiPerformanceDiagnosticsService : IAiPerformanceDiagnosticsServ
 sealed class TestAiAssistantController : IAiAssistantController
 {
     private readonly AiInstallationState _installationState;
+    private readonly AiStoredProposal? _sendResult;
 
-    public TestAiAssistantController(AiInstallationState installationState = AiInstallationState.Ready)
+    public TestAiAssistantController(
+        AiInstallationState installationState = AiInstallationState.Ready,
+        AiStoredProposal? sendResult = null)
     {
         _installationState = installationState;
+        _sendResult = sendResult;
     }
 
     public AiAssistantState State { get; private set; } = new();
     public int InitializeCalls { get; private set; }
     public int CancelCalls { get; private set; }
+    public int SendCalls { get; private set; }
+    public AiAssistantInput? LastInput { get; private set; }
+    public AiProposalKind? LastKind { get; private set; }
     public event EventHandler? StateChanged;
 
     public Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -2455,7 +2740,14 @@ sealed class TestAiAssistantController : IAiAssistantController
     public Task<AiStoredProposal?> SendAsync(
         AiAssistantInput input,
         AiProposalKind kind,
-        CancellationToken cancellationToken = default) => Task.FromResult<AiStoredProposal?>(null);
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        SendCalls++;
+        LastInput = input;
+        LastKind = kind;
+        return Task.FromResult(_sendResult);
+    }
 
     public void CancelCurrentOperation() => CancelCalls++;
 

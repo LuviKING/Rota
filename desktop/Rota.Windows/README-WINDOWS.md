@@ -5,7 +5,8 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 ## Estado da edição Windows
 
 - Versão: **0.3.2**
-- novos perfis recebem boas-vindas e uma etapa responsiva para informar objetivo, prazo, dias e horas disponíveis; **Agora não** adia cada etapa sem marcar como concluída;
+- novos perfis recebem boas-vindas, configuram objetivo, prazo, dias e horas e, na terceira etapa, informam dificuldades para a IA local preparar o primeiro plano; **Agora não** adia qualquer etapa sem marcá-la como concluída;
+- o primeiro plano exibe uma prévia e reutiliza a confirmação final existente antes de aplicar; se já houver um plano futuro, ele pode ser mantido sem substituição, e se a IA não estiver pronta a tela apenas oferece a configuração — nunca inicia download automaticamente;
 - os dias disponíveis também podem ser alterados depois em **Configurações**, junto com o limite diário;
 - interface principal **calendar-first**, com o mês completo em grade e a agenda detalhada do dia selecionado logo abaixo;
 - navegação rápida entre meses, dias e retorno para hoje;

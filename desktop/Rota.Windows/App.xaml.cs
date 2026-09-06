@@ -55,11 +55,11 @@ public partial class App : Application
                     Shutdown(0);
                 });
             }
-            else if (repository.CompletedOnboardingStep < OnboardingSteps.Routine)
+            else if (repository.CompletedOnboardingStep < OnboardingSteps.FirstPlan)
             {
                 Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
                 {
-                    ShowPendingOnboarding(window, repository);
+                    ShowPendingOnboarding(window, repository, _localAiServices);
                 });
             }
         }
@@ -78,7 +78,10 @@ public partial class App : Application
         }
     }
 
-    private static void ShowPendingOnboarding(MainWindow window, StudyRepository repository)
+    private static void ShowPendingOnboarding(
+        MainWindow window,
+        StudyRepository repository,
+        LocalAiServices localAiServices)
     {
         if (!window.IsVisible) return;
 
@@ -93,6 +96,17 @@ public partial class App : Application
         {
             var routine = new OnboardingRoutineWindow(repository) { Owner = window };
             routine.ShowDialog();
+            if (!window.IsVisible || repository.CompletedOnboardingStep < OnboardingSteps.Routine) return;
+        }
+
+        if (repository.CompletedOnboardingStep < OnboardingSteps.FirstPlan)
+        {
+            var firstPlan = new OnboardingFirstPlanWindow(
+                repository,
+                localAiServices.AssistantController,
+                localAiServices.InstallationController,
+                localAiServices.ApplicationService) { Owner = window };
+            firstPlan.ShowDialog();
         }
     }
 
