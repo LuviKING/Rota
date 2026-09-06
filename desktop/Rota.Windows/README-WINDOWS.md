@@ -10,6 +10,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - os dias disponíveis também podem ser alterados depois em **Configurações**, junto com o limite diário;
 - interface principal **calendar-first**, com o mês completo em grade e a agenda detalhada do dia selecionado logo abaixo;
 - navegação rápida entre meses, dias e retorno para hoje;
+- um aviso discreto identifica blocos atrasados e sua carga total sem alterar datas; a análise ignora sessões concluídas, distingue revisões automáticas protegidas e devolve apenas uma visão limitada dos dados;
 - tema **escuro e claro**, com troca imediata pela interface e preferência preservada localmente;
 - cards de contexto mostram plano ativo, objetivo, carga do mês e progresso mensal usando dados reais do calendário;
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;

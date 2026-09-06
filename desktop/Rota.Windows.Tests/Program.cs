@@ -50,6 +50,9 @@ var tests = new (string Name, Action Body)[]
     ("First-plan input carries the saved routine and difficulties", FirstPlanInputUsesSavedRoutine),
     ("First-plan input requires difficulties or an explicit unknown choice", FirstPlanInputValidatesDifficulties),
     ("First-plan onboarding completion persists as the last step", FirstPlanCompletionPersists),
+    ("Overdue analysis identifies only unfinished past sessions", OverdueAnalysisFindsOnlyPastPending),
+    ("Overdue analysis stays bounded without losing totals", OverdueAnalysisBoundsDetails),
+    ("Overdue analysis never mutates repository state", OverdueAnalysisIsReadOnly),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -685,6 +688,77 @@ static void FirstPlanCompletionPersists()
     });
 }
 
+static void OverdueAnalysisFindsOnlyPastPending()
+{
+    var sessions = new List<SessionItem>
+    {
+        OverdueSession("old-study", "2026-08-29", 60),
+        OverdueSession("old-review", "2026-08-31", 30, "review", "runtime"),
+        OverdueSession("today", "2026-09-01", 45),
+        OverdueSession("future", "2026-09-02", 50),
+        OverdueSession("completed-old", "2026-08-28", 40, completed: true)
+    };
+    var snapshot = new RepositoryApplicationSnapshot(
+        7,
+        "2026-09-01",
+        new AppSettings(),
+        sessions);
+
+    var overdue = OverdueStudyAnalyzer.Analyze(snapshot);
+
+    Eq(2, overdue.TotalCount);
+    Eq(90, overdue.TotalMinutes);
+    Eq(new DateOnly(2026, 8, 29), overdue.OldestDate);
+    Eq(3, overdue.MostDelayedDays);
+    Eq(1, overdue.RuntimeProtectedCount);
+    Eq("old-study", overdue.Items[0].SessionId);
+    Eq("old-review", overdue.Items[1].SessionId);
+    True(overdue.Items[1].IsRuntimeProtected);
+}
+
+static void OverdueAnalysisBoundsDetails()
+{
+    var sessions = Enumerable.Range(1, 8)
+        .Select(index => OverdueSession($"old-{index}", $"2026-08-{index + 10:00}", 25))
+        .ToList();
+    var snapshot = new RepositoryApplicationSnapshot(
+        0,
+        "2026-09-01",
+        new AppSettings(),
+        sessions);
+
+    var overdue = OverdueStudyAnalyzer.Analyze(snapshot, itemLimit: 3);
+
+    Eq(8, overdue.TotalCount);
+    Eq(200, overdue.TotalMinutes);
+    Eq(3, overdue.Items.Count);
+    ThrowsType<ArgumentOutOfRangeException>(() => OverdueStudyAnalyzer.Analyze(snapshot, 0));
+    ThrowsType<ArgumentOutOfRangeException>(() =>
+        OverdueStudyAnalyzer.Analyze(snapshot, OverdueStudyAnalyzer.MaximumItemLimit + 1));
+}
+
+static void OverdueAnalysisIsReadOnly()
+{
+    WithRepository(new DateTime(2026, 8, 31, 9, 0, 0), (repo, path, clock) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "overdue-plan",
+            1,
+            "2026-09-30",
+            SessionJson("overdue", "2026-09-01", 60),
+            SessionJson("future", "2026-09-04", 60)))).Success);
+        clock.Value = new DateTime(2026, 9, 3, 9, 0, 0);
+        var beforeMemory = JsonSerializer.Serialize(repo.CaptureApplicationSnapshot());
+        var beforeDisk = File.ReadAllText(path);
+
+        var result = OverdueStudyAnalyzer.Analyze(repo.CaptureApplicationSnapshot());
+
+        Eq(1, result.TotalCount);
+        Eq(beforeMemory, JsonSerializer.Serialize(repo.CaptureApplicationSnapshot()));
+        Eq(beforeDisk, File.ReadAllText(path));
+    });
+}
+
 static void StoredStateRejectsUnknownProperties()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
@@ -1189,6 +1263,42 @@ static void DesktopWindowsLoad()
             True(existingPlanRepo.CaptureApplicationSnapshot().Sessions.Any(session => session.Id == "existing-session"),
                 "keeping the current plan replaced its existing session");
             Eq(0, existingPlanAssistant.InitializeCalls);
+
+            var overdueUiClock = new MutableClock(new DateTime(2026, 8, 31, 9, 0, 0));
+            var overdueUiRepo = new StudyRepository(
+                Path.Combine(dir, "overdue-ui-state.json"),
+                () => overdueUiClock.Value);
+            True(overdueUiRepo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+                "overdue-ui-plan",
+                1,
+                "2026-09-30",
+                SessionJson("overdue-ui", "2026-09-01", 75),
+                SessionJson("future-ui", "2026-09-04", 45)))).Success);
+            overdueUiClock.Value = new DateTime(2026, 9, 3, 9, 0, 0);
+            var overdueUiAssistant = new TestAiAssistantController();
+            var overdueUiWindow = new MainWindow(
+                overdueUiRepo,
+                overdueUiAssistant,
+                installation,
+                application)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            overdueUiWindow.Show();
+            overdueUiWindow.Width = overdueUiWindow.MinWidth;
+            overdueUiWindow.Height = overdueUiWindow.MinHeight;
+            overdueUiWindow.UpdateLayout();
+            var overdueStatus = overdueUiWindow.FindName("OverdueStatusPanel") as System.Windows.Controls.Border
+                ?? throw new InvalidOperationException("overdue status panel was not created");
+            Eq(Visibility.Visible, overdueStatus.Visibility);
+            var overdueTitle = overdueUiWindow.OverdueStatusTitle;
+            Contains(overdueTitle, "1 bloco atrasado");
+            Contains(overdueTitle, "75 min");
+            SaveWindowSnapshot(overdueUiWindow, "light-MainWindow-overdue-status");
+            overdueUiWindow.Close();
 
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);
             var unavailableWindow = new AiAssistantWindow(unavailable, installation, application, repo)
@@ -2434,6 +2544,29 @@ static string PlanJson(string planId, int revision, string objectiveDate, params
             "\"date\":" + JsonSerializer.Serialize(objectiveDate) + "}," +
         "\"sessions\":[" + string.Join(",", sessions) + "]}";
 }
+
+static SessionItem OverdueSession(
+    string id,
+    string date,
+    int minutes,
+    string kind = "study",
+    string origin = "plan",
+    bool completed = false) => new()
+    {
+        Id = id,
+        PlanId = "overdue-test-plan",
+        PlanRevision = 1,
+        Date = date,
+        Subject = "Matemática",
+        Topic = "Frações",
+        Minutes = minutes,
+        Target = "Resolver exercícios",
+        Kind = kind,
+        ReviewLabel = kind == "review" ? "D+1" : "",
+        Status = completed ? "completed" : "planned",
+        Origin = origin,
+        CompletedAtUnixMs = completed ? 1 : 0
+    };
 
 static string SessionJson(string id, string date, int minutes, string kind = "study")
 {

@@ -55,6 +55,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private Visibility _emptyVisibility;
     public Visibility EmptyVisibility { get => _emptyVisibility; private set => Set(ref _emptyVisibility, value); }
 
+    private Visibility _overdueStatusVisibility;
+    public Visibility OverdueStatusVisibility { get => _overdueStatusVisibility; private set => Set(ref _overdueStatusVisibility, value); }
+
+    private string _overdueStatusTitle = "";
+    public string OverdueStatusTitle { get => _overdueStatusTitle; private set => Set(ref _overdueStatusTitle, value); }
+
+    private string _overdueStatusDetail = "";
+    public string OverdueStatusDetail { get => _overdueStatusDetail; private set => Set(ref _overdueStatusDetail, value); }
+
     private Visibility _darkThemeSelectedVisibility;
     public Visibility DarkThemeSelectedVisibility { get => _darkThemeSelectedVisibility; private set => Set(ref _darkThemeSelectedVisibility, value); }
 
@@ -127,8 +136,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         EmptyVisibility = DaySessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshThemeProperties();
+        RefreshOverdueStatus();
         RefreshMonth();
         RefreshOverviewCards();
+    }
+
+    private void RefreshOverdueStatus()
+    {
+        var overdue = OverdueStudyAnalyzer.Analyze(_repository.CaptureApplicationSnapshot());
+        OverdueStatusVisibility = overdue.HasOverdue ? Visibility.Visible : Visibility.Collapsed;
+        OverdueStatusTitle = overdue.HasOverdue
+            ? $"{overdue.TotalCount} {(overdue.TotalCount == 1 ? "bloco atrasado" : "blocos atrasados")} · {overdue.TotalMinutes} min"
+            : "";
+        OverdueStatusDetail = overdue.OldestDate is null
+            ? ""
+            : $"O mais antigo estava previsto para {overdue.OldestDate.Value.ToString("dd/MM/yyyy", PtBr)}. " +
+              "O Rota apenas identificou o atraso; nenhuma data foi alterada.";
     }
 
     private void RefreshMonth()

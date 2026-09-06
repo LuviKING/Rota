@@ -26,6 +26,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - Tema: **escuro e claro**, com preferência local em `%LOCALAPPDATA%\Rota\theme.txt`
 - Primeira abertura: boas-vindas, rotina guiada e primeiro plano pela IA local; dificuldades, objetivo, prazo, dias e horas seguem para uma proposta que só altera o calendário após prévia e confirmação final
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal
+- Atrasos: sessões passadas ainda pendentes são identificadas em modo somente leitura, com quantidade, minutos e data mais antiga, sem reorganização automática
 - Contexto mensal: plano ativo, objetivo, carga e progresso calculados dos dados reais
 - Importação: editor, arquivo `.json` e arrastar/soltar StudyPlan na janela
 - IA: assistente local/offline com perfis Leve, Equilibrado e Desempenho, instalação verificada, diagnóstico real de hardware/desempenho, conversa persistente, prévia, confirmação e desfazer seguro

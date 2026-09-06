@@ -399,6 +399,33 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <Border x:Name="OverdueStatusPanel"
+                        Visibility="{Binding OverdueStatusVisibility}"
+                        Background="{DynamicResource AssessmentSoftBrush}"
+                        BorderBrush="{DynamicResource AssessmentBrush}"
+                        BorderThickness="1" CornerRadius="12"
+                        Padding="14,11" Margin="0,0,8,14">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="38" Height="38" CornerRadius="11"
+                                Background="{DynamicResource SurfaceRaisedBrush}" Margin="0,0,11,0">
+                            <TextBlock Text="&#xE823;" Style="{StaticResource IconGlyphText}"
+                                       Foreground="{DynamicResource AssessmentBrush}"
+                                       FontSize="18" Width="24" Height="24" LineHeight="24" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding OverdueStatusTitle}"
+                                       FontSize="12.5" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding OverdueStatusDetail}"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       FontSize="9.5" TextWrapping="Wrap" Margin="0,3,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
                 <!-- Month navigation -->
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
