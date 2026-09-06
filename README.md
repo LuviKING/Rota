@@ -27,6 +27,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - Primeira abertura: boas-vindas, rotina guiada e primeiro plano pela IA local; dificuldades, objetivo, prazo, dias e horas seguem para uma proposta que só altera o calendário após prévia e confirmação final
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal
 - Atrasos: sessões passadas ainda pendentes são identificadas em modo somente leitura, com quantidade, minutos e data mais antiga, sem reorganização automática
+- Recuperação de atrasos: uma tela dedicada permite revisar os blocos, abrir o mais antigo ou preparar com a IA uma proposta limitada a datas futuras; nenhuma opção altera o calendário sem prévia e confirmação
 - Contexto mensal: plano ativo, objetivo, carga e progresso calculados dos dados reais
 - Importação: editor, arquivo `.json` e arrastar/soltar StudyPlan na janela
 - IA: assistente local/offline com perfis Leve, Equilibrado e Desempenho, instalação verificada, diagnóstico real de hardware/desempenho, conversa persistente, prévia, confirmação e desfazer seguro

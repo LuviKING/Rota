@@ -53,6 +53,7 @@ var tests = new (string Name, Action Body)[]
     ("Overdue analysis identifies only unfinished past sessions", OverdueAnalysisFindsOnlyPastPending),
     ("Overdue analysis stays bounded without losing totals", OverdueAnalysisBoundsDetails),
     ("Overdue analysis never mutates repository state", OverdueAnalysisIsReadOnly),
+    ("Overdue recovery request is bounded and requires a preview", OverdueRecoveryRequestIsSafe),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -759,6 +760,44 @@ static void OverdueAnalysisIsReadOnly()
     });
 }
 
+static void OverdueRecoveryRequestIsSafe()
+{
+    var sessions = Enumerable.Range(1, 30)
+        .Select(index => OverdueSession(
+            $"recovery-{index}",
+            $"2026-08-{(index % 28) + 1:00}",
+            30,
+            index == 1 ? "review" : "study",
+            index == 1 ? "runtime" : "plan"))
+        .ToList();
+    var source = new RepositoryApplicationSnapshot(
+        5,
+        "2026-09-01",
+        new AppSettings(),
+        sessions);
+    var before = JsonSerializer.Serialize(source);
+
+    var snapshot = OverdueStudyAnalyzer.Analyze(source);
+    var request = OverdueRecoveryPresentation.BuildAiRequest(snapshot);
+
+    True(request.Length <= OverdueRecoveryPresentation.MaximumRequestLength);
+    Contains(request, "30 blocos atrasados");
+    Contains(request, "somente datas futuras");
+    Contains(request, "prévia e confirmação");
+    Contains(request, "revisão automática protegida");
+    Contains(request, "mais 10 blocos");
+    Eq(before, JsonSerializer.Serialize(source));
+    ThrowsType<InvalidOperationException>(() => OverdueRecoveryPresentation.BuildAiRequest(
+        new OverdueStudySnapshot(
+            new DateOnly(2026, 9, 1),
+            0,
+            0,
+            null,
+            0,
+            0,
+            Array.Empty<OverdueStudyItem>())));
+}
+
 static void StoredStateRejectsUnknownProperties()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
@@ -846,6 +885,15 @@ static void DesktopWindowsLoad()
                 firstPlanPrepared,
                 new AiProposalApplicationResult { Success = true, Message = "Plano aplicado." });
             var assistantWindow = new AiAssistantWindow(assistant, installation, application, repo);
+            var recoveryWindowSnapshot = OverdueStudyAnalyzer.Analyze(new RepositoryApplicationSnapshot(
+                0,
+                "2026-09-03",
+                new AppSettings(),
+                new[]
+                {
+                    OverdueSession("recovery-window-study", "2026-09-01", 60),
+                    OverdueSession("recovery-window-review", "2026-09-02", 30, "review", "runtime")
+                }));
             Eq(0, assistant.InitializeCalls);
             Eq(0, installation.PrepareCalls);
             var windows = new Window[]
@@ -872,7 +920,8 @@ static void DesktopWindowsLoad()
                 new SettingsWindow(repo),
                 new WelcomeWindow(repo),
                 new OnboardingRoutineWindow(repo),
-                new OnboardingFirstPlanWindow(repo, firstPlanAssistant, installation, firstPlanApplication)
+                new OnboardingFirstPlanWindow(repo, firstPlanAssistant, installation, firstPlanApplication),
+                new OverdueRecoveryWindow(recoveryWindowSnapshot)
             };
             foreach (var window in windows)
             {
@@ -1133,6 +1182,18 @@ static void DesktopWindowsLoad()
                     True(firstPlanWindow.FirstPlanCompleted, "first-plan application did not complete onboarding");
                     Eq(OnboardingSteps.FirstPlan, repo.CompletedOnboardingStep);
                 }
+                if (window is OverdueRecoveryWindow recoveryWindow)
+                {
+                    var recoveryItems = recoveryWindow.FindName("OverdueItemsControl") as System.Windows.Controls.ItemsControl
+                        ?? throw new InvalidOperationException("overdue recovery list was not created");
+                    var prepareWithAi = recoveryWindow.FindName("PrepareWithAiButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("overdue AI recovery action was not created");
+                    var viewOldest = recoveryWindow.FindName("ViewOldestButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("view-oldest recovery action was not created");
+                    Eq(2, recoveryItems.Items.Count);
+                    True(prepareWithAi.MinHeight >= 40 && viewOldest.MinHeight >= 40,
+                        "overdue recovery actions are too small");
+                }
                 window.Close();
             }
             Eq(1, assistant.CancelCalls);
@@ -1293,11 +1354,50 @@ static void DesktopWindowsLoad()
             overdueUiWindow.UpdateLayout();
             var overdueStatus = overdueUiWindow.FindName("OverdueStatusPanel") as System.Windows.Controls.Border
                 ?? throw new InvalidOperationException("overdue status panel was not created");
+            var overdueRecovery = overdueUiWindow.FindName("OverdueRecoveryButton") as System.Windows.Controls.Button
+                ?? throw new InvalidOperationException("overdue recovery entry point was not created");
             Eq(Visibility.Visible, overdueStatus.Visibility);
             var overdueTitle = overdueUiWindow.OverdueStatusTitle;
             Contains(overdueTitle, "1 bloco atrasado");
             Contains(overdueTitle, "75 min");
             SaveWindowSnapshot(overdueUiWindow, "light-MainWindow-overdue-status");
+            _ = overdueUiWindow.Dispatcher.BeginInvoke(() =>
+            {
+                var recovery = app.Windows.OfType<OverdueRecoveryWindow>()
+                    .Single(candidate => candidate.IsVisible);
+                SaveWindowSnapshot(recovery, "light-OverdueRecoveryWindow");
+                var viewOldest = recovery.FindName("ViewOldestButton") as System.Windows.Controls.Button
+                    ?? throw new InvalidOperationException("view-oldest action was not created");
+                viewOldest.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            });
+            overdueRecovery.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            Contains(overdueUiWindow.SelectedDateHeading, "01 de Setembro");
+
+            var recoveryRequest = OverdueRecoveryPresentation.BuildAiRequest(
+                OverdueStudyAnalyzer.Analyze(overdueUiRepo.CaptureApplicationSnapshot()));
+            var recoveryAssistant = new AiAssistantWindow(
+                new TestAiAssistantController(),
+                installation,
+                application,
+                overdueUiRepo,
+                initialRequest: recoveryRequest,
+                initialProposalKind: AiProposalKind.PlanChanges)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            recoveryAssistant.Show();
+            recoveryAssistant.UpdateLayout();
+            var recoveryRequestBox = recoveryAssistant.FindName("RequestBox") as System.Windows.Controls.TextBox
+                ?? throw new InvalidOperationException("recovery assistant request was not created");
+            var recoveryChangeChoice = recoveryAssistant.FindName("ChangePlanChoice") as System.Windows.Controls.RadioButton
+                ?? throw new InvalidOperationException("recovery assistant proposal choice was not created");
+            Contains(recoveryRequestBox.Text, "1 bloco atrasado");
+            True(recoveryChangeChoice.IsChecked == true,
+                "recovery assistant did not start as a plan-change proposal");
+            recoveryAssistant.Close();
             overdueUiWindow.Close();
 
             var unavailable = new TestAiAssistantController(AiInstallationState.NotInstalled);

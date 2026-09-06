@@ -29,7 +29,9 @@ public partial class AiAssistantWindow : Window
         IAiProposalApplicationService applicationService,
         StudyRepository repository,
         IAiHardwareDiagnosticsService? hardwareDiagnosticsService = null,
-        IAiPerformanceDiagnosticsService? performanceDiagnosticsService = null)
+        IAiPerformanceDiagnosticsService? performanceDiagnosticsService = null,
+        string? initialRequest = null,
+        AiProposalKind initialProposalKind = AiProposalKind.StudyPlan)
     {
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
         _installationController = installationController ?? throw new ArgumentNullException(nameof(installationController));
@@ -40,6 +42,13 @@ public partial class AiAssistantWindow : Window
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         DataContext = this;
+        if (!string.IsNullOrWhiteSpace(initialRequest))
+        {
+            RequestBox.Text = initialRequest.Trim();
+            _proposalKind = initialProposalKind;
+            NewPlanChoice.IsChecked = _proposalKind == AiProposalKind.StudyPlan;
+            ChangePlanChoice.IsChecked = _proposalKind == AiProposalKind.PlanChanges;
+        }
         _controller.StateChanged += Controller_StateChanged;
         Loaded += Window_Loaded;
         Closed += Window_Closed;

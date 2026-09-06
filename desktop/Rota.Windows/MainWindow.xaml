@@ -409,6 +409,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Width="38" Height="38" CornerRadius="11"
                                 Background="{DynamicResource SurfaceRaisedBrush}" Margin="0,0,11,0">
@@ -423,6 +424,10 @@
                                        Foreground="{DynamicResource MutedBrush}"
                                        FontSize="9.5" TextWrapping="Wrap" Margin="0,3,0,0" />
                         </StackPanel>
+                        <Button x:Name="OverdueRecoveryButton" Grid.Column="2"
+                                Style="{StaticResource SecondaryButton}"
+                                Click="OverdueRecovery_Click" MinWidth="138" MinHeight="42"
+                                Margin="14,0,0,0">Revisar atrasos</Button>
                     </Grid>
                 </Border>
 

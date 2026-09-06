@@ -314,6 +314,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private void AiNav_Click(object sender, RoutedEventArgs e)
+        => OpenAiAssistant();
+
+    private void OpenAiAssistant(
+        string? initialRequest = null,
+        AiProposalKind initialProposalKind = AiProposalKind.StudyPlan)
     {
         var dialog = new AiAssistantWindow(
             _aiAssistantController,
@@ -321,10 +326,37 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _aiProposalApplicationService,
             _repository,
             _aiHardwareDiagnosticsService,
-            _aiPerformanceDiagnosticsService)
+            _aiPerformanceDiagnosticsService,
+            initialRequest,
+            initialProposalKind)
         { Owner = this };
         dialog.ShowDialog();
         RefreshAll();
+    }
+
+    private void OverdueRecovery_Click(object sender, RoutedEventArgs e)
+    {
+        var overdue = OverdueStudyAnalyzer.Analyze(_repository.CaptureApplicationSnapshot());
+        if (!overdue.HasOverdue)
+        {
+            RefreshAll();
+            return;
+        }
+
+        var dialog = new OverdueRecoveryWindow(overdue) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        if (dialog.OpenAssistantRequested)
+        {
+            OpenAiAssistant(
+                OverdueRecoveryPresentation.BuildAiRequest(overdue),
+                AiProposalKind.PlanChanges);
+            return;
+        }
+        if (dialog.SelectedDate is DateOnly date)
+        {
+            SetSelectedDate(date);
+            CalendarHost.BringIntoView();
+        }
     }
 
     private void ImportNav_Click(object sender, RoutedEventArgs e) => ShowImport();
