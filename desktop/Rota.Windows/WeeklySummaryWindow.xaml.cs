@@ -6,6 +6,7 @@ namespace Rota.Desktop;
 public partial class WeeklySummaryWindow : Window
 {
     private static readonly CultureInfo Portuguese = CultureInfo.GetCultureInfo("pt-BR");
+    private readonly RepositoryApplicationSnapshot _snapshot;
 
     public string WeekRangeLabel { get; }
     public string CompletedMinutesLabel { get; }
@@ -21,6 +22,7 @@ public partial class WeeklySummaryWindow : Window
 
     public WeeklySummaryWindow(RepositoryApplicationSnapshot snapshot)
     {
+        _snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
         var summary = WeeklyProgressAnalyzer.Analyze(snapshot);
         WeekRangeLabel = $"{summary.WeekStart:dd/MM/yyyy} a {summary.WeekEnd:dd/MM/yyyy}";
         CompletedMinutesLabel = $"{summary.CompletedMinutes} min";
@@ -48,6 +50,12 @@ public partial class WeeklySummaryWindow : Window
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void SubjectProgress_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SubjectProgressWindow(_snapshot) { Owner = this };
+        dialog.ShowDialog();
+    }
 }
 
 public sealed record WeeklyProgressDayView(

@@ -71,25 +71,25 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="DIA A DIA" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl ItemsSource="{Binding Days}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="0,6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="92"/><ColumnDefinition Width="*"/><ColumnDefinition Width="104"/><ColumnDefinition Width="88"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding DayName}" FontSize="11.5" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding DateLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,2,0,0" />
-                                </StackPanel>
-                                <ProgressBar Grid.Column="1" Style="{StaticResource WeeklyProgressBar}"
-                                             Maximum="{Binding ProgressMaximum, Mode=OneWay}" Value="{Binding CompletedMinutes, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,18,0" />
-                                <TextBlock Grid.Column="2" Text="{Binding MinutesLabel}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="3" Text="{Binding SessionsLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Days}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="92"/><ColumnDefinition Width="*"/><ColumnDefinition Width="104"/><ColumnDefinition Width="88"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DayName}" FontSize="11.5" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding DateLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <ProgressBar Grid.Column="1" Style="{StaticResource WeeklyProgressBar}"
+                                                 Maximum="{Binding ProgressMaximum, Mode=OneWay}" Value="{Binding CompletedMinutes, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,18,0" />
+                                    <TextBlock Grid.Column="2" Text="{Binding MinutesLabel}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="3" Text="{Binding SessionsLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="9.5" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </ScrollViewer>
             </DockPanel>
         </Border>
@@ -97,8 +97,12 @@
         <Grid Grid.Row="4" Margin="0,16,0,0">
             <TextBlock Text="Resumo somente leitura calculado pelas datas planejadas."
                        Foreground="{DynamicResource MutedBrush}" FontSize="9.5" VerticalAlignment="Center" />
-            <Button x:Name="CloseButton" Style="{StaticResource PrimaryButton}" Click="Close_Click"
-                    Width="130" HorizontalAlignment="Right" IsDefault="True" IsCancel="True">Fechar</Button>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="SubjectProgressButton" Style="{StaticResource SecondaryButton}"
+                        Click="SubjectProgress_Click" Width="164" Margin="0,0,8,0">Por matéria</Button>
+                <Button x:Name="CloseButton" Style="{StaticResource PrimaryButton}" Click="Close_Click"
+                        Width="130" IsDefault="True" IsCancel="True">Fechar</Button>
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>

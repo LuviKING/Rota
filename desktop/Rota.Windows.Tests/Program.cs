@@ -59,6 +59,8 @@ var tests = new (string Name, Action Body)[]
     ("Overdue recovery request is bounded and requires a preview", OverdueRecoveryRequestIsSafe),
     ("Weekly summary counts completed minutes and sessions", WeeklySummaryCountsProgress),
     ("Weekly summary uses Monday boundaries without mutation", WeeklySummaryIsReadOnlyAndMondayBased),
+    ("Subject progress groups completed minutes and sessions", SubjectProgressGroupsSessions),
+    ("Subject progress stays bounded without mutation", SubjectProgressIsBoundedAndReadOnly),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -564,21 +566,75 @@ static void WeeklySummaryIsReadOnlyAndMondayBased()
     Eq(before, JsonSerializer.Serialize(snapshot));
 }
 
-static SessionItem WeeklySession(string id, string date, int minutes, bool completed = false) => new()
+static void SubjectProgressGroupsSessions()
 {
-    Id = id,
-    PlanId = "weekly-plan",
-    PlanRevision = 1,
-    Date = date,
-    Subject = "Matemática",
-    Topic = id,
-    Minutes = minutes,
-    Target = "Estudar",
-    Kind = "study",
-    Status = completed ? "completed" : "planned",
-    Origin = "plan",
-    CompletedAtUnixMs = completed ? 1_788_200_000_000 : 0
-};
+    var sessions = new[]
+    {
+        WeeklySession("math-complete", "2026-08-31", 60, completed: true, subject: "Matemática"),
+        WeeklySession("math-pending", "2026-09-02", 45, subject: "matemática"),
+        WeeklySession("physics-complete", "2026-09-01", 30, completed: true, subject: "Física")
+    };
+    var progress = SubjectProgressAnalyzer.Analyze(new RepositoryApplicationSnapshot(
+        8, "2026-09-02", new AppSettings(), sessions));
+
+    Eq(2, progress.TotalSubjects);
+    Eq(3, progress.PlannedSessions);
+    Eq(2, progress.CompletedSessions);
+    Eq(135, progress.PlannedMinutes);
+    Eq(90, progress.CompletedMinutes);
+    Eq(67, progress.CompletionPercent);
+    Eq("Matemática", progress.Subjects[0].Subject);
+    Eq(2, progress.Subjects[0].PlannedSessions);
+    Eq(1, progress.Subjects[0].CompletedSessions);
+    Eq(60, progress.Subjects[0].CompletedMinutes);
+    Eq(45, progress.Subjects[0].RemainingMinutes);
+    Eq(50, progress.Subjects[0].CompletionPercent);
+}
+
+static void SubjectProgressIsBoundedAndReadOnly()
+{
+    var sessions = Enumerable.Range(0, 120)
+        .Select(index => WeeklySession(
+            $"subject-{index}",
+            "2026-09-01",
+            30,
+            completed: index % 2 == 0,
+            subject: $"Matéria {index:000}"))
+        .ToArray();
+    var snapshot = new RepositoryApplicationSnapshot(9, "2026-09-02", new AppSettings(), sessions);
+    var before = JsonSerializer.Serialize(snapshot);
+
+    var progress = SubjectProgressAnalyzer.Analyze(snapshot, itemLimit: 10);
+
+    Eq(120, progress.TotalSubjects);
+    Eq(10, progress.Subjects.Count);
+    Eq(110, progress.HiddenSubjectCount);
+    Eq(120, progress.PlannedSessions);
+    Eq(60, progress.CompletedSessions);
+    Eq(before, JsonSerializer.Serialize(snapshot));
+    ThrowsType<ArgumentOutOfRangeException>(() => SubjectProgressAnalyzer.Analyze(snapshot, 0));
+}
+
+static SessionItem WeeklySession(
+    string id,
+    string date,
+    int minutes,
+    bool completed = false,
+    string subject = "Matemática") => new()
+    {
+        Id = id,
+        PlanId = "weekly-plan",
+        PlanRevision = 1,
+        Date = date,
+        Subject = subject,
+        Topic = id,
+        Minutes = minutes,
+        Target = "Estudar",
+        Kind = "study",
+        Status = completed ? "completed" : "planned",
+        Origin = "plan",
+        CompletedAtUnixMs = completed ? 1_788_200_000_000 : 0
+    };
 
 static void OnboardingStartsAtWelcome()
 {
@@ -1059,7 +1115,8 @@ static void DesktopWindowsLoad()
                 new OnboardingFirstPlanWindow(repo, firstPlanAssistant, installation, firstPlanApplication),
                 new OverdueRecoveryWindow(recoveryWindowSnapshot),
                 new ReminderWindow(repo),
-                new WeeklySummaryWindow(weeklyWindowSnapshot)
+                new WeeklySummaryWindow(weeklyWindowSnapshot),
+                new SubjectProgressWindow(weeklyWindowSnapshot)
             };
             foreach (var window in windows)
             {
@@ -1268,6 +1325,28 @@ static void DesktopWindowsLoad()
                     Eq("1", weeklySummaryWindow.CompletedSessionsLabel);
                     Eq("50%", weeklySummaryWindow.CompletionLabel);
                     Eq(7, weeklySummaryWindow.Days.Count);
+                    var subjectProgress = weeklySummaryWindow.FindName("SubjectProgressButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("subject progress entry point was not created");
+                    True(subjectProgress.MinHeight >= 40, "subject progress entry point is too small");
+                    _ = weeklySummaryWindow.Dispatcher.BeginInvoke(() =>
+                    {
+                        var subjectWindow = app.Windows.OfType<SubjectProgressWindow>()
+                            .Single(candidate => candidate.IsVisible);
+                        subjectWindow.Close();
+                    });
+                    subjectProgress.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                }
+                if (window is SubjectProgressWindow subjectProgressWindow)
+                {
+                    var close = subjectProgressWindow.FindName("CloseButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("subject progress close action was not created");
+                    True(close.IsDefault && close.MinHeight >= 40,
+                        "subject progress close action is unavailable or too small");
+                    Eq("1", subjectProgressWindow.TotalSubjectsLabel);
+                    Eq("60 min", subjectProgressWindow.CompletedMinutesLabel);
+                    Eq("1", subjectProgressWindow.CompletedSessionsLabel);
+                    Eq("50%", subjectProgressWindow.CompletionLabel);
+                    Eq(1, subjectProgressWindow.Subjects.Count);
                 }
                 if (window is WelcomeWindow welcomeWindow)
                 {
@@ -1389,6 +1468,20 @@ static void DesktopWindowsLoad()
             lightWeeklyWindow.UpdateLayout();
             SaveWindowSnapshot(lightWeeklyWindow, "light-WeeklySummaryWindow");
             lightWeeklyWindow.Close();
+
+            var lightSubjectWindow = new SubjectProgressWindow(weeklyWindowSnapshot)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            lightSubjectWindow.Show();
+            lightSubjectWindow.Width = lightSubjectWindow.MinWidth;
+            lightSubjectWindow.Height = lightSubjectWindow.MinHeight;
+            lightSubjectWindow.UpdateLayout();
+            SaveWindowSnapshot(lightSubjectWindow, "light-SubjectProgressWindow");
+            lightSubjectWindow.Close();
 
             var deferredRepo = new StudyRepository(Path.Combine(dir, "deferred-state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var lightWelcomeWindow = new WelcomeWindow(deferredRepo)
