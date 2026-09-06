@@ -17,6 +17,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly IAiAssistantController _aiAssistantController;
     private readonly IAiInstallationController _aiInstallationController;
     private readonly IAiProposalApplicationService _aiProposalApplicationService;
+    private readonly IAiHardwareDiagnosticsService _aiHardwareDiagnosticsService;
     private DateOnly _selectedDate;
     private DateOnly _displayMonth;
     private string _theme;
@@ -71,12 +72,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         StudyRepository repository,
         IAiAssistantController aiAssistantController,
         IAiInstallationController aiInstallationController,
-        IAiProposalApplicationService aiProposalApplicationService)
+        IAiProposalApplicationService aiProposalApplicationService,
+        IAiHardwareDiagnosticsService? aiHardwareDiagnosticsService = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _aiAssistantController = aiAssistantController ?? throw new ArgumentNullException(nameof(aiAssistantController));
         _aiInstallationController = aiInstallationController ?? throw new ArgumentNullException(nameof(aiInstallationController));
         _aiProposalApplicationService = aiProposalApplicationService ?? throw new ArgumentNullException(nameof(aiProposalApplicationService));
+        _aiHardwareDiagnosticsService = aiHardwareDiagnosticsService ?? new AiHardwareDiagnosticsService();
         _selectedDate = DateOnly.FromDateTime(DateTime.Today);
         _displayMonth = new DateOnly(_selectedDate.Year, _selectedDate.Month, 1);
         _theme = ThemeManager.LoadPreference(_repository.DataDirectory);
@@ -290,7 +293,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _aiAssistantController,
             _aiInstallationController,
             _aiProposalApplicationService,
-            _repository)
+            _repository,
+            _aiHardwareDiagnosticsService)
         { Owner = this };
         dialog.ShowDialog();
         RefreshAll();

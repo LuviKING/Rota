@@ -42,7 +42,8 @@ public partial class App : Application
                 repository,
                 _localAiServices.AssistantController,
                 _localAiServices.InstallationController,
-                _localAiServices.ApplicationService);
+                _localAiServices.ApplicationService,
+                _localAiServices.HardwareDiagnostics);
             MainWindow = window;
             window.Show();
             if (_isSmokeTest)

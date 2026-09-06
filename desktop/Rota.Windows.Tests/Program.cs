@@ -101,6 +101,7 @@ tests = tests.Concat(Rota.Desktop.Tests.AiProposalApplicationTests.Cases).ToArra
 tests = tests.Concat(Rota.Desktop.Tests.AiConversationTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.EnemCatalogTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiProfileResourceBudgetTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.AiHardwareDiagnosticsTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 
@@ -451,6 +452,7 @@ static void DesktopWindowsLoad()
             var repo = new StudyRepository(Path.Combine(dir, "state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var assistant = new TestAiAssistantController();
             var diagnostics = new TestAiAssistantController();
+            var hardwareDiagnostics = new TestAiHardwareDiagnosticsService();
             var installation = new TestAiInstallationController();
             var application = new TestAiProposalApplicationService();
             var assistantWindow = new AiAssistantWindow(assistant, installation, application, repo);
@@ -460,7 +462,7 @@ static void DesktopWindowsLoad()
             {
                 new MainWindow(repo, assistant, installation, application),
                 assistantWindow,
-                new AiDiagnosticsWindow(diagnostics),
+                new AiDiagnosticsWindow(diagnostics, hardwareDiagnostics),
                 new AiProposalConfirmationWindow(new AiPreparedApplication
                 {
                     ConfirmationId = Guid.NewGuid(),
@@ -580,15 +582,39 @@ static void DesktopWindowsLoad()
                         ?? throw new InvalidOperationException("AI diagnostics performance stage was not created");
                     var refresh = diagnosticsWindow.FindName("RefreshButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("AI diagnostics refresh action was not created");
+                    var hardwareDetails = diagnosticsWindow.FindName("HardwareDetailsPanel") as System.Windows.Controls.Border
+                        ?? throw new InvalidOperationException("AI hardware details were not created");
+                    var processor = diagnosticsWindow.FindName("CpuValueText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI processor details were not created");
+                    var memory = diagnosticsWindow.FindName("MemoryValueText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI memory details were not created");
+                    var gpu = diagnosticsWindow.FindName("GpuValueText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI GPU details were not created");
+                    var storage = diagnosticsWindow.FindName("StorageValueText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI storage details were not created");
+                    var recommended = diagnosticsWindow.FindName("RecommendedProfileText") as System.Windows.Controls.TextBlock
+                        ?? throw new InvalidOperationException("AI recommended profile was not created");
                     Eq("PRONTA", badge.Text);
                     Eq("Desempenho", profile.Text);
                     Contains(installationStatus.Text, "disponíveis");
-                    Eq("Ainda não analisado.", hardwareStatus.Text);
+                    Contains(hardwareStatus.Text, "perfil Desempenho");
                     Eq("Ainda não medido.", performanceStatus.Text);
+                    Eq(Visibility.Visible, hardwareDetails.Visibility);
+                    Contains(processor.Text, "Ryzen 7 5700X");
+                    Contains(memory.Text, "16 GB");
+                    Contains(gpu.Text, "RTX 3070");
+                    Contains(storage.Text, "400 GB livres");
+                    Contains(recommended.Text, "DESEMPENHO");
+                    Eq(1, hardwareDiagnostics.AnalyzeCalls);
+                    diagnosticsWindow.Width = 760;
+                    diagnosticsWindow.Height = 720;
+                    diagnosticsWindow.UpdateLayout();
+                    SaveWindowSnapshot(diagnosticsWindow, "dark-AiDiagnosticsWindow-expanded");
                     True(refresh.IsEnabled && refresh.MinHeight >= 40,
                         "AI diagnostics refresh action is unavailable or too small");
                     refresh.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     Eq(2, diagnostics.InitializeCalls);
+                    Eq(2, hardwareDiagnostics.AnalyzeCalls);
                 }
                 if (window is AiInstallationWindow installationWindow)
                 {
@@ -632,7 +658,8 @@ static void DesktopWindowsLoad()
             unavailableWindow.Close();
 
             var lightDiagnosticsController = new TestAiAssistantController();
-            var lightDiagnosticsWindow = new AiDiagnosticsWindow(lightDiagnosticsController)
+            var lightHardwareDiagnostics = new TestAiHardwareDiagnosticsService();
+            var lightDiagnosticsWindow = new AiDiagnosticsWindow(lightDiagnosticsController, lightHardwareDiagnostics)
             {
                 WindowStartupLocation = WindowStartupLocation.Manual,
                 Left = -20_000,
@@ -650,6 +677,7 @@ static void DesktopWindowsLoad()
             lightDiagnosticsWindow.Close();
             Eq(1, lightDiagnosticsController.InitializeCalls);
             Eq(1, lightDiagnosticsController.CancelCalls);
+            Eq(1, lightHardwareDiagnostics.AnalyzeCalls);
             ThemeManager.Apply(ThemeManager.Dark);
         }
         catch (Exception ex)
@@ -1941,6 +1969,31 @@ sealed class TestAiProposalApplicationService : IAiProposalApplicationService
 
     public CalendarApplicationState GetCalendarState(Guid proposalId) =>
         new(false, false, false, false, "");
+}
+
+sealed class TestAiHardwareDiagnosticsService : IAiHardwareDiagnosticsService
+{
+    public int AnalyzeCalls { get; private set; }
+
+    public Task<AiHardwareDiagnosticReport> AnalyzeAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        AnalyzeCalls++;
+        return Task.FromResult(new AiHardwareDiagnosticReport(
+            new AiHardwareProfile(
+                "AMD Ryzen 7 5700X",
+                16,
+                16L * AiProfileRecommendationPolicy.Gibibyte,
+                "NVIDIA GeForce RTX 3070",
+                8L * AiProfileRecommendationPolicy.Gibibyte,
+                AiProfile.Performance,
+                Array.Empty<string>()),
+            new AiStorageSnapshot(
+                @"C:\Rota\AI",
+                1_000L * AiProfileRecommendationPolicy.Gibibyte,
+                400L * AiProfileRecommendationPolicy.Gibibyte),
+            new DateTimeOffset(2026, 9, 6, 12, 0, 0, TimeSpan.Zero)));
+    }
 }
 
 sealed class TestAiAssistantController : IAiAssistantController

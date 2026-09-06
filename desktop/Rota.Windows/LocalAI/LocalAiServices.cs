@@ -8,6 +8,9 @@ public sealed class LocalAiServices : IAsyncDisposable
     {
         RootDirectory = rootDirectory;
         HardwareDetector = new WindowsAiHardwareProfileDetector();
+        HardwareDiagnostics = new AiHardwareDiagnosticsService(
+            HardwareDetector,
+            new WindowsAiStorageProbe(rootDirectory));
         ConfigurationStore = new AiConfigurationStore(Path.Combine(rootDirectory, "config.json"));
         ModelManager = new LocalAiModelManager(rootDirectory, AiModelCatalog.Default, HardwareDetector);
         Installer = new LocalAiInstaller(rootDirectory, ConfigurationStore, ModelManager);
@@ -36,6 +39,7 @@ public sealed class LocalAiServices : IAsyncDisposable
 
     public string RootDirectory { get; }
     public WindowsAiHardwareProfileDetector HardwareDetector { get; }
+    public AiHardwareDiagnosticsService HardwareDiagnostics { get; }
     public AiConfigurationStore ConfigurationStore { get; }
     public LocalAiModelManager ModelManager { get; }
     public LocalAiInstaller Installer { get; }

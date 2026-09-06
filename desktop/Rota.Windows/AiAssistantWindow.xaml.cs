@@ -12,6 +12,7 @@ public partial class AiAssistantWindow : Window
     private readonly IAiAssistantController _controller;
     private readonly IAiInstallationController _installationController;
     private readonly IAiProposalApplicationService _applicationService;
+    private readonly IAiHardwareDiagnosticsService _hardwareDiagnosticsService;
     private readonly StudyRepository _repository;
     private AiProposalKind _proposalKind = AiProposalKind.StudyPlan;
     private bool _initializationStarted;
@@ -25,12 +26,14 @@ public partial class AiAssistantWindow : Window
         IAiAssistantController controller,
         IAiInstallationController installationController,
         IAiProposalApplicationService applicationService,
-        StudyRepository repository)
+        StudyRepository repository,
+        IAiHardwareDiagnosticsService? hardwareDiagnosticsService = null)
     {
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
         _installationController = installationController ?? throw new ArgumentNullException(nameof(installationController));
         _applicationService = applicationService ?? throw new ArgumentNullException(nameof(applicationService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _hardwareDiagnosticsService = hardwareDiagnosticsService ?? new AiHardwareDiagnosticsService();
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         DataContext = this;
@@ -308,7 +311,7 @@ public partial class AiAssistantWindow : Window
 
     private void OpenAiDiagnostics_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new AiDiagnosticsWindow(_controller) { Owner = this };
+        var dialog = new AiDiagnosticsWindow(_controller, _hardwareDiagnosticsService) { Owner = this };
         dialog.ShowDialog();
         if (IsLoaded) RefreshState();
     }

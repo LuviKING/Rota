@@ -21,6 +21,8 @@ Os modelos e o runtime não fazem parte do estado ou dos backups do StudyPlan. A
 
 `WindowsAiHardwareProfileDetector` lê CPU, processadores lógicos, RAM física e adaptadores de vídeo diretamente das APIs locais do Windows. A GPU com mais memória dedicada é usada, adaptadores de software são ignorados e uma falha de enumeração de GPU produz aviso e fallback seguro para CPU/RAM.
 
+`AiHardwareDiagnosticsService` combina essa leitura com o espaço total e livre da unidade onde a IA local será instalada. A consulta roda fora da interface, aceita cancelamento e transforma indisponibilidade do armazenamento em aviso controlado, sem criar pastas nem alterar arquivos.
+
 `AiProfileRecommendationPolicy` mantém os critérios determinísticos e separados da detecção:
 
 - `Lightweight`: fallback seguro para computadores com menos recursos;
