@@ -17,7 +17,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 
 ### Windows
 
-- Versão: **0.4.0**
+- Versão em desenvolvimento: **0.5.0**
 - Compatibilidade: **Windows 10 e Windows 11 x64**
 - Tecnologia: **WPF / .NET 8**
 - Distribuição CI: executável **self-contained**, sem exigir instalação separada do .NET
