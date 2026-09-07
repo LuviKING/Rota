@@ -32,6 +32,8 @@ var tests = new (string Name, Action Body)[]
     ("New plan replaces pending future but preserves completed/runtime", NewPlanPreservesProtectedState),
     ("Session identity remains scoped to plan id", IdentityIsScopedToPlan),
     ("Daily capacity includes runtime reviews", CapacityIncludesRuntime),
+    ("Calendar move relocates a pending session", CalendarMoveRelocatesPendingSession),
+    ("Calendar move protects completed sessions and automatic reviews", CalendarMoveProtectsImmutableSessions),
     ("Preview does not mutate memory or disk", PreviewDoesNotMutate),
     ("Failed persistence leaves memory and disk unchanged", FailedPersistenceIsTransactional),
     ("Repository recovers the last valid atomic backup", RepositoryRecoversAtomicBackup),
@@ -527,6 +529,52 @@ static void ReminderSchedulerRemovesOwnedTask()
     Eq("/Delete", runner.Calls[1][0]);
     Eq(runner.Calls[0][2], runner.Calls[1][2]);
     True(runner.Calls[1].Contains("/F"), "reminder deletion must be explicit and non-interactive");
+}
+
+static void CalendarMoveRelocatesPendingSession()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-plan", 1, "2026-09-30", SessionJson("move-me", "2026-09-02", 60)))).Success);
+
+        var result = repo.MoveSession("move-plan", "move-me", new DateOnly(2026, 9, 4));
+
+        True(result.Success && !result.AlreadyHandled, result.Message);
+        Eq("2026-09-02", result.SourceDate);
+        Eq("2026-09-04", result.TargetDate);
+        Eq(0, repo.SessionsForDate(new DateOnly(2026, 9, 2)).Count);
+        Eq("move-me", repo.SessionsForDate(new DateOnly(2026, 9, 4)).Single().Id);
+        Eq("2026-09-04", new StudyRepository(path, () => new DateTime(2026, 9, 1))
+            .SessionsForDate(new DateOnly(2026, 9, 4)).Single().Date);
+
+        var repeated = repo.MoveSession("move-plan", "move-me", new DateOnly(2026, 9, 4));
+        True(repeated.Success && repeated.AlreadyHandled, repeated.Message);
+    });
+}
+
+static void CalendarMoveProtectsImmutableSessions()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-protected",
+            1,
+            "2026-09-30",
+            SessionJson("completed", "2026-09-02", 60),
+            SessionJson("pending", "2026-09-03", 45)))).Success);
+        True(repo.MarkCompleted("move-protected", "completed"));
+        var review = repo.SessionsForDate(new DateOnly(2026, 9, 2))
+            .Single(session => session.Origin == "runtime");
+
+        True(!repo.MoveSession("move-protected", "completed", new DateOnly(2026, 9, 5)).Success);
+        True(!repo.MoveSession(review.PlanId, review.Id, new DateOnly(2026, 9, 5)).Success);
+        True(!repo.MoveSession("move-protected", "pending", new DateOnly(2026, 8, 31)).Success);
+        Eq("2026-09-02", repo.SessionsForDate(new DateOnly(2026, 9, 2))
+            .Single(session => session.Id == "completed").Date);
+        Eq("2026-09-03", repo.SessionsForDate(new DateOnly(2026, 9, 3))
+            .Single(session => session.Id == "pending").Date);
+    });
 }
 
 static void WeeklySummaryCountsProgress()

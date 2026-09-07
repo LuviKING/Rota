@@ -149,6 +149,14 @@ public sealed record CalendarMutationResult(
     string Message,
     long MutationVersion = 0);
 
+public sealed record SessionMoveResult(
+    bool Success,
+    bool AlreadyHandled,
+    string Message,
+    string SourceDate = "",
+    string TargetDate = "",
+    long MutationVersion = 0);
+
 public sealed record SessionProgress(int Completed, int Total, int Minutes)
 {
     public double Fraction => Total == 0 ? 0 : (double)Completed / Total;

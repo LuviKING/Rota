@@ -22,6 +22,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private DateOnly _selectedDate;
     private DateOnly _displayMonth;
     private string _theme;
+    private Point? _sessionDragStart;
 
     public ObservableCollection<MonthDayCardView> MonthDays { get; } = new();
     public ObservableCollection<MonthTabView> MonthTabs { get; } = new();
@@ -289,6 +290,64 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (sender is Button { Tag: string iso } &&
             DateOnly.TryParseExact(iso, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             SetSelectedDate(date);
+    }
+
+    private void SessionCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _sessionDragStart = e.GetPosition(this);
+    }
+
+    private void SessionCard_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _sessionDragStart is not Point start ||
+            sender is not FrameworkElement { DataContext: SessionCardView card } || !card.CanMove)
+            return;
+
+        var current = e.GetPosition(this);
+        if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _sessionDragStart = null;
+        DragDrop.DoDragDrop((DependencyObject)sender, card, DragDropEffects.Move);
+    }
+
+    private void MonthDay_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = sender is Button { Tag: string iso } &&
+                    DateOnly.TryParseExact(iso, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) &&
+                    e.Data.GetDataPresent(typeof(SessionCardView))
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void MonthDay_Drop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not Button { Tag: string iso } ||
+            !DateOnly.TryParseExact(iso, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var targetDate) ||
+            e.Data.GetData(typeof(SessionCardView)) is not SessionCardView card)
+            return;
+
+        try
+        {
+            var result = _repository.MoveSession(card.PlanId, card.Id, targetDate);
+            if (result.Success)
+            {
+                SetSelectedDate(targetDate);
+                return;
+            }
+            MessageBox.Show(result.Message, "Mover sessão", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(
+                "Não foi possível salvar a nova data. A sessão não foi alterada.\n\n" + ex.Message,
+                "Mover sessão",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private void MonthTab_Click(object sender, RoutedEventArgs e)
@@ -606,6 +665,8 @@ public sealed class SessionCardView
     public Brush CardBackground { get; }
     public Visibility CompleteButtonVisibility { get; }
     public Visibility CompletedVisibility { get; }
+    public Visibility MoveHintVisibility { get; }
+    public bool CanMove { get; }
 
     public SessionCardView(SessionItem session)
     {
@@ -636,6 +697,8 @@ public sealed class SessionCardView
         IconGlyph = IconFor(session);
         CompleteButtonVisibility = session.IsCompleted ? Visibility.Collapsed : Visibility.Visible;
         CompletedVisibility = session.IsCompleted ? Visibility.Visible : Visibility.Collapsed;
+        CanMove = !session.IsCompleted && session.Origin != "runtime";
+        MoveHintVisibility = CanMove ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static string IconFor(SessionItem session)

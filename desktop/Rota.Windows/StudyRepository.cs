@@ -237,6 +237,37 @@ public sealed class StudyRepository
         }
     }
 
+    public SessionMoveResult MoveSession(string planId, string sessionId, DateOnly targetDate)
+    {
+        if (string.IsNullOrWhiteSpace(planId) || string.IsNullOrWhiteSpace(sessionId))
+            return new SessionMoveResult(false, false, "A sessão selecionada é inválida.");
+
+        lock (_gate)
+        {
+            var next = CloneState(_state);
+            var item = FindIdentity(next, planId, sessionId);
+            if (item is null)
+                return new SessionMoveResult(false, false, "A sessão não existe mais no calendário.");
+            if (item.IsCompleted)
+                return new SessionMoveResult(false, false, "Uma sessão concluída não pode ser movida.", item.Date);
+            if (item.Origin == "runtime")
+                return new SessionMoveResult(false, false, "Uma revisão automática protegida não pode ser movida.", item.Date);
+
+            var target = Iso(targetDate);
+            if (target == item.Date)
+                return new SessionMoveResult(true, true, "A sessão já está nesse dia.", item.Date, target, _state.MutationVersion);
+
+            var today = DateOnly.FromDateTime(_now());
+            if (targetDate < today)
+                return new SessionMoveResult(false, false, "Escolha hoje ou uma data futura.", item.Date, target, _state.MutationVersion);
+
+            var source = item.Date;
+            item.Date = target;
+            Commit(next);
+            return new SessionMoveResult(true, false, "Sessão movida no calendário.", source, target, _state.MutationVersion);
+        }
+    }
+
     public bool SaveOnboardingRoutine(
         string objectiveName,
         string objectiveDate,
