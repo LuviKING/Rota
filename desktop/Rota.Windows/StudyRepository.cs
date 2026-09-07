@@ -8,7 +8,7 @@ namespace Rota.Desktop;
 
 public sealed class StudyRepository
 {
-    private const int CurrentStateVersion = 1;
+    private const int CurrentStateVersion = 2;
     private const long MaxStateFileBytes = 8 * 1024 * 1024;
     private const int MaxStoredSessions = 20_000;
     private const int MaxAiApplicationReceipts = 100;
@@ -51,6 +51,27 @@ public sealed class StudyRepository
         get
         {
             lock (_gate) return _state.CompletedOnboardingStep;
+        }
+    }
+
+    public LearningCatalog LearningCatalog
+    {
+        get
+        {
+            lock (_gate) return _state.LearningCatalog.Copy();
+        }
+    }
+
+    public void SaveLearningCatalog(LearningCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        var candidate = catalog.Copy();
+        LearningCatalogValidator.Validate(candidate);
+        lock (_gate)
+        {
+            var next = CloneState(_state);
+            next.LearningCatalog = candidate;
+            Commit(next);
         }
     }
 
@@ -791,7 +812,13 @@ public sealed class StudyRepository
 
         try
         {
-            return ReadState(_dataPath);
+            var loaded = ReadState(_dataPath, out var migrated);
+            if (migrated)
+            {
+                SaveStateInternal(loaded);
+                LastLoadWarning = "Os dados locais foram atualizados com segurança para a base de aprendizagem 0.5.0.";
+            }
+            return loaded;
         }
         catch (Exception ex) when (IsInvalidStateError(ex))
         {
@@ -801,7 +828,7 @@ public sealed class StudyRepository
             {
                 if (File.Exists(backupPath))
                 {
-                    var recovered = ReadState(backupPath);
+                    var recovered = ReadState(backupPath, out _);
                     SaveStateInternal(recovered);
                     LastLoadWarning =
                         $"O estado principal estava inválido e foi preservado como {Path.GetFileName(corruptPath)}. " +
@@ -823,7 +850,7 @@ public sealed class StudyRepository
         }
     }
 
-    private AppState ReadState(string path)
+    private AppState ReadState(string path, out bool migrated)
     {
         var info = new FileInfo(path);
         if (info.Length > MaxStateFileBytes)
@@ -834,8 +861,20 @@ public sealed class StudyRepository
         var json = reader.ReadToEnd();
         var loaded = JsonSerializer.Deserialize<AppState>(json, _jsonOptions)
             ?? throw new InvalidDataException("O arquivo de estado está vazio.");
+        migrated = MigrateState(loaded);
         ValidateState(loaded);
         return CloneState(loaded);
+    }
+
+    private static bool MigrateState(AppState state)
+    {
+        if (state.StateVersion == CurrentStateVersion) return false;
+        if (state.StateVersion != 1)
+            throw new InvalidDataException($"Versão de estado não suportada: {state.StateVersion}.");
+
+        state.LearningCatalog ??= new LearningCatalog();
+        state.StateVersion = CurrentStateVersion;
+        return true;
     }
 
     private void Commit(AppState next)
@@ -914,7 +953,8 @@ public sealed class StudyRepository
         CompletedOnboardingStep = 0,
         Settings = new AppSettings(),
         Sessions = new List<SessionItem>(),
-        AiApplications = new List<CalendarApplicationReceipt>()
+        AiApplications = new List<CalendarApplicationReceipt>(),
+        LearningCatalog = new LearningCatalog()
     };
 
     private static void ValidateState(AppState state)
@@ -925,10 +965,11 @@ public sealed class StudyRepository
             throw new InvalidDataException("A versão de alteração do estado é inválida.");
         if (state.CompletedOnboardingStep is < 0 or > OnboardingSteps.Last)
             throw new InvalidDataException("A etapa da configuração inicial é inválida.");
-        if (state.Settings is null || state.Sessions is null || state.AiApplications is null)
+        if (state.Settings is null || state.Sessions is null || state.AiApplications is null || state.LearningCatalog is null)
             throw new InvalidDataException("O estado local está incompleto.");
 
         ValidateCoreState(state.Settings, state.Sessions);
+        LearningCatalogValidator.Validate(state.LearningCatalog);
         if (state.AiApplications.Count > MaxAiApplicationReceipts)
             throw new InvalidDataException("O estado contém recibos de aplicação demais.");
 
@@ -1112,7 +1153,8 @@ public sealed class StudyRepository
         Sessions = source.Sessions.Select(session => session.Copy()).ToList(),
         AiApplications = source.AiApplications.Select(receipt => receipt.Copy()).ToList(),
         AiUndoCheckpoint = source.AiUndoCheckpoint?.Copy(),
-        SessionMoveUndoCheckpoint = source.SessionMoveUndoCheckpoint?.Copy()
+        SessionMoveUndoCheckpoint = source.SessionMoveUndoCheckpoint?.Copy(),
+        LearningCatalog = source.LearningCatalog.Copy()
     };
 
     public static AppSettings CopySettings(AppSettings source) => new()

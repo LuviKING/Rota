@@ -75,7 +75,7 @@ public sealed class AppSettings
 
 public sealed class AppState
 {
-    public int StateVersion { get; set; } = 1;
+    public int StateVersion { get; set; } = 2;
     public long MutationVersion { get; set; }
     public int CompletedOnboardingStep { get; set; }
     public AppSettings Settings { get; set; } = new();
@@ -83,6 +83,7 @@ public sealed class AppState
     public List<CalendarApplicationReceipt> AiApplications { get; set; } = new();
     public CalendarUndoCheckpoint? AiUndoCheckpoint { get; set; }
     public SessionMoveUndoCheckpoint? SessionMoveUndoCheckpoint { get; set; }
+    public LearningCatalog LearningCatalog { get; set; } = new();
 }
 
 public static class OnboardingSteps
