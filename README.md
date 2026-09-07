@@ -26,6 +26,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - Movimento: sessões pendentes podem ser arrastadas para outra data, com prévia, confirmação, desfazer e validação de prazo, dias disponíveis, carga diária e revisões protegidas
 - Instalação: instalador por usuário com atalhos, atualização sobre a instalação existente e desinstalação que preserva os dados locais
 - Atualizações: verificação manual nas Configurações, com novidades, confirmação, download limitado e conferência de tamanho e SHA-256 antes de abrir o instalador
+- Assinatura: pipeline Authenticode preparado para assinar aplicativo, instalador e desinstalador com SHA-256 e timestamp assim que o certificado comercial for configurado nos Secrets do GitHub
 - Tema: **escuro e claro**, com preferência local em `%LOCALAPPDATA%\Rota\theme.txt`
 - Primeira abertura: boas-vindas, rotina guiada e primeiro plano pela IA local; dificuldades, objetivo, prazo, dias e horas seguem para uma proposta que só altera o calendário após prévia e confirmação final
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal
@@ -186,7 +187,7 @@ Valida, nesta ordem:
 Valida:
 
 1. restore e build Release em runner Windows;
-2. testes de invariantes do importador, repositório, histórico, revisões, configuração inicial e IA local, além da carga real das onze janelas WPF;
+2. 241 testes de invariantes do importador, repositório, histórico, revisões, calendário, atualizações, configuração inicial e IA local, além da carga real das 18 janelas WPF;
 3. publicação `win-x64` self-contained em arquivo executável;
 4. metadados e SHA-256 do executável;
 5. smoke test de inicialização real do `Rota.exe`;

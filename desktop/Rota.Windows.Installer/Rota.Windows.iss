@@ -41,6 +41,12 @@ VersionInfoCompany=Rota
 VersionInfoDescription=Instalador do Rota para Windows
 VersionInfoProductName=Rota
 VersionInfoProductVersion={#AppVersion}
+#ifdef EnableSigning
+SignTool=rotasign
+SignedUninstaller=yes
+SignToolRetryCount=3
+SignToolRetryDelay=2500
+#endif
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"

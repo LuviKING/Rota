@@ -2,7 +2,11 @@ param(
     [Parameter(Mandatory = $true)][string]$PublishDir,
     [Parameter(Mandatory = $true)][string]$OutputDir,
     [string]$Version = '0.4.0',
-    [string]$CompilerPath = ''
+    [string]$CompilerPath = '',
+    [string]$SignToolPath = '',
+    [string]$CertificateThumbprint = '',
+    [string]$TimestampUrl = 'http://timestamp.digicert.com',
+    [switch]$SkipTimestamp
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,8 +33,21 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Versão inválida: $Version"
 }
 
+$compilerArguments = @("/DAppVersion=$Version", "/DPublishDir=$publish", "/DOutputDir=$output")
+if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
+    $signTool = (Resolve-Path -LiteralPath $SignToolPath).Path
+    $thumbprint = $CertificateThumbprint.Replace(' ', '').ToUpperInvariant()
+    if ($thumbprint -notmatch '^[0-9A-F]{40,128}$') { throw 'A impressão digital do certificado é inválida.' }
+    $signCommand = '$q' + $signTool + '$q sign /sha1 ' + $thumbprint + ' /s My /fd SHA256 /d $qRota$q'
+    if (-not $SkipTimestamp) {
+        $signCommand += ' /tr ' + $TimestampUrl + ' /td SHA256'
+    }
+    $signCommand += ' $f'
+    $compilerArguments += @('/DEnableSigning=1', "/Srotasign=$signCommand")
+}
+
 $script = Join-Path $PSScriptRoot 'Rota.Windows.iss'
-& $CompilerPath "/DAppVersion=$Version" "/DPublishDir=$publish" "/DOutputDir=$output" $script
+& $CompilerPath @compilerArguments $script
 if ($LASTEXITCODE -ne 0) {
     throw "O compilador do instalador terminou com o código $LASTEXITCODE."
 }

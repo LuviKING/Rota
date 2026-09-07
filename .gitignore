@@ -22,6 +22,8 @@ artifacts/
 *.jks
 *.keystore
 keystore.properties
+*.pfx
+*.p12
 
 # IDE
 .idea/

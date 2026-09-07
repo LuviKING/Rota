@@ -73,7 +73,7 @@ Os modelos de IA não ficam embutidos no EXE. A pessoa escolhe um perfil e confi
 
 O canal de atualização usa `windows-update.json` anexado a uma versão do GitHub. Enquanto o repositório for privado, a consulta automática pode exigir acesso ao GitHub e a tela informa isso sem alterar o aplicativo atual. Para distribuição a usuários sem acesso ao repositório, publique os mesmos arquivos em um canal HTTPS público e confiável.
 
-O binário de desenvolvimento ainda não possui assinatura Authenticode comercial. O Windows SmartScreen pode exibir um aviso de reputação na primeira execução. Uma distribuição pública definitiva deve usar um certificado de code signing persistente e protegido fora do repositório.
+O pipeline Authenticode já está preparado para assinar o aplicativo, o instalador e o desinstalador com SHA-256 e timestamp. Enquanto o certificado comercial não estiver configurado nos Secrets do GitHub, os artefatos continuam marcados como builds de desenvolvimento não assinados e o Windows SmartScreen pode exibir um aviso de reputação. Consulte `desktop/Rota.Windows.Signing/SIGNING-WINDOWS.md`.
 
 ## Build local
 
