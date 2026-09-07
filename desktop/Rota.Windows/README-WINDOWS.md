@@ -4,7 +4,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 
 ## Estado da edição Windows
 
-- Versão: **0.4.0**
+- Versão em desenvolvimento: **0.5.0**
 - novos perfis recebem boas-vindas, configuram objetivo, prazo, dias e horas e, na terceira etapa, informam dificuldades para a IA local preparar o primeiro plano; **Agora não** adia qualquer etapa sem marcá-la como concluída;
 - o primeiro plano exibe uma prévia e reutiliza a confirmação final existente antes de aplicar; se já houver um plano futuro, ele pode ser mantido sem substituição, e se a IA não estiver pronta a tela apenas oferece a configuração — nunca inicia download automaticamente;
 - os dias disponíveis também podem ser alterados depois em **Configurações**, junto com o limite diário;
@@ -67,7 +67,7 @@ A identidade persistida de uma sessão é o par `(plan.id, session.id)`. O marca
 
 ## Executável
 
-O CI publica o artefato **`Rota-Windows-v0.4.0-x64`** com o instalador recomendado e o executável portátil `win-x64`, ambos **self-contained**, então o usuário não precisa instalar o .NET 8 separadamente. O instalador funciona por usuário, cria um atalho no menu Iniciar, oferece um atalho opcional na área de trabalho e registra a desinstalação no Windows. Os dados de estudo são preservados ao desinstalar.
+O CI publica o artefato **`Rota-Windows-v0.5.0-x64`** com o instalador recomendado e o executável portátil `win-x64`, ambos **self-contained**, então o usuário não precisa instalar o .NET 8 separadamente. O instalador funciona por usuário, cria um atalho no menu Iniciar, oferece um atalho opcional na área de trabalho e registra a desinstalação no Windows. Os dados de estudo são preservados ao desinstalar.
 
 Os modelos de IA não ficam embutidos no EXE. A pessoa escolhe um perfil e confirma a instalação dentro do aplicativo; só então o Rota baixa e verifica o runtime e o modelo correspondentes. Isso mantém o instalador do aplicativo menor e torna transparente o espaço necessário para cada perfil.
 

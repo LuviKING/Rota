@@ -271,7 +271,7 @@ public sealed class AppUpdateService : IAppUpdateService
     private static HttpClient CreateSharedClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("Rota-Windows-Updater/0.4.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Rota-Windows-Updater/0.5.0");
         return client;
     }
 }

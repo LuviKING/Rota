@@ -37,7 +37,7 @@ Sem esses segredos, o mesmo workflow continua gerando artefatos de desenvolvimen
 .\desktop\Rota.Windows.Signing\Build-WindowsRelease.ps1 `
   -PublishDir .\artifacts\win-x64 `
   -OutputDir .\artifacts\installer `
-  -Version 0.4.0 `
+  -Version 0.5.0 `
   -PfxPath C:\segredos\rota-code-signing.pfx `
   -CertificatePassword 'senha-fornecida-fora-do-repositorio'
 ```

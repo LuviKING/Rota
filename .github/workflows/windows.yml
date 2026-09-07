@@ -93,7 +93,7 @@ jobs:
               .\desktop\Rota.Windows.Signing\Build-WindowsRelease.ps1 `
                 -PublishDir .\artifacts\win-x64 `
                 -OutputDir .\artifacts\installer `
-                -Version 0.4.0 `
+                -Version 0.5.0 `
                 -PfxPath $pfx `
                 -CertificatePassword $env:WINDOWS_CERTIFICATE_PASSWORD
               New-Item -ItemType File '.\artifacts\signing-enabled.txt' | Out-Null
@@ -106,7 +106,7 @@ jobs:
             .\desktop\Rota.Windows.Signing\Build-WindowsRelease.ps1 `
               -PublishDir .\artifacts\win-x64 `
               -OutputDir .\artifacts\installer `
-              -Version 0.4.0
+              -Version 0.5.0
           }
 
       - name: Verify Windows package
@@ -119,12 +119,12 @@ jobs:
 
           $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
           if ($info.ProductName -ne 'Rota') { throw "Unexpected product name: $($info.ProductName)" }
-          if ($info.FileVersion -notlike '0.4.0*') { throw "Unexpected file version: $($info.FileVersion)" }
+          if ($info.FileVersion -notlike '0.5.0*') { throw "Unexpected file version: $($info.FileVersion)" }
 
           $requireTrusted = Test-Path -LiteralPath '.\artifacts\signing-enabled.txt'
           .\desktop\Rota.Windows.Signing\Verify-WindowsSignature.ps1 -Files @(
             $exe.Path,
-            (Resolve-Path '.\artifacts\installer\Rota-Windows-v0.4.0-Setup-x64.exe').Path
+            (Resolve-Path '.\artifacts\installer\Rota-Windows-v0.5.0-Setup-x64.exe').Path
           ) -RequireTrusted:$requireTrusted
           if (-not $requireTrusted) { Write-Host 'Development artifact: commercial Authenticode certificate is not configured.' }
           Get-FileHash $exe -Algorithm SHA256 | Format-List
@@ -162,7 +162,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = (Resolve-Path '.\artifacts\installer\Rota-Windows-v0.4.0-Setup-x64.exe').Path
+          $installer = (Resolve-Path '.\artifacts\installer\Rota-Windows-v0.5.0-Setup-x64.exe').Path
           if ((Get-Item -LiteralPath $installer).Length -lt 10MB) { throw 'The Windows installer is unexpectedly small.' }
 
           $installRoot = Join-Path $env:RUNNER_TEMP 'Rota-Installer-Smoke'
@@ -190,17 +190,17 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force '.\artifacts\stage' | Out-Null
-          Copy-Item '.\artifacts\win-x64\Rota.exe' '.\artifacts\stage\Rota-Windows-v0.4.0-x64.exe'
-          Copy-Item '.\artifacts\installer\Rota-Windows-v0.4.0-Setup-x64.exe' '.\artifacts\stage\Rota-Windows-v0.4.0-Setup-x64.exe'
+          Copy-Item '.\artifacts\win-x64\Rota.exe' '.\artifacts\stage\Rota-Windows-v0.5.0-x64.exe'
+          Copy-Item '.\artifacts\installer\Rota-Windows-v0.5.0-Setup-x64.exe' '.\artifacts\stage\Rota-Windows-v0.5.0-Setup-x64.exe'
           Copy-Item '.\desktop\Rota.Windows\README-WINDOWS.md' '.\artifacts\stage\LEIA-ME.txt'
-          Copy-Item '.\desktop\Rota.Windows\RELEASE-NOTES-0.4.0.md' '.\artifacts\stage\NOVIDADES-0.4.0.txt'
+          Copy-Item '.\desktop\Rota.Windows\RELEASE-NOTES-0.5.0-DRAFT.md' '.\artifacts\stage\NOVIDADES-0.5.0.txt'
           Get-ChildItem '.\artifacts\stage\*.exe' | ForEach-Object {
             (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $_.Name
           } | Set-Content -Encoding ascii '.\artifacts\stage\SHA256SUMS.txt'
-          $installer = Get-Item '.\artifacts\stage\Rota-Windows-v0.4.0-Setup-x64.exe'
+          $installer = Get-Item '.\artifacts\stage\Rota-Windows-v0.5.0-Setup-x64.exe'
           $manifest = [ordered]@{
-            version = '0.4.0'
-            installer_url = 'https://github.com/LuviKING/Rota/releases/download/v0.4.0/Rota-Windows-v0.4.0-Setup-x64.exe'
+            version = '0.5.0'
+            installer_url = 'https://github.com/LuviKING/Rota/releases/download/v0.5.0/Rota-Windows-v0.5.0-Setup-x64.exe'
             sha256 = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             bytes = $installer.Length
             notes = 'Resumo semanal e mensal, progresso por matéria, calendário com mover/confirmar/desfazer, instalador e atualização segura.'
@@ -210,7 +210,7 @@ jobs:
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Rota-Windows-v0.4.0-x64
+          name: Rota-Windows-v0.5.0-x64
           path: artifacts/stage/*
           if-no-files-found: error
           retention-days: 7
