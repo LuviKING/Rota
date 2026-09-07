@@ -55,7 +55,7 @@
                     </StackPanel>
                     <Border HorizontalAlignment="Right" VerticalAlignment="Top"
                             Background="{DynamicResource SubtleBrush}" CornerRadius="9" Padding="9,5">
-                        <TextBlock x:Name="VersionBadgeText" Text="VERSÃO ATUAL · 0.4.0"
+                        <TextBlock x:Name="VersionBadgeText" Text="VERSÃO ATUAL · 0.5.0"
                                    Foreground="{DynamicResource PrimaryTextBrush}"
                                    FontSize="9.5" FontWeight="SemiBold" />
                     </Border>

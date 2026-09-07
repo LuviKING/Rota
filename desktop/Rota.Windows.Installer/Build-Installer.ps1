@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$PublishDir,
     [Parameter(Mandatory = $true)][string]$OutputDir,
-    [string]$Version = '0.4.0',
+    [string]$Version = '0.5.0',
     [string]$CompilerPath = '',
     [string]$SignToolPath = '',
     [string]$CertificateThumbprint = '',

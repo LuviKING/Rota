@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.4.0"
+  #define AppVersion "0.5.0"
 #endif
 #ifndef PublishDir
   #define PublishDir "..\..\artifacts\win-x64"
@@ -57,7 +57,7 @@ Name: "desktopicon"; Description: "Criar um atalho na área de trabalho"; GroupD
 [Files]
 Source: "{#PublishDir}\Rota.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Rota.Windows\README-WINDOWS.md"; DestDir: "{app}"; DestName: "LEIA-ME.txt"; Flags: ignoreversion
-Source: "..\Rota.Windows\RELEASE-NOTES-0.4.0.md"; DestDir: "{app}"; DestName: "NOVIDADES-0.4.0.txt"; Flags: ignoreversion
+Source: "..\Rota.Windows\RELEASE-NOTES-0.5.0-DRAFT.md"; DestDir: "{app}"; DestName: "NOVIDADES-0.5.0.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Rota"; Filename: "{app}\Rota.exe"; WorkingDir: "{app}"; Comment: "Abrir o Rota"
