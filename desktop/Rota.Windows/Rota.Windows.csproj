@@ -9,9 +9,9 @@
     <AssemblyName>Rota</AssemblyName>
     <RootNamespace>Rota.Desktop</RootNamespace>
     <ApplicationIcon>Assets\Rota.ico</ApplicationIcon>
-    <Version>0.3.2</Version>
-    <AssemblyVersion>0.3.2.0</AssemblyVersion>
-    <FileVersion>0.3.2.0</FileVersion>
+    <Version>0.4.0</Version>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <FileVersion>0.4.0.0</FileVersion>
     <Product>Rota</Product>
     <Description>Rota para Windows - calendário de estudos com IA local e StudyPlan Code.</Description>
     <Company>Rota</Company>

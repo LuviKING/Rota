@@ -17,13 +17,14 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 
 ### Windows
 
-- Versão: **0.3.2**
+- Versão: **0.4.0**
 - Compatibilidade: **Windows 10 e Windows 11 x64**
 - Tecnologia: **WPF / .NET 8**
 - Distribuição CI: executável **self-contained**, sem exigir instalação separada do .NET
 - Dados locais: `%LOCALAPPDATA%\Rota\desktop-state.json`, com troca atômica, cópia íntegra anterior e recuperação de corrupção
 - UI principal: calendário mensal em grade + agenda detalhada do dia selecionado
 - Movimento: sessões pendentes podem ser arrastadas para outra data, com prévia, confirmação, desfazer e validação de prazo, dias disponíveis, carga diária e revisões protegidas
+- Instalação: instalador por usuário com atalhos, atualização sobre a instalação existente e desinstalação que preserva os dados locais
 - Tema: **escuro e claro**, com preferência local em `%LOCALAPPDATA%\Rota\theme.txt`
 - Primeira abertura: boas-vindas, rotina guiada e primeiro plano pela IA local; dificuldades, objetivo, prazo, dias e horas seguem para uma proposta que só altera o calendário após prévia e confirmação final
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal

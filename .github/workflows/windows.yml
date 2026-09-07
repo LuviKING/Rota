@@ -67,7 +67,7 @@ jobs:
 
           $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
           if ($info.ProductName -ne 'Rota') { throw "Unexpected product name: $($info.ProductName)" }
-          if ($info.FileVersion -notlike '0.3.2*') { throw "Unexpected file version: $($info.FileVersion)" }
+          if ($info.FileVersion -notlike '0.4.0*') { throw "Unexpected file version: $($info.FileVersion)" }
 
           $sig = Get-AuthenticodeSignature $exe
           Write-Host "Authenticode status: $($sig.Status) (development artifact; commercial signing is intentionally not configured yet)"
@@ -102,20 +102,64 @@ jobs:
           Invoke-RotaSmoke 'dark' 'rota-desktop-smoke-dark.json'
           Invoke-RotaSmoke 'light' 'rota-desktop-smoke-light.json'
 
+      - name: Install pinned installer compiler
+        shell: pwsh
+        run: >-
+          winget install --id JRSoftware.InnoSetup -e --source winget --version 6.7.3
+          --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: >-
+          .\desktop\Rota.Windows.Installer\Build-Installer.ps1
+          -PublishDir .\artifacts\win-x64
+          -OutputDir .\artifacts\installer
+          -Version 0.4.0
+
+      - name: Install update launch and uninstall smoke test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path '.\artifacts\installer\Rota-Windows-v0.4.0-Setup-x64.exe').Path
+          if ((Get-Item -LiteralPath $installer).Length -lt 10MB) { throw 'The Windows installer is unexpectedly small.' }
+
+          $installRoot = Join-Path $env:RUNNER_TEMP 'Rota-Installer-Smoke'
+          $install = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installRoot", '/TASKS=') -PassThru -Wait -WindowStyle Hidden
+          if ($install.ExitCode -ne 0) { throw "Installer smoke failed with code $($install.ExitCode)." }
+
+          $installedExe = Join-Path $installRoot 'Rota.exe'
+          if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) { throw 'Rota.exe was not installed.' }
+          $env:ROTA_SMOKE_DATA_PATH = Join-Path $env:RUNNER_TEMP 'rota-installed-smoke.json'
+          $launch = Start-Process -FilePath $installedExe -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
+          if (-not $launch.WaitForExit(15000)) {
+            Stop-Process -Id $launch.Id -Force
+            throw 'The installed Rota startup smoke test timed out.'
+          }
+          if ($launch.ExitCode -ne 0) { throw "The installed Rota smoke failed with code $($launch.ExitCode)." }
+
+          $uninstaller = Join-Path $installRoot 'unins000.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) { throw 'The Windows uninstaller was not registered.' }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru -Wait -WindowStyle Hidden
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller smoke failed with code $($uninstall.ExitCode)." }
+          if (Test-Path -LiteralPath $installedExe) { throw 'Rota.exe remained after uninstall.' }
+
       - name: Stage artifact
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force '.\artifacts\stage' | Out-Null
-          Copy-Item '.\artifacts\win-x64\Rota.exe' '.\artifacts\stage\Rota-Windows-v0.3.2-x64.exe'
+          Copy-Item '.\artifacts\win-x64\Rota.exe' '.\artifacts\stage\Rota-Windows-v0.4.0-x64.exe'
+          Copy-Item '.\artifacts\installer\Rota-Windows-v0.4.0-Setup-x64.exe' '.\artifacts\stage\Rota-Windows-v0.4.0-Setup-x64.exe'
           Copy-Item '.\desktop\Rota.Windows\README-WINDOWS.md' '.\artifacts\stage\LEIA-ME.txt'
-          Copy-Item '.\desktop\Rota.Windows\RELEASE-NOTES-0.3.2.md' '.\artifacts\stage\NOVIDADES-0.3.2.txt'
-          (Get-FileHash '.\artifacts\stage\Rota-Windows-v0.3.2-x64.exe' -Algorithm SHA256).Hash.ToLowerInvariant() + '  Rota-Windows-v0.3.2-x64.exe' | Set-Content -Encoding ascii '.\artifacts\stage\Rota-Windows-v0.3.2-x64.sha256.txt'
+          Copy-Item '.\desktop\Rota.Windows\RELEASE-NOTES-0.4.0.md' '.\artifacts\stage\NOVIDADES-0.4.0.txt'
+          Get-ChildItem '.\artifacts\stage\*.exe' | ForEach-Object {
+            (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $_.Name
+          } | Set-Content -Encoding ascii '.\artifacts\stage\SHA256SUMS.txt'
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Rota-Windows-v0.3.2-x64
+          name: Rota-Windows-v0.4.0-x64
           path: artifacts/stage/*
           if-no-files-found: error
           retention-days: 7
