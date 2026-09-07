@@ -28,13 +28,17 @@ public sealed class LearningContentPackage
     [JsonPropertyName("theory_materials")]
     public List<LearningTheoryMaterial> TheoryMaterials { get; set; } = new();
 
+    [JsonPropertyName("practice_questions")]
+    public List<LearningPracticeQuestion> PracticeQuestions { get; set; } = new();
+
     public LearningContentPackage Copy() => new()
     {
         Format = Format,
         SchemaVersion = SchemaVersion,
         Package = Package.Copy(),
         Catalog = Catalog.Copy(),
-        TheoryMaterials = TheoryMaterials.Select(material => material.Copy()).ToList()
+        TheoryMaterials = TheoryMaterials.Select(material => material.Copy()).ToList(),
+        PracticeQuestions = PracticeQuestions.Select(question => question.Copy()).ToList()
     };
 }
 
@@ -122,12 +126,13 @@ public static class LearningContentPackageFormat
             throw new InvalidDataException("O formato do pacote pedagógico não é reconhecido.");
         if (package.SchemaVersion != LearningContentPackage.CurrentSchemaVersion)
             throw new InvalidDataException($"A versão do pacote pedagógico não é suportada: {package.SchemaVersion}.");
-        if (package.Package is null || package.Catalog is null || package.TheoryMaterials is null)
+        if (package.Package is null || package.Catalog is null || package.TheoryMaterials is null || package.PracticeQuestions is null)
             throw new InvalidDataException("O pacote pedagógico está incompleto.");
 
         ValidateIdentity(package.Package);
         LearningCatalogValidator.Validate(package.Catalog);
         LearningTheoryMaterialValidator.Validate(package.TheoryMaterials, package.Catalog);
+        LearningPracticeQuestionValidator.Validate(package.PracticeQuestions, package.Catalog);
         if (package.Catalog.Subjects.Count == 0 || package.Catalog.Courses.Count == 0 ||
             package.Catalog.Modules.Count == 0 || package.Catalog.Lessons.Count == 0 || package.Catalog.Contents.Count == 0)
         {
