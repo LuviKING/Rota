@@ -430,6 +430,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void AiNav_Click(object sender, RoutedEventArgs e)
         => OpenAiAssistant();
 
+    private void LearningNav_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new LearningHubWindow(
+            Path.Combine(_repository.DataDirectory, "LearningLibrary"),
+            new Version(0, 5, 0)) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private void OpenAiAssistant(
         string? initialRequest = null,
         AiProposalKind initialProposalKind = AiProposalKind.StudyPlan)

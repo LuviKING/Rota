@@ -144,6 +144,10 @@ tests = tests.Concat(Rota.Desktop.Tests.LearningPackageManifestTests.Cases).ToAr
 tests = tests.Concat(Rota.Desktop.Tests.LearningTheoryMaterialTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.LearningPracticeQuestionTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.LearningAssessmentTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.LearningPackageInstallerTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.LearningContentLibraryTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.LearningProgressStoreTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.LearningStudyGuideTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_LOCAL_AI_PERFORMANCE")))
@@ -1338,6 +1342,7 @@ static void DesktopWindowsLoad()
                 }),
                 new AiInstallationWindow(installation),
                 new AiPromptWindow(repo),
+                new LearningHubWindow(Path.Combine(dir, "LearningLibrary"), new Version(0, 5, 0)),
                 new ImportPlanWindow(repo),
                 new SettingsWindow(repo, new RecordingStudyReminderScheduler()),
                 new WelcomeWindow(repo),

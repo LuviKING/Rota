@@ -250,6 +250,21 @@
                         </Border>
                     </Button>
                     <Button Style="{StaticResource SidebarNavigationButton}"
+                            Click="LearningNav_Click"
+                            ToolTip="Abrir aulas, exercícios e simulados">
+                        <Border CornerRadius="11" Padding="8,6">
+                            <StackPanel Orientation="Horizontal">
+                                <Border Style="{StaticResource SidebarIconContainer}">
+                                    <TextBlock Text="&#xE82D;" Style="{StaticResource IconGlyphText}"
+                                               Foreground="{DynamicResource SidebarMutedBrush}"
+                                               FontSize="19" />
+                                </Border>
+                                <TextBlock Text="Aprender" Foreground="{DynamicResource SidebarTextBrush}"
+                                           FontSize="12.5" Margin="11,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                    <Button Style="{StaticResource SidebarNavigationButton}"
                             Click="ImportNav_Click"
                             ToolTip="Importar StudyPlan JSON (Ctrl+I)">
                         <Border CornerRadius="11" Padding="8,6">
