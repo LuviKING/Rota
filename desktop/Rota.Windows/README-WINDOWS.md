@@ -10,7 +10,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - os dias disponíveis também podem ser alterados depois em **Configurações**, junto com o limite diário;
 - interface principal **calendar-first**, com o mês completo em grade e a agenda detalhada do dia selecionado logo abaixo;
 - navegação rápida entre meses, dias e retorno para hoje;
-- sessões pendentes mostram uma indicação de arraste e podem ser movidas para outro dia no calendário; concluídas e revisões automáticas permanecem imóveis;
+- sessões pendentes mostram uma indicação de arraste e podem ser movidas para outro dia no calendário; prazo, dias disponíveis e limite diário são validados, enquanto concluídas e revisões automáticas permanecem imóveis;
 - um aviso discreto identifica blocos atrasados e sua carga total sem alterar datas; a análise ignora sessões concluídas, distingue revisões automáticas protegidas e devolve apenas uma visão limitada dos dados;
 - a tela **Recuperar estudos atrasados** detalha uma amostra segura dos blocos, leva ao mais antigo e pode preparar um pedido limitado para a IA reorganizar somente datas futuras; o calendário só muda após prévia e confirmação final;
 - um lembrete diário opcional pode ser ativado nas Configurações; o Agendador de Tarefas do Windows abre no horário escolhido um resumo somente leitura dos blocos de hoje e atrasados, mesmo com o aplicativo fechado;

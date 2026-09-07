@@ -34,6 +34,9 @@ var tests = new (string Name, Action Body)[]
     ("Daily capacity includes runtime reviews", CapacityIncludesRuntime),
     ("Calendar move relocates a pending session", CalendarMoveRelocatesPendingSession),
     ("Calendar move protects completed sessions and automatic reviews", CalendarMoveProtectsImmutableSessions),
+    ("Calendar move respects available study days", CalendarMoveRespectsAvailableDays),
+    ("Calendar move respects the objective deadline", CalendarMoveRespectsDeadline),
+    ("Calendar move respects daily capacity", CalendarMoveRespectsDailyCapacity),
     ("Preview does not mutate memory or disk", PreviewDoesNotMutate),
     ("Failed persistence leaves memory and disk unchanged", FailedPersistenceIsTransactional),
     ("Repository recovers the last valid atomic backup", RepositoryRecoversAtomicBackup),
@@ -574,6 +577,64 @@ static void CalendarMoveProtectsImmutableSessions()
             .Single(session => session.Id == "completed").Date);
         Eq("2026-09-03", repo.SessionsForDate(new DateOnly(2026, 9, 3))
             .Single(session => session.Id == "pending").Date);
+    });
+}
+
+static void CalendarMoveRespectsAvailableDays()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        repo.SavePreferences("ENEM", "2026-09-30", 5, 60, true, true, true,
+            new[] { DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday });
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-days", 1, "2026-09-30", SessionJson("session", "2026-09-02", 60)))).Success);
+        var before = File.ReadAllText(path);
+
+        var preview = repo.PreviewSessionMove("move-days", "session", new DateOnly(2026, 9, 3));
+        var result = repo.MoveSession("move-days", "session", new DateOnly(2026, 9, 3));
+
+        True(!preview.Success && !result.Success);
+        Contains(result.Message, "não está disponível");
+        Eq(before, File.ReadAllText(path));
+        Eq("session", repo.SessionsForDate(new DateOnly(2026, 9, 2)).Single().Id);
+    });
+}
+
+static void CalendarMoveRespectsDeadline()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-deadline", 1, "2026-09-04", SessionJson("session", "2026-09-02", 60)))).Success);
+        var before = File.ReadAllText(path);
+
+        var result = repo.MoveSession("move-deadline", "session", new DateOnly(2026, 9, 5));
+
+        True(!result.Success);
+        Contains(result.Message, "depois do prazo");
+        Eq(before, File.ReadAllText(path));
+    });
+}
+
+static void CalendarMoveRespectsDailyCapacity()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        repo.SavePreferences("ENEM", "2026-09-30", 1, 60, true, true, true);
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-capacity",
+            1,
+            "2026-09-30",
+            SessionJson("moving", "2026-09-02", 30),
+            SessionJson("occupied", "2026-09-03", 60)))).Success);
+        var before = File.ReadAllText(path);
+
+        var result = repo.MoveSession("move-capacity", "moving", new DateOnly(2026, 9, 3));
+
+        True(!result.Success);
+        Contains(result.Message, "limite diário");
+        Eq(before, File.ReadAllText(path));
+        Eq("moving", repo.SessionsForDate(new DateOnly(2026, 9, 2)).Single().Id);
     });
 }
 

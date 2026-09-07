@@ -239,33 +239,65 @@ public sealed class StudyRepository
 
     public SessionMoveResult MoveSession(string planId, string sessionId, DateOnly targetDate)
     {
-        if (string.IsNullOrWhiteSpace(planId) || string.IsNullOrWhiteSpace(sessionId))
-            return new SessionMoveResult(false, false, "A sessão selecionada é inválida.");
-
         lock (_gate)
         {
+            var validation = EvaluateSessionMove(_state, planId, sessionId, targetDate);
+            if (!validation.Success || validation.AlreadyHandled) return validation;
+
             var next = CloneState(_state);
             var item = FindIdentity(next, planId, sessionId);
             if (item is null)
                 return new SessionMoveResult(false, false, "A sessão não existe mais no calendário.");
-            if (item.IsCompleted)
-                return new SessionMoveResult(false, false, "Uma sessão concluída não pode ser movida.", item.Date);
-            if (item.Origin == "runtime")
-                return new SessionMoveResult(false, false, "Uma revisão automática protegida não pode ser movida.", item.Date);
 
-            var target = Iso(targetDate);
-            if (target == item.Date)
-                return new SessionMoveResult(true, true, "A sessão já está nesse dia.", item.Date, target, _state.MutationVersion);
-
-            var today = DateOnly.FromDateTime(_now());
-            if (targetDate < today)
-                return new SessionMoveResult(false, false, "Escolha hoje ou uma data futura.", item.Date, target, _state.MutationVersion);
-
-            var source = item.Date;
-            item.Date = target;
+            item.Date = validation.TargetDate;
             Commit(next);
-            return new SessionMoveResult(true, false, "Sessão movida no calendário.", source, target, _state.MutationVersion);
+            return validation with { Message = "Sessão movida no calendário.", MutationVersion = _state.MutationVersion };
         }
+    }
+
+    public SessionMoveResult PreviewSessionMove(string planId, string sessionId, DateOnly targetDate)
+    {
+        lock (_gate) return EvaluateSessionMove(_state, planId, sessionId, targetDate);
+    }
+
+    private SessionMoveResult EvaluateSessionMove(AppState state, string planId, string sessionId, DateOnly targetDate)
+    {
+        if (string.IsNullOrWhiteSpace(planId) || string.IsNullOrWhiteSpace(sessionId))
+            return new SessionMoveResult(false, false, "A sessão selecionada é inválida.");
+
+        var item = FindIdentity(state, planId, sessionId);
+        if (item is null)
+            return new SessionMoveResult(false, false, "A sessão não existe mais no calendário.");
+
+        var target = Iso(targetDate);
+        if (item.IsCompleted)
+            return new SessionMoveResult(false, false, "Uma sessão concluída não pode ser movida.", item.Date, target, state.MutationVersion);
+        if (item.Origin == "runtime")
+            return new SessionMoveResult(false, false, "Uma revisão automática protegida não pode ser movida.", item.Date, target, state.MutationVersion);
+        if (target == item.Date)
+            return new SessionMoveResult(true, true, "A sessão já está nesse dia.", item.Date, target, state.MutationVersion);
+
+        var today = DateOnly.FromDateTime(_now());
+        if (targetDate < today)
+            return new SessionMoveResult(false, false, "Escolha hoje ou uma data futura.", item.Date, target, state.MutationVersion);
+        if (!state.Settings.AvailableStudyDays.Contains(targetDate.DayOfWeek))
+            return new SessionMoveResult(false, false, "Esse dia da semana não está disponível na sua rotina.", item.Date, target, state.MutationVersion);
+        if (state.Settings.ObjectiveDate.Length > 0 && string.CompareOrdinal(target, state.Settings.ObjectiveDate) > 0)
+            return new SessionMoveResult(false, false, "A sessão não pode ficar depois do prazo do objetivo.", item.Date, target, state.MutationVersion);
+
+        var targetMinutes = state.Sessions
+            .Where(session => session.Date == target && !ReferenceEquals(session, item))
+            .Sum(session => (long)session.Minutes);
+        var dailyLimit = DailyMinutesLimit(state.Settings);
+        if (targetMinutes + item.Minutes > dailyLimit)
+        {
+            var shown = targetDate.ToString("dd/MM/yyyy", CultureInfo.GetCultureInfo("pt-BR"));
+            return new SessionMoveResult(false, false,
+                $"Mover para {shown} ultrapassaria seu limite diário de {dailyLimit} minutos.",
+                item.Date, target, state.MutationVersion);
+        }
+
+        return new SessionMoveResult(true, false, "Movimento validado com segurança.", item.Date, target, state.MutationVersion);
     }
 
     public bool SaveOnboardingRoutine(
