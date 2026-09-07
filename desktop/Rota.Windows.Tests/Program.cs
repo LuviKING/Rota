@@ -1342,6 +1342,7 @@ static void DesktopWindowsLoad()
                 }),
                 new AiInstallationWindow(installation),
                 new AiPromptWindow(repo),
+                new LearningHubWindow(Path.Combine(dir, "LearningLibrary"), new Version(0, 5, 0)),
                 new ImportPlanWindow(repo),
                 new SettingsWindow(repo, new RecordingStudyReminderScheduler()),
                 new WelcomeWindow(repo),
