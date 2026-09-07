@@ -56,6 +56,12 @@ public partial class WeeklySummaryWindow : Window
         var dialog = new SubjectProgressWindow(_snapshot) { Owner = this };
         dialog.ShowDialog();
     }
+
+    private void ProgressHistory_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ProgressHistoryWindow(_snapshot) { Owner = this };
+        dialog.ShowDialog();
+    }
 }
 
 public sealed record WeeklyProgressDayView(

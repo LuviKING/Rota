@@ -98,6 +98,8 @@
             <TextBlock Text="Resumo somente leitura calculado pelas datas planejadas."
                        Foreground="{DynamicResource MutedBrush}" FontSize="9.5" VerticalAlignment="Center" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="ProgressHistoryButton" Style="{StaticResource SecondaryButton}"
+                        Click="ProgressHistory_Click" Width="142" Margin="0,0,8,0">Histórico</Button>
                 <Button x:Name="SubjectProgressButton" Style="{StaticResource SecondaryButton}"
                         Click="SubjectProgress_Click" Width="164" Margin="0,0,8,0">Por matéria</Button>
                 <Button x:Name="CloseButton" Style="{StaticResource PrimaryButton}" Click="Close_Click"

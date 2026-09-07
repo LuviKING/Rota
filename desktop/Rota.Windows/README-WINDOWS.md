@@ -15,6 +15,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - um lembrete diário opcional pode ser ativado nas Configurações; o Agendador de Tarefas do Windows abre no horário escolhido um resumo somente leitura dos blocos de hoje e atrasados, mesmo com o aplicativo fechado;
 - o botão **Resumo** mostra a semana atual de segunda a domingo, com minutos e sessões planejados, concluídos e restantes, percentual geral e andamento diário, sem alterar o calendário;
 - dentro do Resumo, **Por matéria** agrupa todo o calendário salvo e compara minutos, sessões e dias concluídos de cada disciplina; o painel deixa explícito que ainda não mede notas ou acertos;
+- dentro do Resumo, **Histórico** mostra os últimos 12 meses e compara as últimas 8 semanas com a semana anterior, sem alterar o calendário;
 - tema **escuro e claro**, com troca imediata pela interface e preferência preservada localmente;
 - cards de contexto mostram plano ativo, objetivo, carga do mês e progresso mensal usando dados reais do calendário;
 - cada dia indica visualmente conteúdo, revisão, simulado/prova ou conclusão;

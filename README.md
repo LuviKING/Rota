@@ -31,6 +31,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - Lembretes: horário diário opcional nas Configurações; o Agendador de Tarefas do Windows abre um resumo local da agenda mesmo com o Rota fechado
 - Resumo semanal: minutos e sessões planejados, concluídos e restantes, com progresso de cada dia de segunda a domingo
 - Progresso por matéria: comparação de minutos, sessões e dias concluídos para cada disciplina, sem confundir execução do plano com nota ou taxa de acertos
+- Histórico de progresso: visão dos últimos 12 meses e comparação das últimas 8 semanas com a semana anterior
 - Contexto mensal: plano ativo, objetivo, carga e progresso calculados dos dados reais
 - Importação: editor, arquivo `.json` e arrastar/soltar StudyPlan na janela
 - IA: assistente local/offline com perfis Leve, Equilibrado e Desempenho, instalação verificada, diagnóstico real de hardware/desempenho, conversa persistente, prévia, confirmação e desfazer seguro

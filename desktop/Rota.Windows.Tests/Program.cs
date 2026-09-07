@@ -61,6 +61,8 @@ var tests = new (string Name, Action Body)[]
     ("Weekly summary uses Monday boundaries without mutation", WeeklySummaryIsReadOnlyAndMondayBased),
     ("Subject progress groups completed minutes and sessions", SubjectProgressGroupsSessions),
     ("Subject progress stays bounded without mutation", SubjectProgressIsBoundedAndReadOnly),
+    ("Progress history aggregates months and compares weeks", ProgressHistoryAggregatesAndCompares),
+    ("Progress history stays bounded without mutation", ProgressHistoryIsBoundedAndReadOnly),
     ("Stored state rejects unknown properties", StoredStateRejectsUnknownProperties),
     ("Exported backup can be loaded independently", ExportedBackupReloads),
     ("Desktop windows load without XAML or binding failures", DesktopWindowsLoad),
@@ -636,6 +638,50 @@ static SessionItem WeeklySession(
         CompletedAtUnixMs = completed ? 1_788_200_000_000 : 0
     };
 
+static void ProgressHistoryAggregatesAndCompares()
+{
+    var sessions = new[]
+    {
+        WeeklySession("august", "2026-08-20", 30, completed: true),
+        WeeklySession("previous-week", "2026-08-27", 40, completed: true),
+        WeeklySession("current-done", "2026-09-01", 60, completed: true),
+        WeeklySession("current-pending", "2026-09-02", 30)
+    };
+    var history = ProgressHistoryAnalyzer.Analyze(new RepositoryApplicationSnapshot(
+        10, "2026-09-02", new AppSettings(), sessions), monthCount: 2, weekCount: 2);
+
+    Eq(3, history.TotalCompletedSessions);
+    Eq(130, history.TotalCompletedMinutes);
+    Eq(2, history.ActiveMonths);
+    Eq(new DateOnly(2026, 9, 1), history.Months[0].Month);
+    Eq(2, history.Months[0].PlannedSessions);
+    Eq(1, history.Months[0].CompletedSessions);
+    Eq(50, history.Months[0].CompletionPercent);
+    Eq(2, history.Weeks.Count);
+    Eq(20, history.Weeks[0].CompletedMinutesChange);
+}
+
+static void ProgressHistoryIsBoundedAndReadOnly()
+{
+    var snapshot = new RepositoryApplicationSnapshot(
+        11,
+        "2026-09-02",
+        new AppSettings(),
+        new[] { WeeklySession("one", "2026-09-01", 30, completed: true) });
+    var before = JsonSerializer.Serialize(snapshot);
+
+    var history = ProgressHistoryAnalyzer.Analyze(
+        snapshot,
+        ProgressHistoryAnalyzer.MaximumMonthCount,
+        ProgressHistoryAnalyzer.MaximumWeekCount);
+
+    Eq(ProgressHistoryAnalyzer.MaximumMonthCount, history.Months.Count);
+    Eq(ProgressHistoryAnalyzer.MaximumWeekCount, history.Weeks.Count);
+    Eq(before, JsonSerializer.Serialize(snapshot));
+    ThrowsType<ArgumentOutOfRangeException>(() => ProgressHistoryAnalyzer.Analyze(snapshot, 0, 2));
+    ThrowsType<ArgumentOutOfRangeException>(() => ProgressHistoryAnalyzer.Analyze(snapshot, 1, 1));
+}
+
 static void OnboardingStartsAtWelcome()
 {
     WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
@@ -1116,7 +1162,8 @@ static void DesktopWindowsLoad()
                 new OverdueRecoveryWindow(recoveryWindowSnapshot),
                 new ReminderWindow(repo),
                 new WeeklySummaryWindow(weeklyWindowSnapshot),
-                new SubjectProgressWindow(weeklyWindowSnapshot)
+                new SubjectProgressWindow(weeklyWindowSnapshot),
+                new ProgressHistoryWindow(weeklyWindowSnapshot)
             };
             foreach (var window in windows)
             {
@@ -1328,6 +1375,9 @@ static void DesktopWindowsLoad()
                     var subjectProgress = weeklySummaryWindow.FindName("SubjectProgressButton") as System.Windows.Controls.Button
                         ?? throw new InvalidOperationException("subject progress entry point was not created");
                     True(subjectProgress.MinHeight >= 40, "subject progress entry point is too small");
+                    var progressHistory = weeklySummaryWindow.FindName("ProgressHistoryButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("progress history entry point was not created");
+                    True(progressHistory.MinHeight >= 40, "progress history entry point is too small");
                     _ = weeklySummaryWindow.Dispatcher.BeginInvoke(() =>
                     {
                         var subjectWindow = app.Windows.OfType<SubjectProgressWindow>()
@@ -1335,6 +1385,13 @@ static void DesktopWindowsLoad()
                         subjectWindow.Close();
                     });
                     subjectProgress.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    _ = weeklySummaryWindow.Dispatcher.BeginInvoke(() =>
+                    {
+                        var historyWindow = app.Windows.OfType<ProgressHistoryWindow>()
+                            .Single(candidate => candidate.IsVisible);
+                        historyWindow.Close();
+                    });
+                    progressHistory.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 }
                 if (window is SubjectProgressWindow subjectProgressWindow)
                 {
@@ -1347,6 +1404,20 @@ static void DesktopWindowsLoad()
                     Eq("1", subjectProgressWindow.CompletedSessionsLabel);
                     Eq("50%", subjectProgressWindow.CompletionLabel);
                     Eq(1, subjectProgressWindow.Subjects.Count);
+                }
+                if (window is ProgressHistoryWindow progressHistoryWindow)
+                {
+                    var close = progressHistoryWindow.FindName("CloseButton") as System.Windows.Controls.Button
+                        ?? throw new InvalidOperationException("progress history close action was not created");
+                    var months = progressHistoryWindow.FindName("MonthlyHistoryItems") as System.Windows.Controls.ItemsControl
+                        ?? throw new InvalidOperationException("monthly history list was not created");
+                    var weeks = progressHistoryWindow.FindName("WeeklyComparisonItems") as System.Windows.Controls.ItemsControl
+                        ?? throw new InvalidOperationException("weekly comparison list was not created");
+                    True(close.IsDefault && close.MinHeight >= 40,
+                        "progress history close action is unavailable or too small");
+                    Eq(12, months.Items.Count);
+                    Eq(8, weeks.Items.Count);
+                    Eq("60 min", progressHistoryWindow.TotalCompletedMinutesLabel);
                 }
                 if (window is WelcomeWindow welcomeWindow)
                 {
@@ -1482,6 +1553,20 @@ static void DesktopWindowsLoad()
             lightSubjectWindow.UpdateLayout();
             SaveWindowSnapshot(lightSubjectWindow, "light-SubjectProgressWindow");
             lightSubjectWindow.Close();
+
+            var lightHistoryWindow = new ProgressHistoryWindow(weeklyWindowSnapshot)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -20_000,
+                Top = -20_000,
+                ShowInTaskbar = false
+            };
+            lightHistoryWindow.Show();
+            lightHistoryWindow.Width = lightHistoryWindow.MinWidth;
+            lightHistoryWindow.Height = lightHistoryWindow.MinHeight;
+            lightHistoryWindow.UpdateLayout();
+            SaveWindowSnapshot(lightHistoryWindow, "light-ProgressHistoryWindow");
+            lightHistoryWindow.Close();
 
             var deferredRepo = new StudyRepository(Path.Combine(dir, "deferred-state.json"), () => new DateTime(2026, 9, 1, 9, 0, 0));
             var lightWelcomeWindow = new WelcomeWindow(deferredRepo)
