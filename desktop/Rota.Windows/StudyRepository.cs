@@ -237,10 +237,35 @@ public sealed class StudyRepository
         }
     }
 
-    public SessionMoveResult MoveSession(string planId, string sessionId, DateOnly targetDate)
+    public bool CanUndoSessionMove
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var checkpoint = _state.SessionMoveUndoCheckpoint;
+                return checkpoint is not null && checkpoint.ExpectedMutationVersion == _state.MutationVersion;
+            }
+        }
+    }
+
+    public SessionMoveResult MoveSession(
+        string planId,
+        string sessionId,
+        DateOnly targetDate,
+        long? expectedMutationVersion = null)
     {
         lock (_gate)
         {
+            if (expectedMutationVersion is not null && expectedMutationVersion != _state.MutationVersion)
+            {
+                return new SessionMoveResult(
+                    false,
+                    false,
+                    "O calendário mudou depois da prévia. Revise o movimento novamente.",
+                    MutationVersion: _state.MutationVersion);
+            }
+
             var validation = EvaluateSessionMove(_state, planId, sessionId, targetDate);
             if (!validation.Success || validation.AlreadyHandled) return validation;
 
@@ -248,8 +273,15 @@ public sealed class StudyRepository
             var item = FindIdentity(next, planId, sessionId);
             if (item is null)
                 return new SessionMoveResult(false, false, "A sessão não existe mais no calendário.");
-
             item.Date = validation.TargetDate;
+            next.SessionMoveUndoCheckpoint = new SessionMoveUndoCheckpoint
+            {
+                PlanId = planId,
+                SessionId = sessionId,
+                SourceDate = validation.SourceDate,
+                TargetDate = validation.TargetDate,
+                ExpectedMutationVersion = checked(_state.MutationVersion + 1)
+            };
             Commit(next);
             return validation with { Message = "Sessão movida no calendário.", MutationVersion = _state.MutationVersion };
         }
@@ -258,6 +290,50 @@ public sealed class StudyRepository
     public SessionMoveResult PreviewSessionMove(string planId, string sessionId, DateOnly targetDate)
     {
         lock (_gate) return EvaluateSessionMove(_state, planId, sessionId, targetDate);
+    }
+
+    public SessionMoveResult UndoLastSessionMove()
+    {
+        lock (_gate)
+        {
+            var checkpoint = _state.SessionMoveUndoCheckpoint;
+            if (checkpoint is null)
+                return new SessionMoveResult(false, false, "Não existe um movimento para desfazer.", MutationVersion: _state.MutationVersion);
+            if (checkpoint.ExpectedMutationVersion != _state.MutationVersion)
+            {
+                return new SessionMoveResult(
+                    false,
+                    false,
+                    "O calendário mudou depois do movimento. Nada foi desfeito para preservar as alterações posteriores.",
+                    checkpoint.TargetDate,
+                    checkpoint.SourceDate,
+                    _state.MutationVersion);
+            }
+
+            var next = CloneState(_state);
+            var item = FindIdentity(next, checkpoint.PlanId, checkpoint.SessionId);
+            if (item is null || item.IsCompleted || item.Origin == "runtime" || item.Date != checkpoint.TargetDate)
+            {
+                return new SessionMoveResult(
+                    false,
+                    false,
+                    "A sessão mudou e não pode mais voltar com segurança.",
+                    checkpoint.TargetDate,
+                    checkpoint.SourceDate,
+                    _state.MutationVersion);
+            }
+
+            item.Date = checkpoint.SourceDate;
+            next.SessionMoveUndoCheckpoint = null;
+            Commit(next);
+            return new SessionMoveResult(
+                true,
+                false,
+                "Movimento desfeito. A sessão voltou ao dia anterior.",
+                checkpoint.TargetDate,
+                checkpoint.SourceDate,
+                _state.MutationVersion);
+        }
     }
 
     private SessionMoveResult EvaluateSessionMove(AppState state, string planId, string sessionId, DateOnly targetDate)
@@ -898,6 +974,20 @@ public sealed class StudyRepository
                 throw new InvalidDataException("O ponto de desfazer está incompleto.");
             ValidateCoreState(checkpoint.Settings, checkpoint.Sessions);
         }
+
+        if (state.SessionMoveUndoCheckpoint is { } moveCheckpoint)
+        {
+            ValidateStoredText(moveCheckpoint.PlanId, "SessionMoveUndo.PlanId", 80, allowEmpty: false);
+            ValidateStoredText(moveCheckpoint.SessionId, "SessionMoveUndo.SessionId", 100, allowEmpty: false);
+            if (!DateOnly.TryParseExact(moveCheckpoint.SourceDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ||
+                !DateOnly.TryParseExact(moveCheckpoint.TargetDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _) ||
+                moveCheckpoint.SourceDate == moveCheckpoint.TargetDate ||
+                moveCheckpoint.ExpectedMutationVersion < 1 ||
+                moveCheckpoint.ExpectedMutationVersion > state.MutationVersion)
+            {
+                throw new InvalidDataException("O ponto de desfazer do movimento é inválido.");
+            }
+        }
     }
 
     private static void ValidateCoreState(AppSettings settings, IReadOnlyList<SessionItem> sessions)
@@ -1021,7 +1111,8 @@ public sealed class StudyRepository
         Settings = CopySettings(source.Settings),
         Sessions = source.Sessions.Select(session => session.Copy()).ToList(),
         AiApplications = source.AiApplications.Select(receipt => receipt.Copy()).ToList(),
-        AiUndoCheckpoint = source.AiUndoCheckpoint?.Copy()
+        AiUndoCheckpoint = source.AiUndoCheckpoint?.Copy(),
+        SessionMoveUndoCheckpoint = source.SessionMoveUndoCheckpoint?.Copy()
     };
 
     public static AppSettings CopySettings(AppSettings source) => new()

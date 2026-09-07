@@ -82,6 +82,7 @@ public sealed class AppState
     public List<SessionItem> Sessions { get; set; } = new();
     public List<CalendarApplicationReceipt> AiApplications { get; set; } = new();
     public CalendarUndoCheckpoint? AiUndoCheckpoint { get; set; }
+    public SessionMoveUndoCheckpoint? SessionMoveUndoCheckpoint { get; set; }
 }
 
 public static class OnboardingSteps
@@ -156,6 +157,24 @@ public sealed record SessionMoveResult(
     string SourceDate = "",
     string TargetDate = "",
     long MutationVersion = 0);
+
+public sealed class SessionMoveUndoCheckpoint
+{
+    public string PlanId { get; set; } = "";
+    public string SessionId { get; set; } = "";
+    public string SourceDate { get; set; } = "";
+    public string TargetDate { get; set; } = "";
+    public long ExpectedMutationVersion { get; set; }
+
+    public SessionMoveUndoCheckpoint Copy() => new()
+    {
+        PlanId = PlanId,
+        SessionId = SessionId,
+        SourceDate = SourceDate,
+        TargetDate = TargetDate,
+        ExpectedMutationVersion = ExpectedMutationVersion
+    };
+}
 
 public sealed record SessionProgress(int Completed, int Total, int Minutes)
 {

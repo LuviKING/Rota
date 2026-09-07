@@ -662,6 +662,19 @@
                             <StackPanel Grid.Column="1"
                                         Orientation="Horizontal"
                                         VerticalAlignment="Center">
+                                <Button Style="{StaticResource SecondaryButton}"
+                                        Click="UndoSessionMove_Click"
+                                        Visibility="{Binding UndoMoveVisibility}"
+                                        Padding="10,6" MinHeight="34"
+                                        Margin="0,0,10,0"
+                                        ToolTip="Desfazer o último movimento de sessão">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE7A7;" Style="{StaticResource IconGlyphText}"
+                                                   FontSize="13" Width="17" Height="17" LineHeight="17" />
+                                        <TextBlock Text="Desfazer" Margin="5,0,0,0" FontSize="10"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
                                 <TextBlock Text="{Binding SelectedDateMeta}"
                                            Foreground="{DynamicResource MutedBrush}"
                                            FontSize="10"

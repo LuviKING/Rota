@@ -56,6 +56,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private Visibility _emptyVisibility;
     public Visibility EmptyVisibility { get => _emptyVisibility; private set => Set(ref _emptyVisibility, value); }
 
+    private Visibility _undoMoveVisibility;
+    public Visibility UndoMoveVisibility { get => _undoMoveVisibility; private set => Set(ref _undoMoveVisibility, value); }
+
     private Visibility _overdueStatusVisibility;
     public Visibility OverdueStatusVisibility { get => _overdueStatusVisibility; private set => Set(ref _overdueStatusVisibility, value); }
 
@@ -135,6 +138,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         foreach (var session in sessions)
             DaySessions.Add(new SessionCardView(session));
         EmptyVisibility = DaySessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UndoMoveVisibility = _repository.CanUndoSessionMove ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshThemeProperties();
         RefreshOverdueStatus();
@@ -332,7 +336,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            var result = _repository.MoveSession(card.PlanId, card.Id, targetDate);
+            var preview = _repository.PreviewSessionMove(card.PlanId, card.Id, targetDate);
+            if (preview.AlreadyHandled)
+            {
+                SetSelectedDate(targetDate);
+                return;
+            }
+            if (!preview.Success)
+            {
+                MessageBox.Show(preview.Message, "Mover sessão", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var confirmation = new SessionMoveConfirmationWindow(card, preview) { Owner = this };
+            if (confirmation.ShowDialog() != true) return;
+
+            var result = _repository.MoveSession(card.PlanId, card.Id, targetDate, preview.MutationVersion);
             if (result.Success)
             {
                 SetSelectedDate(targetDate);
@@ -345,6 +364,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             MessageBox.Show(
                 "Não foi possível salvar a nova data. A sessão não foi alterada.\n\n" + ex.Message,
                 "Mover sessão",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void UndoSessionMove_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            "Deseja devolver a última sessão movida para a data anterior?",
+            "Desfazer movimento",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+
+        try
+        {
+            var result = _repository.UndoLastSessionMove();
+            if (result.Success && DateOnly.TryParseExact(
+                    result.TargetDate,
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var restoredDate))
+            {
+                SetSelectedDate(restoredDate);
+                return;
+            }
+
+            RefreshAll();
+            MessageBox.Show(result.Message, "Desfazer movimento", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(
+                "Não foi possível desfazer. O calendário atual foi preservado.\n\n" + ex.Message,
+                "Desfazer movimento",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }

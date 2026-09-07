@@ -37,6 +37,9 @@ var tests = new (string Name, Action Body)[]
     ("Calendar move respects available study days", CalendarMoveRespectsAvailableDays),
     ("Calendar move respects the objective deadline", CalendarMoveRespectsDeadline),
     ("Calendar move respects daily capacity", CalendarMoveRespectsDailyCapacity),
+    ("Calendar move preview is read-only and expires", CalendarMovePreviewIsReadOnlyAndExpires),
+    ("Calendar move can be undone after restart", CalendarMoveUndoPersists),
+    ("Calendar move undo protects later changes", CalendarMoveUndoProtectsLaterChanges),
     ("Preview does not mutate memory or disk", PreviewDoesNotMutate),
     ("Failed persistence leaves memory and disk unchanged", FailedPersistenceIsTransactional),
     ("Repository recovers the last valid atomic backup", RepositoryRecoversAtomicBackup),
@@ -635,6 +638,70 @@ static void CalendarMoveRespectsDailyCapacity()
         Contains(result.Message, "limite diário");
         Eq(before, File.ReadAllText(path));
         Eq("moving", repo.SessionsForDate(new DateOnly(2026, 9, 2)).Single().Id);
+    });
+}
+
+static void CalendarMovePreviewIsReadOnlyAndExpires()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-preview", 1, "2026-09-30", SessionJson("session", "2026-09-02", 60)))).Success);
+        var before = File.ReadAllText(path);
+
+        var preview = repo.PreviewSessionMove("move-preview", "session", new DateOnly(2026, 9, 4));
+
+        True(preview.Success && !preview.AlreadyHandled, preview.Message);
+        Eq(before, File.ReadAllText(path));
+        repo.SavePreferences("Novo objetivo", "2026-09-30", 5, 60, true, true, true);
+        var result = repo.MoveSession("move-preview", "session", new DateOnly(2026, 9, 4), preview.MutationVersion);
+        True(!result.Success);
+        Contains(result.Message, "mudou depois da prévia");
+        Eq("session", repo.SessionsForDate(new DateOnly(2026, 9, 2)).Single().Id);
+    });
+}
+
+static void CalendarMoveUndoPersists()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, path, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-undo", 1, "2026-09-30", SessionJson("session", "2026-09-02", 60)))).Success);
+        var preview = repo.PreviewSessionMove("move-undo", "session", new DateOnly(2026, 9, 4));
+        True(repo.MoveSession("move-undo", "session", new DateOnly(2026, 9, 4), preview.MutationVersion).Success);
+
+        var reloaded = new StudyRepository(path, () => new DateTime(2026, 9, 1, 9, 0, 0));
+        True(reloaded.CanUndoSessionMove);
+        var result = reloaded.UndoLastSessionMove();
+
+        True(result.Success, result.Message);
+        Eq("2026-09-04", result.SourceDate);
+        Eq("2026-09-02", result.TargetDate);
+        True(!reloaded.CanUndoSessionMove);
+        Eq("session", reloaded.SessionsForDate(new DateOnly(2026, 9, 2)).Single().Id);
+        Eq("session", new StudyRepository(path, () => new DateTime(2026, 9, 1))
+            .SessionsForDate(new DateOnly(2026, 9, 2)).Single().Id);
+    });
+}
+
+static void CalendarMoveUndoProtectsLaterChanges()
+{
+    WithRepository(new DateTime(2026, 9, 1, 9, 0, 0), (repo, _, _) =>
+    {
+        True(repo.ApplyPlan(StudyPlanImporter.Parse(PlanJson(
+            "move-later", 1, "2026-09-30",
+            SessionJson("moving", "2026-09-02", 60),
+            SessionJson("later", "2026-09-03", 45)))).Success);
+        var preview = repo.PreviewSessionMove("move-later", "moving", new DateOnly(2026, 9, 4));
+        True(repo.MoveSession("move-later", "moving", new DateOnly(2026, 9, 4), preview.MutationVersion).Success);
+        True(repo.MarkCompleted("move-later", "later"));
+
+        True(!repo.CanUndoSessionMove);
+        var result = repo.UndoLastSessionMove();
+        True(!result.Success);
+        Contains(result.Message, "mudou depois do movimento");
+        Eq("moving", repo.SessionsForDate(new DateOnly(2026, 9, 4))
+            .Single(session => session.Id == "moving").Id);
     });
 }
 
@@ -1273,6 +1340,9 @@ static void DesktopWindowsLoad()
                 new WeeklySummaryWindow(weeklyWindowSnapshot),
                 new SubjectProgressWindow(weeklyWindowSnapshot),
                 new ProgressHistoryWindow(weeklyWindowSnapshot)
+                ,new SessionMoveConfirmationWindow(
+                    new SessionCardView(WeeklySession("move-confirmation", "2026-09-02", 60)),
+                    new SessionMoveResult(true, false, "Prévia válida.", "2026-09-02", "2026-09-04", 1))
             };
             foreach (var window in windows)
             {
