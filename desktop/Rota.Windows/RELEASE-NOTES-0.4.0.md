@@ -23,4 +23,12 @@ Atualização focada em acompanhamento de progresso, organização segura do cal
 - atualização sobre a mesma instalação e desinstalação registradas no Windows;
 - a desinstalação remove o aplicativo e os atalhos, mas preserva os planos e o histórico local.
 
+## Atualizações
+
+- nova opção **Verificar atualizações** nas Configurações;
+- as novidades e o tamanho do pacote são mostrados antes de qualquer download;
+- baixar e instalar exige confirmação explícita;
+- tamanho e SHA-256 são conferidos antes de abrir o instalador;
+- qualquer falha mantém a versão atual intacta e remove downloads parciais.
+
 O aplicativo continua self-contained e não exige a instalação separada do .NET 8. Os modelos da IA local continuam sendo baixados somente após confirmação dentro do Rota.

@@ -28,6 +28,7 @@ Aplicativo desktop nativo para **Windows 10 e Windows 11 x64**, construído em W
 - instalação e download podem ser cancelados e só ficam ativos depois da verificação de integridade;
 - propostas prontas são recalculadas sobre o calendário atual e só podem ser aplicadas após uma confirmação final explícita;
 - aplicações ficam registradas no próprio estado do calendário, não podem se repetir e podem ser desfeitas enquanto nenhuma alteração posterior tiver ocorrido;
+- as Configurações permitem procurar uma versão mais recente por ação explícita; o Rota mostra as novidades, pede confirmação e só abre um pacote cujo tamanho e SHA-256 correspondam ao manifesto oficial;
 - o gerador de prompt para usar com outra IA permanece disponível dentro do assistente.
 
 A preferência de tema fica separada do estado de estudos em `%LOCALAPPDATA%\Rota\theme.txt`. O calendário, o histórico, o lembrete e o progresso da configuração inicial continuam em `%LOCALAPPDATA%\Rota\desktop-state.json`. Quando ativado, o Rota cria somente a tarefa diária **Rota - Lembrete de estudos** no Agendador de Tarefas do usuário; ao desativar, remove apenas essa tarefa.
@@ -69,6 +70,8 @@ A identidade persistida de uma sessão é o par `(plan.id, session.id)`. O marca
 O CI publica o artefato **`Rota-Windows-v0.4.0-x64`** com o instalador recomendado e o executável portátil `win-x64`, ambos **self-contained**, então o usuário não precisa instalar o .NET 8 separadamente. O instalador funciona por usuário, cria um atalho no menu Iniciar, oferece um atalho opcional na área de trabalho e registra a desinstalação no Windows. Os dados de estudo são preservados ao desinstalar.
 
 Os modelos de IA não ficam embutidos no EXE. A pessoa escolhe um perfil e confirma a instalação dentro do aplicativo; só então o Rota baixa e verifica o runtime e o modelo correspondentes. Isso mantém o instalador do aplicativo menor e torna transparente o espaço necessário para cada perfil.
+
+O canal de atualização usa `windows-update.json` anexado a uma versão do GitHub. Enquanto o repositório for privado, a consulta automática pode exigir acesso ao GitHub e a tela informa isso sem alterar o aplicativo atual. Para distribuição a usuários sem acesso ao repositório, publique os mesmos arquivos em um canal HTTPS público e confiável.
 
 O binário de desenvolvimento ainda não possui assinatura Authenticode comercial. O Windows SmartScreen pode exibir um aviso de reputação na primeira execução. Uma distribuição pública definitiva deve usar um certificado de code signing persistente e protegido fora do repositório.
 

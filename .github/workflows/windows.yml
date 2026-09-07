@@ -155,6 +155,15 @@ jobs:
           Get-ChildItem '.\artifacts\stage\*.exe' | ForEach-Object {
             (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $_.Name
           } | Set-Content -Encoding ascii '.\artifacts\stage\SHA256SUMS.txt'
+          $installer = Get-Item '.\artifacts\stage\Rota-Windows-v0.4.0-Setup-x64.exe'
+          $manifest = [ordered]@{
+            version = '0.4.0'
+            installer_url = 'https://github.com/LuviKING/Rota/releases/download/v0.4.0/Rota-Windows-v0.4.0-Setup-x64.exe'
+            sha256 = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = $installer.Length
+            notes = 'Resumo semanal e mensal, progresso por matéria, calendário com mover/confirmar/desfazer, instalador e atualização segura.'
+          }
+          $manifest | ConvertTo-Json | Set-Content -Encoding utf8NoBOM '.\artifacts\stage\windows-update.json'
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7

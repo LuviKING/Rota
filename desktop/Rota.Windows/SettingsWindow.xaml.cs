@@ -11,15 +11,18 @@ public partial class SettingsWindow : Window
     private readonly StudyRepository _repository;
     private readonly IStudyReminderScheduler _reminderScheduler;
     private readonly string _executablePath;
+    private readonly IAppUpdateService? _updateService;
 
     public SettingsWindow(
         StudyRepository repository,
         IStudyReminderScheduler? reminderScheduler = null,
-        string? executablePath = null)
+        string? executablePath = null,
+        IAppUpdateService? updateService = null)
     {
         _repository = repository;
         _reminderScheduler = reminderScheduler ?? new WindowsStudyReminderScheduler();
         _executablePath = executablePath ?? Environment.ProcessPath ?? "Rota.exe";
+        _updateService = updateService;
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         var settings = repository.Settings;
@@ -173,6 +176,12 @@ public partial class SettingsWindow : Window
         yield return (FridayChoice, DayOfWeek.Friday);
         yield return (SaturdayChoice, DayOfWeek.Saturday);
         yield return (SundayChoice, DayOfWeek.Sunday);
+    }
+
+    private void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new AppUpdateWindow(_updateService) { Owner = this };
+        window.ShowDialog();
     }
 }
 

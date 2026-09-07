@@ -136,6 +136,7 @@ tests = tests.Concat(Rota.Desktop.Tests.EnemCatalogTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiProfileResourceBudgetTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiHardwareDiagnosticsTests.Cases).ToArray();
 tests = tests.Concat(Rota.Desktop.Tests.AiPerformanceDiagnosticsTests.Cases).ToArray();
+tests = tests.Concat(Rota.Desktop.Tests.AppUpdateTests.Cases).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_RUNTIME_ARCHIVES")))
     tests = tests.Append(("Official CPU and Vulkan archives pass the real staging pipeline", (Action)OfficialRuntimeArchivesStage)).ToArray();
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROTA_TEST_LOCAL_AI_PERFORMANCE")))
@@ -1339,10 +1340,11 @@ static void DesktopWindowsLoad()
                 new ReminderWindow(repo),
                 new WeeklySummaryWindow(weeklyWindowSnapshot),
                 new SubjectProgressWindow(weeklyWindowSnapshot),
-                new ProgressHistoryWindow(weeklyWindowSnapshot)
-                ,new SessionMoveConfirmationWindow(
+                new ProgressHistoryWindow(weeklyWindowSnapshot),
+                new SessionMoveConfirmationWindow(
                     new SessionCardView(WeeklySession("move-confirmation", "2026-09-02", 60)),
-                    new SessionMoveResult(true, false, "Prévia válida.", "2026-09-02", "2026-09-04", 1))
+                    new SessionMoveResult(true, false, "Prévia válida.", "2026-09-02", "2026-09-04", 1)),
+                new AppUpdateWindow()
             };
             foreach (var window in windows)
             {

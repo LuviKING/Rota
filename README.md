@@ -25,6 +25,7 @@ O mesmo modelo de plano, histórico protegido e revisões por conclusão real é
 - UI principal: calendário mensal em grade + agenda detalhada do dia selecionado
 - Movimento: sessões pendentes podem ser arrastadas para outra data, com prévia, confirmação, desfazer e validação de prazo, dias disponíveis, carga diária e revisões protegidas
 - Instalação: instalador por usuário com atalhos, atualização sobre a instalação existente e desinstalação que preserva os dados locais
+- Atualizações: verificação manual nas Configurações, com novidades, confirmação, download limitado e conferência de tamanho e SHA-256 antes de abrir o instalador
 - Tema: **escuro e claro**, com preferência local em `%LOCALAPPDATA%\Rota\theme.txt`
 - Primeira abertura: boas-vindas, rotina guiada e primeiro plano pela IA local; dificuldades, objetivo, prazo, dias e horas seguem para uma proposta que só altera o calendário após prévia e confirmação final
 - Navegação: meses, dias e retorno para hoje diretamente na tela principal

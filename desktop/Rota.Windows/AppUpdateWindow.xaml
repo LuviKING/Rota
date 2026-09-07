@@ -1,0 +1,98 @@
+<Window x:Class="Rota.Desktop.AppUpdateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Atualizações · Rota"
+        Width="620" Height="500" MinWidth="520" MinHeight="440"
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Background="{DynamicResource BackgroundBrush}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Width="48" Height="48" CornerRadius="14"
+                    Background="{DynamicResource PrimarySoftBrush}" Margin="0,0,13,0">
+                <TextBlock Text="&#xE895;" Style="{StaticResource IconGlyphText}"
+                           Foreground="{DynamicResource PrimaryTextBrush}"
+                           FontSize="21" Width="28" Height="28" LineHeight="28" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="Atualizações do Rota" FontSize="22" FontWeight="Bold" />
+                <TextBlock Text="A verificação só acontece quando você pedir"
+                           Foreground="{DynamicResource MutedBrush}" FontSize="10.5" Margin="0,4,0,0" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                CornerRadius="15" Padding="18">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="14" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid>
+                    <StackPanel>
+                        <TextBlock x:Name="StatusTitleText" Text="Pronto para verificar"
+                                   FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock x:Name="StatusDetailText"
+                                   Text="O Rota consultará somente o canal oficial de versões."
+                                   Foreground="{DynamicResource MutedBrush}" FontSize="10.5"
+                                   TextWrapping="Wrap" Margin="0,5,0,0" />
+                    </StackPanel>
+                    <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Background="{DynamicResource SubtleBrush}" CornerRadius="9" Padding="9,5">
+                        <TextBlock x:Name="VersionBadgeText" Text="VERSÃO ATUAL · 0.4.0"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                   FontSize="9.5" FontWeight="SemiBold" />
+                    </Border>
+                </Grid>
+
+                <Border Grid.Row="2" Background="{DynamicResource SurfaceRaisedBrush}"
+                        CornerRadius="11" Padding="14">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="NotesText"
+                                   Text="Depois da verificação, as novidades e o tamanho do instalador aparecerão aqui."
+                                   Foreground="{DynamicResource MutedBrush}" FontSize="11"
+                                   TextWrapping="Wrap" LineHeight="18" />
+                    </ScrollViewer>
+                </Border>
+
+                <StackPanel Grid.Row="3" Margin="0,14,0,0">
+                    <ProgressBar x:Name="DownloadProgress" Height="7" Minimum="0" Maximum="100"
+                                 Visibility="Collapsed" />
+                    <TextBlock Text="O pacote é verificado por tamanho e SHA-256 antes de ser aberto. A instalação sempre exige sua confirmação."
+                               Foreground="{DynamicResource MutedBrush}" FontSize="9.5"
+                               TextWrapping="Wrap" Margin="0,8,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="1" Style="{StaticResource SecondaryButton}"
+                    IsCancel="True" MinWidth="104" MinHeight="42">Fechar</Button>
+            <Button x:Name="PrimaryActionButton" Grid.Column="3"
+                    Style="{StaticResource PrimaryButton}" Click="PrimaryAction_Click"
+                    MinWidth="166" MinHeight="42">Verificar agora</Button>
+        </Grid>
+    </Grid>
+</Window>
