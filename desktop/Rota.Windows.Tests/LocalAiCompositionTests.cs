@@ -31,6 +31,7 @@ public static class LocalAiCompositionTests
       .Concat(AiTeacherConversationContinuityTests.Cases)
       .Concat(AiTeacherLessonHistoryTests.Cases)
       .Concat(AiTeacherAnswerClipboardTextTests.Cases)
+      .Concat(AiTeacherLessonHistoryClipboardTextTests.Cases)
       .Concat(AiTeacherDeterministicValidationTests.Cases)
       .Concat(AiTeacherPedagogicalQualityTests.Cases);
 

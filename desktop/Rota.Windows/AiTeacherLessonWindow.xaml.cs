@@ -359,6 +359,29 @@ public partial class AiTeacherLessonWindow : Window
         }
     }
 
+    private async void CopyHistory_Click(object sender, RoutedEventArgs e)
+    {
+        if (_conversationId == Guid.Empty) return;
+
+        try
+        {
+            var conversation = await _conversationStore.LoadAsync(_conversationId).ConfigureAwait(true);
+            var history = AiTeacherLessonHistoryFactory.Create(conversation, _controller.LessonContext);
+            var content = AiTeacherLessonHistoryClipboardText.Create(history);
+            Clipboard.SetText(content.Text);
+            OperationNoticeText.Text = content.WasTruncated
+                ? "O histórico local foi copiado com um limite de tamanho para manter a cópia estável."
+                : "O histórico local exibido foi copiado por sua solicitação.";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or
+            AiContractValidationException or ExternalException)
+        {
+            if (IsLoaded) OperationNoticeText.Text = exception is ExternalException
+                ? "Não foi possível acessar a área de transferência agora. Tente novamente."
+                : exception.Message;
+        }
+    }
+
     private void DisposeOwnedStores()
     {
         if (_ownedStoresDisposed) return;
