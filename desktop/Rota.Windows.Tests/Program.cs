@@ -1326,6 +1326,9 @@ static void DesktopWindowsLoad()
             {
                 new MainWindow(repo, assistant, installation, application),
                 assistantWindow,
+                new AiTeacherLessonWindow(
+                    new WindowNoOpTeacherService(),
+                    AiTeacherLessonWindowTestData.CreateContext()),
                 new AiDiagnosticsWindow(diagnostics, hardwareDiagnostics, performanceDiagnostics),
                 new AiProposalConfirmationWindow(new AiPreparedApplication
                 {

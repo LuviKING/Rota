@@ -1,0 +1,131 @@
+<Window x:Class="Rota.Desktop.AiTeacherLessonWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Professora Local · Rota" Width="920" Height="720" MinWidth="720" MinHeight="540"
+        WindowStartupLocation="CenterOwner" Icon="pack://application:,,,/Rota;component/Assets/Rota.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True" Background="{DynamicResource BackgroundBrush}">
+    <Window.Resources>
+        <Style x:Key="TeacherCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+    </Window.Resources>
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="42" Height="42" CornerRadius="13" Background="{DynamicResource PrimarySoftBrush}" Margin="0,0,11,0">
+                        <TextBlock Text="&#xEA80;" Style="{StaticResource IconGlyphText}" Foreground="{DynamicResource PrimaryTextBrush}"
+                                   FontSize="20" Width="28" Height="28" LineHeight="28" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Professora Local" Foreground="{DynamicResource TextBrush}" FontSize="23" FontWeight="Bold" />
+                        <TextBlock x:Name="LessonTitleText" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Background="{DynamicResource SuccessSoftBrush}" CornerRadius="10" Padding="10,6" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" Margin="0,0,7,0" />
+                    <TextBlock Text="LOCAL · OFFLINE" Foreground="{DynamicResource SuccessBrush}" FontWeight="SemiBold" FontSize="9.5" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <Border Style="{StaticResource TeacherCard}" Background="{DynamicResource PrimarySoftBrush}" BorderBrush="{DynamicResource PrimaryBrush}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="BASE DESTA EXPLICAÇÃO" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="Bold" FontSize="10" />
+                            <TextBlock x:Name="KnowledgeStatusText" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" Margin="0,5,0,0" />
+                            <TextBlock x:Name="KnowledgeReasonText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="COBERTURA" Foreground="{DynamicResource MutedBrush}" FontSize="9" FontWeight="Bold" HorizontalAlignment="Right" />
+                            <TextBlock x:Name="ConfidenceText" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="Bold" HorizontalAlignment="Right" Margin="0,3,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource TeacherCard}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="PERGUNTE SOBRE ESTA AULA" Foreground="{DynamicResource MutedBrush}" FontWeight="Bold" FontSize="10" />
+                        <TextBox x:Name="QuestionBox" TextChanged="QuestionBox_TextChanged" AcceptsReturn="True" TextWrapping="Wrap"
+                                 MinHeight="88" MaxLength="4000" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0"
+                                 AutomationProperties.Name="Pergunta para a Professora Local" />
+                        <Grid Margin="0,9,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <ComboBox x:Name="StylePicker" Width="165" DisplayMemberPath="DisplayName"
+                                      AutomationProperties.Name="Estilo da explicação" />
+                            <TextBlock x:Name="QuestionHintText" Grid.Column="1" Foreground="{DynamicResource MutedBrush}" FontSize="10" VerticalAlignment="Center" />
+                        </Grid>
+                        <WrapPanel Margin="0,11,0,0">
+                            <Button x:Name="ExplainButton" Click="Explain_Click" Style="{StaticResource PrimaryButton}" Padding="14,8"
+                                    AutomationProperties.Name="Gerar explicação local">Explicar</Button>
+                            <Button x:Name="CancelButton" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="8,0,0,0"
+                                    Visibility="Collapsed" AutomationProperties.Name="Cancelar explicação">Cancelar</Button>
+                        </WrapPanel>
+                        <TextBlock x:Name="OperationNoticeText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,10,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="AnswerPanel" Style="{StaticResource TeacherCard}" Margin="0,12,0,0" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="AnswerTitleText" Foreground="{DynamicResource TextBrush}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock x:Name="AnswerIntroductionText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" LineHeight="20" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="AnswerStepsList" Margin="0,12,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Border Width="22" Height="22" CornerRadius="11" Background="{DynamicResource PrimarySoftBrush}">
+                                            <TextBlock Text="{Binding Number}" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="Bold" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Explanation}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" LineHeight="19" Margin="0,3,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border x:Name="LimitationsPanel" Background="{DynamicResource AssessmentSoftBrush}" CornerRadius="9" Padding="10" Margin="0,3,0,0" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Text="LIMITE DESTA RESPOSTA" Foreground="{DynamicResource AssessmentBrush}" FontWeight="Bold" FontSize="9.5" />
+                                <ItemsControl x:Name="LimitationsList" Margin="0,5,0,0">
+                                    <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,2,0,0" /></DataTemplate></ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock x:Name="AnswerRecapText" Foreground="{DynamicResource PrimaryTextBrush}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,12,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="SourcesPanel" Style="{StaticResource TeacherCard}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="FONTES INTERNAS USADAS" Foreground="{DynamicResource MutedBrush}" FontWeight="Bold" FontSize="10" />
+                        <ItemsControl x:Name="SourcesList" Margin="0,7,0,0">
+                            <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,2,0,0" /></DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="4" HorizontalAlignment="Right" Style="{StaticResource SecondaryButton}" Padding="14,8" Click="Close_Click" IsCancel="True">Fechar</Button>
+    </Grid>
+</Window>

@@ -63,6 +63,8 @@
                     <TextBlock x:Name="AssessmentText" Foreground="{DynamicResource AssessmentBrush}" Margin="0,8,0,0" TextWrapping="Wrap"/>
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                         <Button x:Name="CompleteContentButton" Click="CompleteContent_Click" Style="{StaticResource PrimaryButton}" Padding="13,8">Marcar como estudado</Button>
+                        <Button x:Name="AskTeacherButton" Click="AskTeacher_Click" Style="{StaticResource SecondaryButton}" Padding="13,8" Margin="8,0,0,0"
+                                ToolTip="Pergunte sobre este conteúdo usando somente o material local verificado.">Perguntar à Professora Local</Button>
                         <TextBlock x:Name="ProgressText" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" Margin="12,0,0,0" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>

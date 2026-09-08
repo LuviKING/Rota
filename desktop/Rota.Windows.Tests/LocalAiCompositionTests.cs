@@ -19,7 +19,8 @@ public static class LocalAiCompositionTests
       .Concat(AiTeacherPrerequisiteDetectionTests.Cases)
       .Concat(AiTeacherPackageGroundingTests.Cases)
       .Concat(AiTeacherSourceConfidenceTests.Cases)
-      .Concat(AiTeacherKnowledgeDisclosureTests.Cases);
+      .Concat(AiTeacherKnowledgeDisclosureTests.Cases)
+      .Concat(AiTeacherLessonControllerTests.Cases);
 
     private static void CompositionStaysInert()
     {

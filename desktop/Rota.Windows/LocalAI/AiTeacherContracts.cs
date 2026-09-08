@@ -114,6 +114,14 @@ public interface IAiTeacherService
     Task<AiTeacherAnswer> ExplainAsync(
         AiTeacherRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Caminho destinado à interface pedagógica. Além do texto da professora,
+    /// devolve a proveniência e o limite de conhecimento determinados pelo Rota.
+    /// </summary>
+    Task<AiTeacherGroundedAnswer> ExplainWithGroundingAsync(
+        AiTeacherRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -392,4 +400,3 @@ public static class AiTeacherContractValidator
         .Replace("\r\n", "\n", StringComparison.Ordinal)
         .Replace('\r', '\n');
 }
-

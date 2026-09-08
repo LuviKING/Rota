@@ -2,6 +2,7 @@ using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using Rota.Desktop.LocalAI;
 
 namespace Rota.Desktop;
 
@@ -11,6 +12,7 @@ public partial class LearningHubWindow : Window
     private readonly Version _version;
     private readonly LearningProgressStore _progressStore;
     private readonly LearningQuestionAttemptStore _questionAttemptStore;
+    private readonly IAiTeacherService? _teacherService;
     private LearningContentLibrarySnapshot _snapshot = new(Array.Empty<LearningLibraryPackage>(), Array.Empty<LearningLibraryIssue>());
     private IReadOnlyList<LearningPracticeQuestion> _practiceQuestions = Array.Empty<LearningPracticeQuestion>();
     private int _practiceIndex;
@@ -18,15 +20,20 @@ public partial class LearningHubWindow : Window
 
     public ObservableCollection<LearningHubPackageView> Packages { get; } = new();
 
-    public LearningHubWindow(string rootDirectory, Version applicationVersion)
+    public LearningHubWindow(
+        string rootDirectory,
+        Version applicationVersion,
+        IAiTeacherService? teacherService = null)
     {
         _root = rootDirectory;
         _version = applicationVersion;
         _progressStore = new LearningProgressStore(Path.Combine(_root, "progress.json"));
         _questionAttemptStore = new LearningQuestionAttemptStore(Path.Combine(_root, "question-attempts.json"));
+        _teacherService = teacherService;
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         PackageList.ItemsSource = Packages;
+        AskTeacherButton.IsEnabled = _teacherService is not null;
         Refresh();
     }
 
@@ -144,6 +151,7 @@ public partial class LearningHubWindow : Window
         ShowPracticeQuestion();
 
         AssessmentText.Text = view.Package.Assessments.Count == 0 ? "" : $"Simulados disponíveis: {view.Package.Assessments.Count}.";
+        AskTeacherButton.IsEnabled = _teacherService is not null;
         RefreshProgress(content.Id);
     }
 
@@ -274,6 +282,27 @@ public partial class LearningHubWindow : Window
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             MessageBox.Show("Não foi possível salvar seu progresso.\n\n" + exception.Message, "Aprender", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void AskTeacher_Click(object sender, RoutedEventArgs e)
+    {
+        if (_teacherService is null ||
+            PackageList.SelectedItem is not LearningHubPackageView view ||
+            ContentList.SelectedItem is not LearningContent content)
+        {
+            return;
+        }
+
+        try
+        {
+            var context = AiTeacherLessonContextFactory.Create(view.Package, content.Id);
+            var dialog = new AiTeacherLessonWindow(_teacherService, context) { Owner = this };
+            dialog.ShowDialog();
+        }
+        catch (Exception exception) when (exception is AiContractValidationException or InvalidDataException)
+        {
+            MessageBox.Show(exception.Message, "Professora Local", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

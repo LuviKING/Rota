@@ -121,6 +121,27 @@ public static class AiTeacherGroundingMetadataFactory
         };
     }
 
+    /// <summary>
+    /// Confere a proveniência antes de ela chegar à interface. Isso impede que um
+    /// backend alternativo, um teste ou uma resposta do modelo transforme a
+    /// indicação de fonte/confiança em uma afirmação livre.
+    /// </summary>
+    public static void Validate(
+        AiTeacherGroundingMetadata grounding,
+        AiTeacherLessonContext? context)
+    {
+        ArgumentNullException.ThrowIfNull(grounding);
+        var expected = Create(context);
+        if (grounding.Sources is null ||
+            !grounding.Sources.SequenceEqual(expected.Sources) ||
+            grounding.Confidence != expected.Confidence ||
+            !string.Equals(grounding.ConfidenceReason, expected.ConfidenceReason, StringComparison.Ordinal))
+        {
+            throw new AiContractValidationException(
+                "A proveniência pedagógica da Professora Local não corresponde ao contexto interno verificado.");
+        }
+    }
+
     public static string GetConfidenceLabel(AiTeacherGroundingConfidence confidence) => confidence switch
     {
         AiTeacherGroundingConfidence.High => "Alta",

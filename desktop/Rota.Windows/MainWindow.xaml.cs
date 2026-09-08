@@ -19,6 +19,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly IAiProposalApplicationService _aiProposalApplicationService;
     private readonly IAiHardwareDiagnosticsService _aiHardwareDiagnosticsService;
     private readonly IAiPerformanceDiagnosticsService? _aiPerformanceDiagnosticsService;
+    private readonly IAiTeacherService? _aiTeacherService;
     private DateOnly _selectedDate;
     private DateOnly _displayMonth;
     private string _theme;
@@ -88,7 +89,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         IAiInstallationController aiInstallationController,
         IAiProposalApplicationService aiProposalApplicationService,
         IAiHardwareDiagnosticsService? aiHardwareDiagnosticsService = null,
-        IAiPerformanceDiagnosticsService? aiPerformanceDiagnosticsService = null)
+        IAiPerformanceDiagnosticsService? aiPerformanceDiagnosticsService = null,
+        IAiTeacherService? aiTeacherService = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _aiAssistantController = aiAssistantController ?? throw new ArgumentNullException(nameof(aiAssistantController));
@@ -96,6 +98,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _aiProposalApplicationService = aiProposalApplicationService ?? throw new ArgumentNullException(nameof(aiProposalApplicationService));
         _aiHardwareDiagnosticsService = aiHardwareDiagnosticsService ?? new AiHardwareDiagnosticsService();
         _aiPerformanceDiagnosticsService = aiPerformanceDiagnosticsService;
+        _aiTeacherService = aiTeacherService;
         _selectedDate = DateOnly.FromDateTime(DateTime.Today);
         _displayMonth = new DateOnly(_selectedDate.Year, _selectedDate.Month, 1);
         _theme = ThemeManager.LoadPreference(_repository.DataDirectory);
@@ -434,7 +437,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var dialog = new LearningHubWindow(
             Path.Combine(_repository.DataDirectory, "LearningLibrary"),
-            new Version(0, 5, 0)) { Owner = this };
+            new Version(0, 5, 0),
+            _aiTeacherService) { Owner = this };
         dialog.ShowDialog();
     }
 
