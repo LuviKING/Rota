@@ -13,6 +13,7 @@ public static class AiTeacherConversationHistoryTests
         ("Teacher conversation history records cancelled and failed exchanges without fabricated answers", RecordsTerminalFailures),
         ("Teacher conversation history recovers interrupted pending exchanges as failed", RecoversInterruptedExchange),
         ("Teacher conversation controller passes only bounded prior recap for a resumed lesson", ControllerPassesBoundedContinuity),
+        ("Teacher conversation controller lets the student skip prior recap", ControllerCanSkipContinuity),
         ("Teacher conversation history rejects duplicate JSON and recovers the last valid backup", RecoversFromDuplicateJson)
     };
 
@@ -268,6 +269,44 @@ public static class AiTeacherConversationHistoryTests
             Require(Directory.EnumerateFiles(root)
                 .Any(path => Path.GetFileName(path).StartsWith(begin.ConversationId.ToString("D") + ".json.corrupt-", StringComparison.Ordinal)));
         });
+    }
+
+    private static void ControllerCanSkipContinuity()
+    {
+        var directory = TempDirectory();
+        try
+        {
+            var context = Context("razao", "Razão");
+            using var store = Store(directory);
+            var service = new RecordingTeacherService(context);
+            var controller = new AiTeacherLessonController(service, context, store);
+
+            var first = controller.AskAsync(
+                    Guid.Empty,
+                    "Primeira pergunta sobre razão.",
+                    "",
+                    AiTeacherRequestMode.Explain,
+                    AiTeacherExplanationStyle.Simple)
+                .GetAwaiter().GetResult();
+            var second = controller.AskAsync(
+                    first.ConversationId,
+                    "Segunda pergunta sem recap.",
+                    "",
+                    AiTeacherRequestMode.Explain,
+                    AiTeacherExplanationStyle.Visual,
+                    includeContinuity: false)
+                .GetAwaiter().GetResult();
+
+            Require(second.ConversationId == first.ConversationId);
+            Require(second.Conversation?.Exchanges.Count == 2);
+            Require(service.Requests.Count == 2);
+            Require(service.Requests[1].Continuity is null);
+            Require(service.Requests[1].Question == "Segunda pergunta sem recap.");
+        }
+        finally
+        {
+            TryDeleteDirectory(directory);
+        }
     }
 
     private static readonly DateTimeOffset Timestamp = new(2026, 9, 8, 16, 0, 0, TimeSpan.Zero);

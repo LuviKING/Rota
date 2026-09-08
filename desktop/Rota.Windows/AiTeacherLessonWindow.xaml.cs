@@ -192,7 +192,8 @@ public partial class AiTeacherLessonWindow : Window
                 studentAttempt: "",
                 AiTeacherRequestMode.Explain,
                 style,
-                generationCancellation.Token);
+                generationCancellation.Token,
+                includeContinuity: UseContinuityCheckBox.IsChecked == true);
             if (!IsLoaded) return;
 
             _conversationId = turn.ConversationId;
@@ -269,6 +270,7 @@ public partial class AiTeacherLessonWindow : Window
         CancelButton.Visibility = _isGenerating ? Visibility.Visible : Visibility.Collapsed;
         QuestionBox.IsEnabled = !_isGenerating;
         StylePicker.IsEnabled = !_isGenerating;
+        UseContinuityCheckBox.IsEnabled = !_isGenerating;
         NewConversationButton.IsEnabled = !_isGenerating;
         QuestionHintText.Text = $"{QuestionBox.Text.Length:N0}/4.000 caracteres";
     }

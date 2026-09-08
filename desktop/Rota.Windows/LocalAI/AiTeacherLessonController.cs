@@ -70,8 +70,8 @@ public sealed class AiTeacherLessonController
     /// Executa uma troca da conversa atual. Guid.Empty começa uma nova conversa.
     /// A requisição contém pergunta/tentativa/modo/estilo e contexto congelado. Em
     /// uma conversa retomada, pode carregar somente um recap limitado da resposta
-    /// anterior — nunca perguntas/tentativas antigas, memória por matéria ou texto
-    /// livre de histórico.
+    /// anterior quando o estudante mantém essa opção ativa — nunca
+    /// perguntas/tentativas antigas, memória por matéria ou texto livre de histórico.
     /// </summary>
     public async Task<AiTeacherLessonTurnResult> AskAsync(
         Guid conversationId,
@@ -79,10 +79,11 @@ public sealed class AiTeacherLessonController
         string studentAttempt,
         AiTeacherRequestMode mode,
         AiTeacherExplanationStyle explanationStyle,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeContinuity = true)
     {
         AiTeacherConversationContinuity? continuity = null;
-        if (_conversationStore is not null && conversationId != Guid.Empty)
+        if (includeContinuity && _conversationStore is not null && conversationId != Guid.Empty)
         {
             var previous = await _conversationStore.LoadAsync(conversationId, cancellationToken)
                 .ConfigureAwait(false);
