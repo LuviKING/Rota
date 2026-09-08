@@ -18,6 +18,7 @@ public static class AiTeacherLessonHistoryTests
         var result = AiTeacherLessonHistoryFactory.Create(Conversation(context, Completed("Pergunta privada.", "Resposta validada.")), context);
         var entry = result.Entries.Single();
         Require(entry.StatusLabel == "Respondida");
+        Require(entry.TimestampLabel == "Atualizada em 01/01/1970 00:00 UTC");
         Require(entry.Question == "Pergunta privada.");
         Require(entry.AnswerTitle == "Explicação validada");
         Require(entry.AnswerRecap == "Resposta validada.");

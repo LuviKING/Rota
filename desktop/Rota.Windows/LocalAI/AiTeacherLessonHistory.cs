@@ -9,6 +9,7 @@ public sealed record AiTeacherLessonHistoryEntry
 {
     public Guid ExchangeId { get; init; }
     public DateTimeOffset UpdatedAtUtc { get; init; }
+    public string TimestampLabel { get; init; } = "";
     public AiTeacherConversationExchangeStatus Status { get; init; }
     public string StatusLabel { get; init; } = "";
     public string Question { get; init; } = "";
@@ -78,6 +79,7 @@ public static class AiTeacherLessonHistoryFactory
         {
             ExchangeId = exchange.ExchangeId,
             UpdatedAtUtc = exchange.UpdatedAtUtc,
+            TimestampLabel = $"Atualizada em {exchange.UpdatedAtUtc:dd/MM/yyyy HH:mm} UTC",
             Status = exchange.Status,
             StatusLabel = StatusLabel(exchange.Status),
             Question = exchange.Question,

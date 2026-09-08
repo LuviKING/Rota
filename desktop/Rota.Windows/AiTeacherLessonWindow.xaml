@@ -101,7 +101,10 @@
                                 <DataTemplate>
                                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
                                         <StackPanel>
-                                            <TextBlock Text="{Binding StatusLabel}" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="10" FontWeight="Bold" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding StatusLabel}" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="10" FontWeight="Bold" />
+                                                <TextBlock Text="{Binding TimestampLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="8,0,0,0" />
+                                            </StackPanel>
                                             <TextBlock Text="{Binding Question}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                                             <TextBlock Text="{Binding AnswerTitle}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0" />
                                             <TextBlock Text="{Binding AnswerRecap}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
