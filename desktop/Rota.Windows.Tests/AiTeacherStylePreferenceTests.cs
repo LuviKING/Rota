@@ -11,6 +11,7 @@ public static class AiTeacherStylePreferenceTests
         ("Teacher style preference is an explicit local subject choice", SavesExplicitLocalChoice),
         ("Teacher continuity preference is explicit and survives a style change", PersistsContinuityChoice),
         ("Legacy teacher style preference defaults continuity to enabled", LegacyPreferenceDefaultsContinuity),
+        ("Teacher preference service serializes explicit rapid choices", SerializesRapidChoices),
         ("Teacher style preferences stay isolated by package and subject", KeepsSubjectsIsolated),
         ("Teacher style preference store recovers a valid backup", RecoversBackup),
         ("Teacher style preferences reject unsupported styles", RejectsUnsupportedStyle)
@@ -77,6 +78,24 @@ public static class AiTeacherStylePreferenceTests
             Require(loaded is not null && loaded.Style == AiTeacherExplanationStyle.Visual);
             Require(loaded!.UseConversationContinuity);
         });
+    }
+
+    private static void SerializesRapidChoices()
+    {
+        var store = new BlockingPreferenceStore();
+        var service = new AiTeacherStylePreferenceService(store, () => Timestamp);
+        var subject = Subject("matematica");
+        var first = service.SetAsync(subject, AiTeacherExplanationStyle.Visual, useConversationContinuity: false);
+        store.FirstSaveStarted.Task.GetAwaiter().GetResult();
+        var second = service.SetAsync(subject, AiTeacherExplanationStyle.Detailed, useConversationContinuity: true);
+
+        Require(store.SaveCount == 1);
+        store.ReleaseFirstSave.SetResult();
+        Task.WhenAll(first, second).GetAwaiter().GetResult();
+
+        Require(store.SaveCount == 2);
+        Require(store.LastSaved is not null && store.LastSaved.Style == AiTeacherExplanationStyle.Detailed);
+        Require(store.LastSaved!.UseConversationContinuity);
     }
 
     private static void KeepsSubjectsIsolated()
@@ -163,5 +182,33 @@ public static class AiTeacherStylePreferenceTests
         try { action(); }
         catch (T) { return; }
         throw new InvalidOperationException($"Expected {typeof(T).Name}.");
+    }
+
+    private sealed class BlockingPreferenceStore : IAiTeacherStylePreferenceStore
+    {
+        private int _saveCount;
+
+        public string RootDirectory => Path.GetTempPath();
+        public int SaveCount => _saveCount;
+        public AiTeacherSubjectStylePreference? LastSaved { get; private set; }
+        public TaskCompletionSource FirstSaveStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseFirstSave { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task SaveAsync(AiTeacherSubjectStylePreference preference, CancellationToken cancellationToken = default)
+        {
+            var count = Interlocked.Increment(ref _saveCount);
+            if (count == 1)
+            {
+                FirstSaveStarted.SetResult();
+                await ReleaseFirstSave.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            LastSaved = AiTeacherSubjectStylePreferenceFactory.Copy(preference);
+        }
+
+        public Task<AiTeacherSubjectStylePreference?> TryLoadAsync(
+            string packageId,
+            string subjectId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<AiTeacherSubjectStylePreference?>(null);
     }
 }

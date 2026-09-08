@@ -324,6 +324,7 @@ public sealed class AiTeacherStylePreferenceService : IAiTeacherStylePreferenceS
 {
     private readonly IAiTeacherStylePreferenceStore _store;
     private readonly Func<DateTimeOffset> _utcNow;
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
 
     public AiTeacherStylePreferenceService(
         IAiTeacherStylePreferenceStore store,
@@ -367,13 +368,21 @@ public sealed class AiTeacherStylePreferenceService : IAiTeacherStylePreferenceS
         bool useConversationContinuity,
         CancellationToken cancellationToken = default)
     {
-        var now = _utcNow();
-        var preference = AiTeacherSubjectStylePreferenceFactory.Create(
-            subject,
-            style,
-            now,
-            useConversationContinuity);
-        await _store.SaveAsync(preference, cancellationToken).ConfigureAwait(false);
-        return style;
+        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var now = _utcNow();
+            var preference = AiTeacherSubjectStylePreferenceFactory.Create(
+                subject,
+                style,
+                now,
+                useConversationContinuity);
+            await _store.SaveAsync(preference, cancellationToken).ConfigureAwait(false);
+            return style;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
     }
 }
