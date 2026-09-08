@@ -12,7 +12,7 @@ public static class AiTeacherConversationHistoryTests
         ("Teacher conversation history lists conversations without dropping old exchanges", ListsWithoutDroppingHistory),
         ("Teacher conversation history records cancelled and failed exchanges without fabricated answers", RecordsTerminalFailures),
         ("Teacher conversation history recovers interrupted pending exchanges as failed", RecoversInterruptedExchange),
-        ("Teacher conversation controller persists successive turns without feeding history back to the service", ControllerPersistsWithoutImplicitMemory),
+        ("Teacher conversation controller passes only bounded prior recap for a resumed lesson", ControllerPassesBoundedContinuity),
         ("Teacher conversation history rejects duplicate JSON and recovers the last valid backup", RecoversFromDuplicateJson)
     };
 
@@ -204,7 +204,7 @@ public static class AiTeacherConversationHistoryTests
         }
     }
 
-    private static void ControllerPersistsWithoutImplicitMemory()
+    private static void ControllerPassesBoundedContinuity()
     {
         var directory = TempDirectory();
         try
@@ -236,6 +236,11 @@ public static class AiTeacherConversationHistoryTests
             Require(service.Requests[1].Question == "Segunda pergunta sobre razão.");
             Require(service.Requests[1].StudentAttempt.Length == 0);
             Require(service.Requests[1].ExplanationStyle == AiTeacherExplanationStyle.Visual);
+            Require(service.Requests[0].Continuity is null);
+            Require(service.Requests[1].Continuity is not null);
+            Require(service.Requests[1].Continuity!.CompletedExchangeCount == 1);
+            Require(service.Requests[1].Continuity!.LastAnswerRecap == "Retome o conceito e faça a próxima tentativa com seu próprio raciocínio.");
+            Require(!service.Requests[1].Continuity!.LastAnswerRecap.Contains("Primeira pergunta", StringComparison.Ordinal));
             Require(!ReferenceEquals(service.Requests[0].LessonContext, context));
         }
         finally

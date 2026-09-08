@@ -12,8 +12,9 @@ public sealed record AiTeacherLessonTurnResult
 
 /// <summary>
 /// Adaptador estritamente pedagógico entre uma aula verificada e a Professora
-/// Local. Histórico, resumo e memória por matéria são registros locais passivos:
-/// nenhum deles é anexado automaticamente à requisição do modelo neste bloco.
+/// Local. Histórico, resumo e memória por matéria continuam passivos. Quando uma
+/// conversa idêntica é retomada, somente um recap limitado da última resposta
+/// validada pode acompanhar a pergunta, sempre como dado não confiável.
 /// </summary>
 public sealed class AiTeacherLessonController
 {
@@ -67,8 +68,10 @@ public sealed class AiTeacherLessonController
 
     /// <summary>
     /// Executa uma troca da conversa atual. Guid.Empty começa uma nova conversa.
-    /// A requisição enviada ao serviço contém somente pergunta/tentativa/modo/estilo
-    /// e o contexto pedagógico congelado da aula, nunca histórico ou memória.
+    /// A requisição contém pergunta/tentativa/modo/estilo e contexto congelado. Em
+    /// uma conversa retomada, pode carregar somente um recap limitado da resposta
+    /// anterior — nunca perguntas/tentativas antigas, memória por matéria ou texto
+    /// livre de histórico.
     /// </summary>
     public async Task<AiTeacherLessonTurnResult> AskAsync(
         Guid conversationId,
@@ -78,13 +81,22 @@ public sealed class AiTeacherLessonController
         AiTeacherExplanationStyle explanationStyle,
         CancellationToken cancellationToken = default)
     {
+        AiTeacherConversationContinuity? continuity = null;
+        if (_conversationStore is not null && conversationId != Guid.Empty)
+        {
+            var previous = await _conversationStore.LoadAsync(conversationId, cancellationToken)
+                .ConfigureAwait(false);
+            continuity = AiTeacherConversationContinuityFactory.Create(previous, LessonContext);
+        }
+
         var request = new AiTeacherRequest
         {
             Question = (question ?? string.Empty).Trim(),
             StudentAttempt = (studentAttempt ?? string.Empty).Trim(),
             Mode = mode,
             ExplanationStyle = explanationStyle,
-            LessonContext = LessonContext
+            LessonContext = LessonContext,
+            Continuity = continuity
         };
         AiTeacherContractValidator.ValidateRequest(request);
         cancellationToken.ThrowIfCancellationRequested();

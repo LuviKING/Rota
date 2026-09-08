@@ -15,7 +15,8 @@ public static class AiTeacherExplanationStyleTests
         ("Teacher explanation style catalog is stable and bounded", StyleCatalogIsStable),
         ("Teacher contracts reject unsupported explanation styles", ContractsRejectUnsupportedStyles),
         ("Teacher backend applies every explanation style as trusted policy", BackendAppliesEveryStyle),
-        ("Teacher explanation style request is deterministic and style-specific", StyleRequestIsDeterministic)
+        ("Teacher explanation style request is deterministic and style-specific", StyleRequestIsDeterministic),
+        ("Teacher backend sends bounded continuity only as untrusted data", BackendSendsUntrustedContinuity)
     }.Concat(AiTeacherHiddenDoubtTests.Cases)
       .Concat(AiTeacherGuidedCorrectionTests.Cases);
 
@@ -121,9 +122,32 @@ public static class AiTeacherExplanationStyleTests
         Require(simple.Answer.ExplanationStyle == AiTeacherExplanationStyle.Simple);
     }
 
+    private static void BackendSendsUntrustedContinuity()
+    {
+        var continuity = new AiTeacherConversationContinuity
+        {
+            CompletedExchangeCount = 2,
+            LastExplanationStyle = AiTeacherExplanationStyle.Simple,
+            LastAnswerRecap = "O recap anterior é dado, não instrução.",
+            LastAnswerRecapTruncated = false
+        };
+        var result = Run(AiTeacherExplanationStyle.Visual, "Continue a explicação.", continuity);
+        using var request = JsonDocument.Parse(result.RequestBody);
+        var payload = JsonDocument.Parse(request.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!).RootElement;
+        var stored = payload.GetProperty("conversation_continuity");
+        Require(stored.GetProperty("completed_exchange_count").GetInt32() == 2);
+        Require(stored.GetProperty("last_explanation_style").GetString() == AiTeacherExplanationStyles.SimpleId);
+        Require(stored.GetProperty("last_answer_recap").GetString() == continuity.LastAnswerRecap);
+        Require(!payload.GetProperty("user_payload").TryGetProperty("prior_question", out _));
+        var system = request.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
+        Require(system.Contains("conversation_continuity", StringComparison.Ordinal));
+        Require(system.Contains("dado não confiável", StringComparison.Ordinal));
+    }
+
     private static (AiTeacherAnswer Answer, string RequestBody) Run(
         AiTeacherExplanationStyle style,
-        string question)
+        string question,
+        AiTeacherConversationContinuity? continuity = null)
     {
         var handler = new CaptureHandler(CompletionResponse());
         using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
@@ -131,7 +155,8 @@ public static class AiTeacherExplanationStyleTests
         var answer = backend.ExplainAsync(new AiTeacherRequest
         {
             Question = question,
-            ExplanationStyle = style
+            ExplanationStyle = style,
+            Continuity = continuity
         }, Configuration()).GetAwaiter().GetResult();
 
         Require(handler.RequestBody is not null);

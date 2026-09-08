@@ -11,6 +11,7 @@ public sealed record AiTeacherRequest
     public AiTeacherRequestMode Mode { get; init; } = AiTeacherRequestMode.Explain;
     public AiTeacherExplanationStyle ExplanationStyle { get; init; } = AiTeacherExplanationStyle.StepByStep;
     public AiTeacherLessonContext? LessonContext { get; init; }
+    public AiTeacherConversationContinuity? Continuity { get; init; }
 }
 
 /// <summary>
@@ -159,6 +160,8 @@ public static class AiTeacherContractValidator
 
         if (request.LessonContext is not null)
             ValidateLessonContext(request.LessonContext);
+        if (request.Continuity is not null)
+            AiTeacherConversationContinuityFactory.Validate(request.Continuity);
     }
 
     public static void ValidateLessonContext(AiTeacherLessonContext context)
