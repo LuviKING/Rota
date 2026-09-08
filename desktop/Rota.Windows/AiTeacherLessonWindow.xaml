@@ -85,8 +85,31 @@
                                     Visibility="Collapsed" AutomationProperties.Name="Cancelar explicação">Cancelar</Button>
                             <Button x:Name="NewConversationButton" Click="NewConversation_Click" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="8,0,0,0"
                                     AutomationProperties.Name="Iniciar nova conversa desta aula">Nova conversa</Button>
+                            <Button x:Name="HistoryButton" Click="History_Click" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="8,0,0,0"
+                                    AutomationProperties.Name="Ver histórico local desta aula">Histórico</Button>
                         </WrapPanel>
                         <TextBlock x:Name="OperationNoticeText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,10,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="HistoryPanel" Style="{StaticResource TeacherCard}" Margin="0,12,0,0" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="HISTÓRICO LOCAL DESTA AULA" Foreground="{DynamicResource MutedBrush}" FontWeight="Bold" FontSize="10" />
+                        <TextBlock x:Name="HistoryInfoText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,6,0,0" />
+                        <ItemsControl x:Name="HistoryEntriesList" Margin="0,10,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding StatusLabel}" Foreground="{DynamicResource PrimaryTextBrush}" FontSize="10" FontWeight="Bold" />
+                                            <TextBlock Text="{Binding Question}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                            <TextBlock Text="{Binding AnswerTitle}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0" />
+                                            <TextBlock Text="{Binding AnswerRecap}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
 

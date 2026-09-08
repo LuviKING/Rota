@@ -121,6 +121,7 @@ public partial class AiTeacherLessonWindow : Window
             if (resumed is null || !IsLoaded) return;
 
             _conversationId = resumed.ConversationId;
+            RefreshInputState();
             var lastCompleted = resumed.Exchanges.LastOrDefault(item =>
                 item.Status == AiTeacherConversationExchangeStatus.Completed &&
                 item.Answer is not null && item.Grounding is not null && item.Knowledge is not null);
@@ -260,6 +261,10 @@ public partial class AiTeacherLessonWindow : Window
     {
         if (_isGenerating) return;
         _conversationId = Guid.Empty;
+        HistoryPanel.Visibility = Visibility.Collapsed;
+        HistoryEntriesList.ItemsSource = null;
+        HistoryInfoText.Text = "";
+        HistoryButton.Content = "Histórico";
         AnswerPanel.Visibility = Visibility.Collapsed;
         AnswerTitleText.Text = "";
         AnswerIntroductionText.Text = "";
@@ -272,6 +277,39 @@ public partial class AiTeacherLessonWindow : Window
             AiTeacherKnowledgeDisclosureFactory.Create(_controller.LessonContext));
         OperationNoticeText.Text = "A próxima pergunta iniciará uma nova conversa desta aula. O histórico anterior continua salvo somente neste computador.";
         QuestionBox.Focus();
+        RefreshInputState();
+    }
+
+    private async void History_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isGenerating) return;
+        if (HistoryPanel.Visibility == Visibility.Visible)
+        {
+            HistoryPanel.Visibility = Visibility.Collapsed;
+            HistoryButton.Content = "Histórico";
+            return;
+        }
+        if (_conversationId == Guid.Empty)
+        {
+            OperationNoticeText.Text = "Ainda não existe uma conversa local para mostrar nesta aula.";
+            return;
+        }
+
+        try
+        {
+            var conversation = await _conversationStore.LoadAsync(_conversationId).ConfigureAwait(true);
+            var history = AiTeacherLessonHistoryFactory.Create(conversation, _controller.LessonContext);
+            HistoryEntriesList.ItemsSource = history.Entries;
+            HistoryInfoText.Text = history.HasEarlierEntries
+                ? $"Mostrando as últimas {history.Entries.Count} de {history.TotalExchangeCount} trocas. Este histórico continua somente no computador."
+                : $"{history.TotalExchangeCount} troca(s) nesta conversa. Este histórico continua somente no computador.";
+            HistoryPanel.Visibility = Visibility.Visible;
+            HistoryButton.Content = "Ocultar histórico";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
+        {
+            if (IsLoaded) OperationNoticeText.Text = exception.Message;
+        }
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
@@ -297,6 +335,7 @@ public partial class AiTeacherLessonWindow : Window
         StylePicker.IsEnabled = !_isGenerating;
         UseContinuityCheckBox.IsEnabled = !_isGenerating;
         NewConversationButton.IsEnabled = !_isGenerating;
+        HistoryButton.IsEnabled = !_isGenerating && _conversationId != Guid.Empty;
         QuestionHintText.Text = $"{QuestionBox.Text.Length:N0}/4.000 caracteres";
     }
 
