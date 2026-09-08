@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using Rota.Desktop.LocalAI;
@@ -26,6 +27,7 @@ public partial class AiTeacherLessonWindow : Window
     private bool _isGenerating;
     private bool _isRestoringSubjectPreference;
     private Guid _conversationId;
+    private AiTeacherAnswer? _displayedAnswer;
 
     public ObservableCollection<AiTeacherExplanationStyleDescriptor> Styles { get; } = new();
 
@@ -280,6 +282,7 @@ public partial class AiTeacherLessonWindow : Window
         AnswerIntroductionText.Text = "";
         AnswerStepsList.ItemsSource = null;
         AnswerRecapText.Text = "";
+        _displayedAnswer = null;
         LimitationsList.ItemsSource = null;
         LimitationsPanel.Visibility = Visibility.Collapsed;
         ShowEvidence(
@@ -337,6 +340,25 @@ public partial class AiTeacherLessonWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void CopyAnswer_Click(object sender, RoutedEventArgs e)
+    {
+        if (_displayedAnswer is null)
+        {
+            OperationNoticeText.Text = "Ainda não há uma explicação local para copiar.";
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(AiTeacherAnswerClipboardText.Create(_displayedAnswer));
+            OperationNoticeText.Text = "A explicação exibida foi copiada. O histórico e a pergunta não foram incluídos.";
+        }
+        catch (ExternalException)
+        {
+            OperationNoticeText.Text = "Não foi possível acessar a área de transferência agora. Tente novamente.";
+        }
+    }
+
     private void DisposeOwnedStores()
     {
         if (_ownedStoresDisposed) return;
@@ -364,6 +386,7 @@ public partial class AiTeacherLessonWindow : Window
 
     private void ShowAnswer(AiTeacherGroundedAnswer result)
     {
+        _displayedAnswer = result.Answer;
         ShowEvidence(result.Grounding, result.Knowledge);
         AnswerTitleText.Text = result.Answer.Title;
         AnswerIntroductionText.Text = result.Answer.Introduction;
