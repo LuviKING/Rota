@@ -47,6 +47,10 @@ public sealed class LocalAiServices : IAsyncDisposable
         TeacherRecurringLearningSignalService = new AiTeacherRecurringLearningSignalService(
             TeacherConversationStore,
             TeacherSubjectBindingStore);
+        TeacherStylePreferenceStore = new AiTeacherStylePreferenceStore(
+            Path.Combine(rootDirectory, "teacher", "preferences", "styles"));
+        TeacherStylePreferenceService = new AiTeacherStylePreferenceService(
+            TeacherStylePreferenceStore);
 
         ContextProvider = new StudyPlanningContextProvider(repository);
         EnemCatalog = EnemCatalogService.Default;
@@ -106,6 +110,13 @@ public sealed class LocalAiServices : IAsyncDisposable
     /// </summary>
     public AiTeacherRecurringLearningSignalService TeacherRecurringLearningSignalService { get; }
 
+    /// <summary>
+    /// Escolha manual de estilo para cada matéria. Ela não é inferida do histórico
+    /// e não concede à professora acesso a informações além da aula atual.
+    /// </summary>
+    public AiTeacherStylePreferenceStore TeacherStylePreferenceStore { get; }
+    public AiTeacherStylePreferenceService TeacherStylePreferenceService { get; }
+
     public StudyPlanningContextProvider ContextProvider { get; }
     public EnemCatalogService EnemCatalog { get; }
     public AiPlanningService PlanningService { get; }
@@ -147,6 +158,7 @@ public sealed class LocalAiServices : IAsyncDisposable
         finally
         {
             Installer.Dispose();
+            TeacherStylePreferenceStore.Dispose();
             TeacherSubjectMemoryStore.Dispose();
             TeacherSubjectBindingStore.Dispose();
             TeacherLessonSummaryStore.Dispose();

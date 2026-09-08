@@ -13,6 +13,7 @@ public partial class LearningHubWindow : Window
     private readonly LearningProgressStore _progressStore;
     private readonly LearningQuestionAttemptStore _questionAttemptStore;
     private readonly IAiTeacherService? _teacherService;
+    private readonly IAiTeacherStylePreferenceService? _teacherStylePreferenceService;
     private LearningContentLibrarySnapshot _snapshot = new(Array.Empty<LearningLibraryPackage>(), Array.Empty<LearningLibraryIssue>());
     private IReadOnlyList<LearningPracticeQuestion> _practiceQuestions = Array.Empty<LearningPracticeQuestion>();
     private int _practiceIndex;
@@ -23,13 +24,15 @@ public partial class LearningHubWindow : Window
     public LearningHubWindow(
         string rootDirectory,
         Version applicationVersion,
-        IAiTeacherService? teacherService = null)
+        IAiTeacherService? teacherService = null,
+        IAiTeacherStylePreferenceService? teacherStylePreferenceService = null)
     {
         _root = rootDirectory;
         _version = applicationVersion;
         _progressStore = new LearningProgressStore(Path.Combine(_root, "progress.json"));
         _questionAttemptStore = new LearningQuestionAttemptStore(Path.Combine(_root, "question-attempts.json"));
         _teacherService = teacherService;
+        _teacherStylePreferenceService = teacherStylePreferenceService;
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         PackageList.ItemsSource = Packages;
@@ -301,7 +304,8 @@ public partial class LearningHubWindow : Window
             var dialog = new AiTeacherLessonWindow(
                 _teacherService,
                 context,
-                subjectBinding: subjectBinding) { Owner = this };
+                subjectBinding: subjectBinding,
+                stylePreferenceService: _teacherStylePreferenceService) { Owner = this };
             dialog.ShowDialog();
         }
         catch (Exception exception) when (exception is AiContractValidationException or InvalidDataException)

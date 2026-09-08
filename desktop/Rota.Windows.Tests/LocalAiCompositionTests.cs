@@ -26,6 +26,7 @@ public static class LocalAiCompositionTests
       .Concat(AiTeacherSubjectMemoryTests.Cases)
       .Concat(AiTeacherSubjectMemoryRegressionTests.Cases)
       .Concat(AiTeacherRecurringLearningSignalTests.Cases)
+      .Concat(AiTeacherStylePreferenceTests.Cases)
       .Concat(AiTeacherDeterministicValidationTests.Cases)
       .Concat(AiTeacherPedagogicalQualityTests.Cases);
 
@@ -50,6 +51,8 @@ public static class LocalAiCompositionTests
                 Require(services.TeacherSubjectBindingStore.RootDirectory == Path.Combine(aiRoot, "teacher", "memory", "subject-bindings"));
                 Require(services.TeacherSubjectMemoryStore.RootDirectory == Path.Combine(aiRoot, "teacher", "memory", "subjects"));
                 Require(services.TeacherSubjectMemoryService is IAiTeacherSubjectMemoryService);
+                Require(services.TeacherStylePreferenceStore.RootDirectory == Path.Combine(aiRoot, "teacher", "preferences", "styles"));
+                Require(services.TeacherStylePreferenceService is IAiTeacherStylePreferenceService);
                 Require(services.EnemCatalog.CatalogVersion == EnemCatalogService.CurrentCatalogVersion);
                 Require(services.ModelManager.RootDirectory == aiRoot);
                 Require(services.HardwareDiagnostics is not null);
@@ -84,6 +87,7 @@ public static class LocalAiCompositionTests
             Expect<ObjectDisposedException>(() => services.TeacherLessonSummaryStore.TryLoadAsync(Guid.NewGuid()).GetAwaiter().GetResult());
             Expect<ObjectDisposedException>(() => services.TeacherSubjectBindingStore.TryLoadAsync(Guid.NewGuid()).GetAwaiter().GetResult());
             Expect<ObjectDisposedException>(() => services.TeacherSubjectMemoryStore.TryLoadAsync("pacote", "materia").GetAwaiter().GetResult());
+            Expect<ObjectDisposedException>(() => services.TeacherStylePreferenceStore.TryLoadAsync("pacote", "materia").GetAwaiter().GetResult());
         });
     }
 
@@ -170,6 +174,8 @@ public static class LocalAiCompositionTests
                 Require(services.TeacherSubjectBindingStore is IAiTeacherSubjectBindingStore);
                 Require(services.TeacherSubjectMemoryStore is IAiTeacherSubjectMemoryStore);
                 Require(services.TeacherSubjectMemoryService is IAiTeacherSubjectMemoryService);
+                Require(services.TeacherStylePreferenceStore is IAiTeacherStylePreferenceStore);
+                Require(services.TeacherStylePreferenceService is IAiTeacherStylePreferenceService);
                 Require(services.RuntimeHost.Status.State == AiRuntimeState.Stopped);
                 Require(!Directory.Exists(aiRoot));
             }

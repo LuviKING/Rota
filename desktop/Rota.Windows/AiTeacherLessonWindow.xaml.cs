@@ -17,6 +17,9 @@ public partial class AiTeacherLessonWindow : Window
     private readonly IAiTeacherLessonSummaryStore? _ownedSummaryStore;
     private readonly IAiTeacherSubjectBindingStore? _ownedSubjectBindingStore;
     private readonly IAiTeacherSubjectMemoryStore? _ownedSubjectMemoryStore;
+    private readonly IAiTeacherStylePreferenceStore? _ownedStylePreferenceStore;
+    private readonly AiTeacherSubjectBinding? _subjectBinding;
+    private readonly IAiTeacherStylePreferenceService? _stylePreferenceService;
     private CancellationTokenSource? _generationCancellation;
     private bool _ownedStoresDisposed;
     private bool _isGenerating;
@@ -30,7 +33,8 @@ public partial class AiTeacherLessonWindow : Window
         IAiTeacherConversationStore? conversationStore = null,
         IAiTeacherLessonSummaryService? summaryService = null,
         AiTeacherSubjectBinding? subjectBinding = null,
-        IAiTeacherSubjectMemoryService? subjectMemoryService = null)
+        IAiTeacherSubjectMemoryService? subjectMemoryService = null,
+        IAiTeacherStylePreferenceService? stylePreferenceService = null)
     {
         _conversationStore = conversationStore ?? new AiTeacherConversationStore();
         _ownsConversationStore = conversationStore is null;
@@ -51,6 +55,14 @@ public partial class AiTeacherLessonWindow : Window
                 bindingStore,
                 memoryStore);
         }
+        if (subjectBinding is not null && stylePreferenceService is null)
+        {
+            var preferenceStore = new AiTeacherStylePreferenceStore();
+            _ownedStylePreferenceStore = preferenceStore;
+            stylePreferenceService = new AiTeacherStylePreferenceService(preferenceStore);
+        }
+        _subjectBinding = subjectBinding;
+        _stylePreferenceService = stylePreferenceService;
         _controller = new AiTeacherLessonController(
             teacherService,
             lessonContext,
@@ -63,12 +75,51 @@ public partial class AiTeacherLessonWindow : Window
         foreach (var style in AiTeacherExplanationStyles.All) Styles.Add(style);
         StylePicker.ItemsSource = Styles;
         StylePicker.SelectedItem = Styles.Single(item => item.Style == AiTeacherExplanationStyle.StepByStep);
+        StylePicker.SelectionChanged += StylePicker_SelectionChanged;
         LessonTitleText.Text = _controller.LessonContext.ContentTitle;
         ShowEvidence(
             AiTeacherGroundingMetadataFactory.Create(_controller.LessonContext),
             AiTeacherKnowledgeDisclosureFactory.Create(_controller.LessonContext));
         RefreshInputState();
+        Loaded += Window_Loaded;
         Closed += Window_Closed;
+    }
+
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= Window_Loaded;
+        if (_subjectBinding is null || _stylePreferenceService is null) return;
+        try
+        {
+            var storedStyle = await _stylePreferenceService.GetAsync(_subjectBinding).ConfigureAwait(true);
+            if (storedStyle is not null && IsLoaded)
+            {
+                StylePicker.SelectedItem = Styles.Single(item => item.Style == storedStyle.Value);
+                OperationNoticeText.Text = "O estilo que você escolheu para esta matéria foi restaurado localmente.";
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
+        {
+            if (IsLoaded) OperationNoticeText.Text = exception.Message;
+        }
+    }
+
+    private async void StylePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _isGenerating || _subjectBinding is null || _stylePreferenceService is null ||
+            StylePicker.SelectedItem is not AiTeacherExplanationStyleDescriptor descriptor)
+        {
+            return;
+        }
+
+        try
+        {
+            await _stylePreferenceService.SetAsync(_subjectBinding, descriptor.Style).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
+        {
+            if (IsLoaded) OperationNoticeText.Text = exception.Message;
+        }
     }
 
     private void Window_Closed(object? sender, EventArgs e)
@@ -151,6 +202,7 @@ public partial class AiTeacherLessonWindow : Window
         _ownedStoresDisposed = true;
         if (_ownedSubjectMemoryStore is IDisposable memoryDisposable) memoryDisposable.Dispose();
         if (_ownedSubjectBindingStore is IDisposable bindingDisposable) bindingDisposable.Dispose();
+        if (_ownedStylePreferenceStore is IDisposable preferenceDisposable) preferenceDisposable.Dispose();
         if (_ownedSummaryStore is IDisposable summaryDisposable) summaryDisposable.Dispose();
         if (_ownsConversationStore && _conversationStore is IDisposable conversationDisposable)
             conversationDisposable.Dispose();
