@@ -18,6 +18,8 @@ public sealed record AiTeacherSubjectStylePreference
     public string PackageId { get; init; } = "";
     public string SubjectId { get; init; } = "";
     public AiTeacherExplanationStyle Style { get; init; }
+    /// <summary>Escolha explícita para enviar o recap limitado quando a conversa for retomada.</summary>
+    public bool UseConversationContinuity { get; init; } = true;
     public DateTimeOffset UpdatedAtUtc { get; init; }
 }
 
@@ -26,7 +28,8 @@ public static class AiTeacherSubjectStylePreferenceFactory
     public static AiTeacherSubjectStylePreference Create(
         AiTeacherSubjectBinding subject,
         AiTeacherExplanationStyle style,
-        DateTimeOffset updatedAtUtc)
+        DateTimeOffset updatedAtUtc,
+        bool useConversationContinuity = true)
     {
         ArgumentNullException.ThrowIfNull(subject);
         AiTeacherSubjectBindingFactory.Validate(subject);
@@ -40,6 +43,7 @@ public static class AiTeacherSubjectStylePreferenceFactory
             PackageId = subject.PackageId,
             SubjectId = subject.SubjectId,
             Style = style,
+            UseConversationContinuity = useConversationContinuity,
             UpdatedAtUtc = updatedAtUtc
         };
     }
@@ -292,6 +296,10 @@ public sealed class AiTeacherStylePreferenceStore : IAiTeacherStylePreferenceSto
 
 public interface IAiTeacherStylePreferenceService
 {
+    Task<AiTeacherSubjectStylePreference?> GetPreferenceAsync(
+        AiTeacherSubjectBinding subject,
+        CancellationToken cancellationToken = default);
+
     Task<AiTeacherExplanationStyle?> GetAsync(
         AiTeacherSubjectBinding subject,
         CancellationToken cancellationToken = default);
@@ -299,6 +307,12 @@ public interface IAiTeacherStylePreferenceService
     Task<AiTeacherExplanationStyle> SetAsync(
         AiTeacherSubjectBinding subject,
         AiTeacherExplanationStyle style,
+        CancellationToken cancellationToken = default);
+
+    Task<AiTeacherExplanationStyle> SetAsync(
+        AiTeacherSubjectBinding subject,
+        AiTeacherExplanationStyle style,
+        bool useConversationContinuity,
         CancellationToken cancellationToken = default);
 }
 
@@ -323,10 +337,18 @@ public sealed class AiTeacherStylePreferenceService : IAiTeacherStylePreferenceS
         AiTeacherSubjectBinding subject,
         CancellationToken cancellationToken = default)
     {
+        var preference = await GetPreferenceAsync(subject, cancellationToken).ConfigureAwait(false);
+        return preference?.Style;
+    }
+
+    public async Task<AiTeacherSubjectStylePreference?> GetPreferenceAsync(
+        AiTeacherSubjectBinding subject,
+        CancellationToken cancellationToken = default)
+    {
         AiTeacherSubjectBindingFactory.Validate(subject);
         var preference = await _store.TryLoadAsync(subject.PackageId, subject.SubjectId, cancellationToken)
             .ConfigureAwait(false);
-        return preference is null ? null : preference.Style;
+        return preference is null ? null : AiTeacherSubjectStylePreferenceFactory.Copy(preference);
     }
 
     public async Task<AiTeacherExplanationStyle> SetAsync(
@@ -334,8 +356,23 @@ public sealed class AiTeacherStylePreferenceService : IAiTeacherStylePreferenceS
         AiTeacherExplanationStyle style,
         CancellationToken cancellationToken = default)
     {
+        var existing = await GetPreferenceAsync(subject, cancellationToken).ConfigureAwait(false);
+        return await SetAsync(subject, style, existing?.UseConversationContinuity ?? true, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<AiTeacherExplanationStyle> SetAsync(
+        AiTeacherSubjectBinding subject,
+        AiTeacherExplanationStyle style,
+        bool useConversationContinuity,
+        CancellationToken cancellationToken = default)
+    {
         var now = _utcNow();
-        var preference = AiTeacherSubjectStylePreferenceFactory.Create(subject, style, now);
+        var preference = AiTeacherSubjectStylePreferenceFactory.Create(
+            subject,
+            style,
+            now,
+            useConversationContinuity);
         await _store.SaveAsync(preference, cancellationToken).ConfigureAwait(false);
         return style;
     }

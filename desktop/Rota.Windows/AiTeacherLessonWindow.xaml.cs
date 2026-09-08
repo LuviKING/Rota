@@ -99,11 +99,12 @@ public partial class AiTeacherLessonWindow : Window
         if (_subjectBinding is null || _stylePreferenceService is null) return;
         try
         {
-            var storedStyle = await _stylePreferenceService.GetAsync(_subjectBinding).ConfigureAwait(true);
-            if (storedStyle is not null && IsLoaded)
+            var preference = await _stylePreferenceService.GetPreferenceAsync(_subjectBinding).ConfigureAwait(true);
+            if (preference is not null && IsLoaded)
             {
-                StylePicker.SelectedItem = Styles.Single(item => item.Style == storedStyle.Value);
-                OperationNoticeText.Text = "O estilo que você escolheu para esta matéria foi restaurado localmente.";
+                StylePicker.SelectedItem = Styles.Single(item => item.Style == preference.Style);
+                UseContinuityCheckBox.IsChecked = preference.UseConversationContinuity;
+                OperationNoticeText.Text = "Suas escolhas de explicação e continuidade para esta matéria foram restauradas localmente.";
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
@@ -150,7 +151,31 @@ public partial class AiTeacherLessonWindow : Window
 
         try
         {
-            await _stylePreferenceService.SetAsync(_subjectBinding, descriptor.Style).ConfigureAwait(true);
+            await _stylePreferenceService.SetAsync(
+                _subjectBinding,
+                descriptor.Style,
+                UseContinuityCheckBox.IsChecked == true).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
+        {
+            if (IsLoaded) OperationNoticeText.Text = exception.Message;
+        }
+    }
+
+    private async void UseContinuityCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isGenerating || _subjectBinding is null || _stylePreferenceService is null ||
+            StylePicker.SelectedItem is not AiTeacherExplanationStyleDescriptor descriptor)
+        {
+            return;
+        }
+
+        try
+        {
+            await _stylePreferenceService.SetAsync(
+                _subjectBinding,
+                descriptor.Style,
+                UseContinuityCheckBox.IsChecked == true).ConfigureAwait(true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
         {

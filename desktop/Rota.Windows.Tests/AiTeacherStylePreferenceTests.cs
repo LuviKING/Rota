@@ -9,6 +9,8 @@ public static class AiTeacherStylePreferenceTests
     public static IEnumerable<(string Name, Action Body)> Cases => new (string, Action)[]
     {
         ("Teacher style preference is an explicit local subject choice", SavesExplicitLocalChoice),
+        ("Teacher continuity preference is explicit and survives a style change", PersistsContinuityChoice),
+        ("Legacy teacher style preference defaults continuity to enabled", LegacyPreferenceDefaultsContinuity),
         ("Teacher style preferences stay isolated by package and subject", KeepsSubjectsIsolated),
         ("Teacher style preference store recovers a valid backup", RecoversBackup),
         ("Teacher style preferences reject unsupported styles", RejectsUnsupportedStyle)
@@ -29,9 +31,51 @@ public static class AiTeacherStylePreferenceTests
             var loaded = store.TryLoadAsync("pacote-matematica", "matematica").GetAwaiter().GetResult();
             Require(loaded is not null);
             Require(loaded!.Style == AiTeacherExplanationStyle.Visual);
+            Require(loaded.UseConversationContinuity);
             Require(loaded.UpdatedAtUtc == Timestamp);
             Require(loaded.PackageId == "pacote-matematica" && loaded.SubjectId == "matematica");
             Require(AiTeacherSubjectStylePreferenceFactory.Matches(loaded, subject));
+        });
+    }
+
+    private static void PersistsContinuityChoice()
+    {
+        WithStore((store, _) =>
+        {
+            var subject = Subject("matematica");
+            var service = new AiTeacherStylePreferenceService(store, () => Timestamp);
+            service.SetAsync(subject, AiTeacherExplanationStyle.Visual, useConversationContinuity: false)
+                .GetAwaiter().GetResult();
+
+            var stored = service.GetPreferenceAsync(subject).GetAwaiter().GetResult();
+            Require(stored is not null && stored.Style == AiTeacherExplanationStyle.Visual);
+            Require(!stored!.UseConversationContinuity);
+
+            service.SetAsync(subject, AiTeacherExplanationStyle.Detailed).GetAwaiter().GetResult();
+            var afterStyleChange = service.GetPreferenceAsync(subject).GetAwaiter().GetResult();
+            Require(afterStyleChange is not null && afterStyleChange.Style == AiTeacherExplanationStyle.Detailed);
+            Require(!afterStyleChange!.UseConversationContinuity);
+        });
+    }
+
+    private static void LegacyPreferenceDefaultsContinuity()
+    {
+        WithStore((store, directory) =>
+        {
+            var path = Path.Combine(directory, "pacote-matematica--matematica.json");
+            File.WriteAllText(path, """
+                {
+                  "SchemaVersion": 1,
+                  "PackageId": "pacote-matematica",
+                  "SubjectId": "matematica",
+                  "Style": "Visual",
+                  "UpdatedAtUtc": "2026-09-08T21:00:00+00:00"
+                }
+                """);
+
+            var loaded = store.TryLoadAsync("pacote-matematica", "matematica").GetAwaiter().GetResult();
+            Require(loaded is not null && loaded.Style == AiTeacherExplanationStyle.Visual);
+            Require(loaded!.UseConversationContinuity);
         });
     }
 

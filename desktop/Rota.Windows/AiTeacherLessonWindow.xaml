@@ -74,6 +74,7 @@
                             <TextBlock x:Name="QuestionHintText" Grid.Column="1" Foreground="{DynamicResource MutedBrush}" FontSize="10" VerticalAlignment="Center" />
                         </Grid>
                         <CheckBox x:Name="UseContinuityCheckBox" IsChecked="True" Margin="0,8,0,0"
+                                  Checked="UseContinuityCheckBox_Changed" Unchecked="UseContinuityCheckBox_Changed"
                                   Content="Usar o recap da resposta anterior nesta conversa"
                                   ToolTip="Você pode continuar a conversa sem enviar o resumo da resposta anterior para a IA."
                                   AutomationProperties.Name="Usar recap da conversa anterior" />
