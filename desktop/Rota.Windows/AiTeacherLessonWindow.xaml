@@ -105,6 +105,7 @@
                                             <TextBlock Text="{Binding Question}" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
                                             <TextBlock Text="{Binding AnswerTitle}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0" />
                                             <TextBlock Text="{Binding AnswerRecap}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                            <TextBlock Text="{Binding EvidenceSummary}" Foreground="{DynamicResource PrimaryTextBrush}" TextWrapping="Wrap" FontSize="10" Margin="0,6,0,0" />
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>

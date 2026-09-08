@@ -21,6 +21,7 @@ public static class AiTeacherLessonHistoryTests
         Require(entry.Question == "Pergunta privada.");
         Require(entry.AnswerTitle == "Explicação validada");
         Require(entry.AnswerRecap == "Resposta validada.");
+        Require(entry.EvidenceSummary == "Base: Material interno suficiente · Cobertura: Alta");
     }
 
     private static void BoundsDisplay()
@@ -49,6 +50,7 @@ public static class AiTeacherLessonHistoryTests
         var result = AiTeacherLessonHistoryFactory.Create(Conversation(context, failed), context);
         Require(result.Entries.Single().StatusLabel == "Sem resposta");
         Require(result.Entries.Single().AnswerTitle.Length == 0 && result.Entries.Single().AnswerRecap.Length == 0);
+        Require(result.Entries.Single().EvidenceSummary.Length == 0);
     }
 
     private static void RejectsForeignLesson()
@@ -98,7 +100,9 @@ public static class AiTeacherLessonHistoryTests
         UpdatedAtUtc = DateTimeOffset.UnixEpoch,
         Status = AiTeacherConversationExchangeStatus.Completed,
         Question = question,
-        Answer = new AiTeacherAnswer { Title = "Explicação validada", Recap = recap }
+        Answer = new AiTeacherAnswer { Title = "Explicação validada", Recap = recap },
+        Grounding = AiTeacherGroundingMetadataFactory.Create(Context()),
+        Knowledge = AiTeacherKnowledgeDisclosureFactory.Create(Context())
     };
 
     private static void Require(bool condition)

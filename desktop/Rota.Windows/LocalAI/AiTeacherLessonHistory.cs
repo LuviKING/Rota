@@ -14,6 +14,11 @@ public sealed record AiTeacherLessonHistoryEntry
     public string Question { get; init; } = "";
     public string AnswerTitle { get; init; } = "";
     public string AnswerRecap { get; init; } = "";
+    /// <summary>
+    /// Transparência preservada do resultado que foi salvo localmente. Este texto
+    /// é apenas para leitura no histórico e não volta para o prompt do modelo.
+    /// </summary>
+    public string EvidenceSummary { get; init; } = "";
 }
 
 public sealed record AiTeacherLessonHistorySnapshot
@@ -77,8 +82,21 @@ public static class AiTeacherLessonHistoryFactory
             StatusLabel = StatusLabel(exchange.Status),
             Question = exchange.Question,
             AnswerTitle = answer?.Title ?? "",
-            AnswerRecap = answer?.Recap ?? ""
+            AnswerRecap = answer?.Recap ?? "",
+            EvidenceSummary = CreateEvidenceSummary(exchange)
         };
+    }
+
+    private static string CreateEvidenceSummary(AiTeacherConversationExchange exchange)
+    {
+        if (exchange.Status != AiTeacherConversationExchangeStatus.Completed ||
+            exchange.Grounding is null || exchange.Knowledge is null)
+        {
+            return "";
+        }
+
+        return $"Base: {AiTeacherKnowledgeDisclosureFactory.GetStatusLabel(exchange.Knowledge.Status)} " +
+               $"· Cobertura: {AiTeacherGroundingMetadataFactory.GetConfidenceLabel(exchange.Grounding.Confidence)}";
     }
 
     private static string StatusLabel(AiTeacherConversationExchangeStatus status) => status switch
