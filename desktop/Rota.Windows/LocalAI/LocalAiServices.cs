@@ -44,6 +44,9 @@ public sealed class LocalAiServices : IAsyncDisposable
             TeacherConversationStore,
             TeacherSubjectBindingStore,
             TeacherSubjectMemoryStore);
+        TeacherRecurringLearningSignalService = new AiTeacherRecurringLearningSignalService(
+            TeacherConversationStore,
+            TeacherSubjectBindingStore);
 
         ContextProvider = new StudyPlanningContextProvider(repository);
         EnemCatalog = EnemCatalogService.Default;
@@ -96,6 +99,12 @@ public sealed class LocalAiServices : IAsyncDisposable
     /// </summary>
     public AiTeacherSubjectMemoryStore TeacherSubjectMemoryStore { get; }
     public AiTeacherSubjectMemoryService TeacherSubjectMemoryService { get; }
+
+    /// <summary>
+    /// Leitura passiva de categorias recorrentes já registradas no histórico. Ela
+    /// não é diagnóstico, não escreve estado e não entra no prompt da professora.
+    /// </summary>
+    public AiTeacherRecurringLearningSignalService TeacherRecurringLearningSignalService { get; }
 
     public StudyPlanningContextProvider ContextProvider { get; }
     public EnemCatalogService EnemCatalog { get; }
