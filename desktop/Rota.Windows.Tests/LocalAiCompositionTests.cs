@@ -27,6 +27,7 @@ public static class LocalAiCompositionTests
       .Concat(AiTeacherSubjectMemoryRegressionTests.Cases)
       .Concat(AiTeacherRecurringLearningSignalTests.Cases)
       .Concat(AiTeacherStylePreferenceTests.Cases)
+      .Concat(AiTeacherLessonContinuationTests.Cases)
       .Concat(AiTeacherDeterministicValidationTests.Cases)
       .Concat(AiTeacherPedagogicalQualityTests.Cases);
 

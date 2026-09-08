@@ -20,6 +20,7 @@ public partial class AiTeacherLessonWindow : Window
     private readonly IAiTeacherStylePreferenceStore? _ownedStylePreferenceStore;
     private readonly AiTeacherSubjectBinding? _subjectBinding;
     private readonly IAiTeacherStylePreferenceService? _stylePreferenceService;
+    private readonly AiTeacherLessonContinuationService _continuationService;
     private CancellationTokenSource? _generationCancellation;
     private bool _ownedStoresDisposed;
     private bool _isGenerating;
@@ -63,6 +64,7 @@ public partial class AiTeacherLessonWindow : Window
         }
         _subjectBinding = subjectBinding;
         _stylePreferenceService = stylePreferenceService;
+        _continuationService = new AiTeacherLessonContinuationService(_conversationStore);
         _controller = new AiTeacherLessonController(
             teacherService,
             lessonContext,
@@ -88,6 +90,12 @@ public partial class AiTeacherLessonWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= Window_Loaded;
+        await RestoreStylePreferenceAsync();
+        await RestoreLatestConversationAsync();
+    }
+
+    private async Task RestoreStylePreferenceAsync()
+    {
         if (_subjectBinding is null || _stylePreferenceService is null) return;
         try
         {
@@ -97,6 +105,34 @@ public partial class AiTeacherLessonWindow : Window
                 StylePicker.SelectedItem = Styles.Single(item => item.Style == storedStyle.Value);
                 OperationNoticeText.Text = "O estilo que você escolheu para esta matéria foi restaurado localmente.";
             }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
+        {
+            if (IsLoaded) OperationNoticeText.Text = exception.Message;
+        }
+    }
+
+    private async Task RestoreLatestConversationAsync()
+    {
+        try
+        {
+            var resumed = await _continuationService.FindLatestAsync(_controller.LessonContext).ConfigureAwait(true);
+            if (resumed is null || !IsLoaded) return;
+
+            _conversationId = resumed.ConversationId;
+            var lastCompleted = resumed.Exchanges.LastOrDefault(item =>
+                item.Status == AiTeacherConversationExchangeStatus.Completed &&
+                item.Answer is not null && item.Grounding is not null && item.Knowledge is not null);
+            if (lastCompleted is not null)
+            {
+                ShowAnswer(new AiTeacherGroundedAnswer
+                {
+                    Answer = lastCompleted.Answer!,
+                    Grounding = lastCompleted.Grounding!,
+                    Knowledge = lastCompleted.Knowledge!
+                });
+            }
+            OperationNoticeText.Text = $"Conversa anterior desta aula retomada localmente · {resumed.Exchanges.Count} troca(s). O histórico não é enviado ao modelo.";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or AiContractValidationException)
         {
