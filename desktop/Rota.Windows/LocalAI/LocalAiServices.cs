@@ -7,6 +7,7 @@ public sealed class LocalAiServices : IAsyncDisposable
     private LocalAiServices(StudyRepository repository, string rootDirectory)
     {
         RootDirectory = rootDirectory;
+        TeacherManual = AiTeacherManual.Current;
         HardwareDetector = new WindowsAiHardwareProfileDetector();
         HardwareDiagnostics = new AiHardwareDiagnosticsService(
             HardwareDetector,
@@ -19,7 +20,20 @@ public sealed class LocalAiServices : IAsyncDisposable
             ConfigurationStore,
             ModelManager,
             RuntimeHost);
+
+        // Planejamento e tutoria compartilham somente runtime/modelo. Contratos, prompts,
+        // parsers e autoridades permanecem deliberadamente separados. Na composição real,
+        // a professora só entra em inferência depois que o Rota fornecer um contexto
+        // pedagógico interno verificado.
         Backend = new LlamaServerBackend(RuntimeHost);
+        TeacherBackend = new LlamaTeacherBackend(RuntimeHost, TeacherManual);
+        TeacherService = new AiTeacherService(
+            TeacherBackend,
+            ConfigurationStore,
+            ModelManager,
+            requireVerifiedLessonContext: true,
+            manual: TeacherManual);
+
         ContextProvider = new StudyPlanningContextProvider(repository);
         EnemCatalog = EnemCatalogService.Default;
         PlanningService = new AiPlanningService(Backend, ConfigurationStore, ContextProvider, EnemCatalog);
@@ -42,6 +56,13 @@ public sealed class LocalAiServices : IAsyncDisposable
     }
 
     public string RootDirectory { get; }
+
+    /// <summary>
+    /// Manual pedagógico canônico. Ele é embarcado, somente leitura e deliberadamente
+    /// separado do prompt do planejador de calendário.
+    /// </summary>
+    public AiTeacherManual TeacherManual { get; }
+
     public WindowsAiHardwareProfileDetector HardwareDetector { get; }
     public AiHardwareDiagnosticsService HardwareDiagnostics { get; }
     public AiConfigurationStore ConfigurationStore { get; }
@@ -50,6 +71,8 @@ public sealed class LocalAiServices : IAsyncDisposable
     public LocalAiRuntimeHost RuntimeHost { get; }
     public AiPerformanceDiagnosticsService PerformanceDiagnostics { get; }
     public LlamaServerBackend Backend { get; }
+    public LlamaTeacherBackend TeacherBackend { get; }
+    public AiTeacherService TeacherService { get; }
     public StudyPlanningContextProvider ContextProvider { get; }
     public EnemCatalogService EnemCatalog { get; }
     public AiPlanningService PlanningService { get; }
@@ -81,6 +104,7 @@ public sealed class LocalAiServices : IAsyncDisposable
         await AssistantController.DisposeAsync().ConfigureAwait(false);
         ApplicationService.Dispose();
         Workflow.Dispose();
+        TeacherBackend.Dispose();
         Backend.Dispose();
         PerformanceDiagnostics.Dispose();
         try

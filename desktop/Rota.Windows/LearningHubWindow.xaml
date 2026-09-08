@@ -9,8 +9,8 @@
         <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel><TextBlock Text="Aprender" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
-                <TextBlock Text="Aulas, exercícios e simulados salvos neste computador." Margin="0,4,0,0" Foreground="{DynamicResource MutedBrush}"/></StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal"><Button Click="Import_Click" Style="{StaticResource SecondaryButton}" Padding="13,8" Margin="0,0,8,0">Importar material</Button><Button Click="Refresh_Click" Style="{StaticResource PrimaryButton}" Padding="13,8">Atualizar</Button></StackPanel>
+                <TextBlock Text="Aulas, exercícios e simulados locais. Atualize materiais sem reinstalar o Rota." Margin="0,4,0,0" Foreground="{DynamicResource MutedBrush}"/></StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal"><Button Click="Import_Click" Style="{StaticResource SecondaryButton}" Padding="13,8" Margin="0,0,8,0">Importar / atualizar</Button><Button Click="Refresh_Click" Style="{StaticResource PrimaryButton}" Padding="13,8">Atualizar</Button></StackPanel>
         </Grid>
         <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="290"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="10"><ListBox x:Name="PackageList" SelectionChanged="PackageList_SelectionChanged" BorderThickness="0" Background="Transparent"><ListBox.ItemTemplate><DataTemplate><StackPanel Margin="5,7"><TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Detail}" Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="0,3,0,0"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></Border>
@@ -24,6 +24,42 @@
                     <TextBlock x:Name="LessonGoalText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,5,0,10"/>
                     <TextBlock x:Name="LessonBodyText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" LineHeight="21"/>
                     <TextBlock x:Name="PracticeText" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,16,0,0" TextWrapping="Wrap"/>
+
+                    <Border x:Name="PracticePanel" Visibility="Collapsed" Margin="0,10,0,0" Padding="14"
+                            Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock x:Name="PracticeCounterText" Foreground="{DynamicResource PrimaryTextBrush}" FontWeight="Bold" FontSize="11"/>
+                                <TextBlock x:Name="PracticeStatsText" Grid.Column="1" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="12,0,0,0"/>
+                            </Grid>
+                            <TextBlock x:Name="PracticePromptText" Foreground="{DynamicResource TextBrush}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,10,0,8"/>
+                            <ItemsControl x:Name="PracticeOptionsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <RadioButton Content="{Binding Text}" Tag="{Binding Id}" GroupName="LearningPracticeOptions"
+                                                     Checked="PracticeOption_Checked" Foreground="{DynamicResource TextBrush}"
+                                                     Margin="0,5,0,5" Padding="2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button x:Name="AnswerPracticeButton" Click="AnswerPractice_Click" Style="{StaticResource PrimaryButton}" Padding="13,8" IsEnabled="False">Responder</Button>
+                                <Button x:Name="RetryPracticeButton" Click="RetryPractice_Click" Style="{StaticResource SecondaryButton}" Padding="13,8" Margin="8,0,0,0" Visibility="Collapsed">Tentar novamente</Button>
+                                <Button x:Name="UndoPracticeAttemptButton" Click="UndoPracticeAttempt_Click" Style="{StaticResource SecondaryButton}" Padding="13,8" Margin="8,0,0,0" IsEnabled="False">Desfazer última tentativa</Button>
+                                <Button x:Name="NextPracticeButton" Click="NextPractice_Click" Style="{StaticResource SecondaryButton}" Padding="13,8" Margin="8,0,0,0">Próxima questão</Button>
+                            </WrapPanel>
+                            <TextBlock x:Name="PracticeResultText" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                            <Border x:Name="PracticeExplanationPanel" Visibility="Collapsed" Margin="0,10,0,0" Padding="10"
+                                    Background="{DynamicResource BackgroundBrush}" CornerRadius="8">
+                                <StackPanel>
+                                    <TextBlock Text="EXPLICAÇÃO" Foreground="{DynamicResource MutedBrush}" FontWeight="Bold" FontSize="10"/>
+                                    <TextBlock x:Name="PracticeExplanationText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock x:Name="AssessmentText" Foreground="{DynamicResource AssessmentBrush}" Margin="0,8,0,0" TextWrapping="Wrap"/>
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
                         <Button x:Name="CompleteContentButton" Click="CompleteContent_Click" Style="{StaticResource PrimaryButton}" Padding="13,8">Marcar como estudado</Button>

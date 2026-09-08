@@ -98,3 +98,41 @@ public static class LearningPracticeQuestionValidator
         }
     }
 }
+
+/// <summary>Resultado local de uma resposta prática, sempre derivado do gabarito do pacote.</summary>
+public sealed record LearningPracticeAnswerResult(
+    string QuestionId,
+    string SelectedOptionId,
+    string CorrectOptionId,
+    string CorrectOptionText,
+    bool IsCorrect,
+    string Explanation);
+
+/// <summary>
+/// Corrige uma questão objetiva sem IA e sem estado externo. O método falha fechado
+/// caso o gabarito ou a alternativa selecionada não pertençam à própria questão.
+/// </summary>
+public static class LearningPracticeQuestionGrader
+{
+    public static LearningPracticeAnswerResult Grade(LearningPracticeQuestion question, string selectedOptionId)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        if (question.Options is null || question.Options.Count is < 2 or > 5)
+            throw new InvalidDataException("A questão prática não possui alternativas válidas.");
+        if (!LearningCatalogIds.IsValid(question.Id) || !LearningCatalogIds.IsValid(selectedOptionId))
+            throw new InvalidDataException("A resposta da questão prática é inválida.");
+
+        var selected = question.Options.SingleOrDefault(option => option.Id == selectedOptionId)
+            ?? throw new InvalidDataException("A alternativa selecionada não pertence à questão prática.");
+        var correct = question.Options.SingleOrDefault(option => option.Id == question.CorrectOptionId)
+            ?? throw new InvalidDataException("O gabarito da questão prática é inválido.");
+
+        return new LearningPracticeAnswerResult(
+            question.Id,
+            selected.Id,
+            correct.Id,
+            correct.Text,
+            string.Equals(selected.Id, correct.Id, StringComparison.Ordinal),
+            question.Explanation);
+    }
+}

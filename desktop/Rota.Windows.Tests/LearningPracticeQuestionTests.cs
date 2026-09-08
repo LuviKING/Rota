@@ -9,7 +9,11 @@ public static class LearningPracticeQuestionTests
         ("Learning package preserves corrected practice questions", PreservesPracticeQuestion),
         ("Learning practice question rejects a missing answer option", RejectsMissingAnswerOption),
         ("Learning practice question rejects invalid content links", RejectsInvalidContentLink),
-        ("Learning practice question copy is independent", CopyIsIndependent)
+        ("Learning practice question copy is independent", CopyIsIndependent),
+        ("Learning practice grader uses only the package answer key", GraderUsesPackageAnswerKey),
+        ("Learning practice grader rejects an unknown option", GraderRejectsUnknownOption),
+        ("Learning question attempts persist and can be undone", QuestionAttemptsPersistAndUndo),
+        ("Learning question attempts reject non UTC timestamps without mutation", QuestionAttemptsRejectNonUtc)
     };
 
     private static void PreservesPracticeQuestion()
@@ -47,6 +51,78 @@ public static class LearningPracticeQuestionTests
         var copy = question.Copy();
         copy.Options[0].Text = "Outro valor";
         Require(question.Options[0].Text != copy.Options[0].Text, "question copy shared option data");
+    }
+
+    private static void GraderUsesPackageAnswerKey()
+    {
+        var question = Question();
+        var correct = LearningPracticeQuestionGrader.Grade(question, "opcao-b");
+        var wrong = LearningPracticeQuestionGrader.Grade(question, "opcao-a");
+
+        Require(correct.IsCorrect, "correct package option was not accepted");
+        Require(!wrong.IsCorrect, "wrong package option was accepted");
+        Require(wrong.CorrectOptionId == question.CorrectOptionId, "grader did not preserve package answer key");
+        Require(wrong.CorrectOptionText == "x = 5", "grader did not expose the package answer text");
+        Require(wrong.Explanation == question.Explanation, "grader did not preserve the package explanation");
+    }
+
+    private static void GraderRejectsUnknownOption()
+    {
+        Throws(() => LearningPracticeQuestionGrader.Grade(Question(), "opcao-inexistente"), "não pertence");
+    }
+
+    private static void QuestionAttemptsPersistAndUndo()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "rota-learning-question-attempts-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "question-attempts.json");
+        try
+        {
+            var store = new LearningQuestionAttemptStore(path);
+            store.Record("mat-equacoes-isolar-q1", "mat-equacoes-isolar", "opcao-a", false,
+                new DateTimeOffset(2026, 9, 7, 20, 0, 0, TimeSpan.Zero));
+            store.Record("mat-equacoes-isolar-q1", "mat-equacoes-isolar", "opcao-b", true,
+                new DateTimeOffset(2026, 9, 7, 20, 5, 0, TimeSpan.Zero));
+
+            var reloaded = new LearningQuestionAttemptStore(path);
+            var beforeUndo = reloaded.Snapshot().Attempts;
+            Require(beforeUndo.Count == 2, "attempt history did not persist");
+            Require(beforeUndo[0].SelectedOptionId == "opcao-a" && !beforeUndo[0].IsCorrect, "first attempt changed after reload");
+            Require(beforeUndo[1].SelectedOptionId == "opcao-b" && beforeUndo[1].IsCorrect, "second attempt changed after reload");
+
+            Require(reloaded.UndoLatest("mat-equacoes-isolar-q1"), "latest question attempt was not removed");
+            var afterUndo = new LearningQuestionAttemptStore(path).Snapshot().Attempts;
+            Require(afterUndo.Count == 1 && afterUndo[0].SelectedOptionId == "opcao-a", "undo removed the wrong attempt");
+        }
+        finally
+        {
+            try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    private static void QuestionAttemptsRejectNonUtc()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "rota-learning-question-attempts-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "question-attempts.json");
+        try
+        {
+            var store = new LearningQuestionAttemptStore(path);
+            try
+            {
+                store.Record("mat-equacoes-isolar-q1", "mat-equacoes-isolar", "opcao-b", true,
+                    new DateTimeOffset(2026, 9, 7, 20, 0, 0, TimeSpan.FromHours(-3)));
+            }
+            catch (ArgumentException exception) when (exception.Message.Contains("UTC", StringComparison.OrdinalIgnoreCase))
+            {
+                Require(store.Snapshot().Attempts.Count == 0, "invalid attempt mutated in-memory history");
+                Require(!File.Exists(path), "invalid attempt created a persistence file");
+                return;
+            }
+            throw new InvalidOperationException("Expected non-UTC attempt to be rejected.");
+        }
+        finally
+        {
+            try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); } catch { }
+        }
     }
 
     private static LearningPracticeQuestion Question() => new()
