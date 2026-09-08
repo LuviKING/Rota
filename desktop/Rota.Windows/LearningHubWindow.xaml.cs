@@ -9,6 +9,7 @@ public partial class LearningHubWindow : Window
 {
     private readonly string _root;
     private readonly Version _version;
+    private readonly LearningProgressStore _progressStore;
     private LearningContentLibrarySnapshot _snapshot = new(Array.Empty<LearningLibraryPackage>(), Array.Empty<LearningLibraryIssue>());
     public ObservableCollection<LearningHubPackageView> Packages { get; } = new();
 
@@ -16,6 +17,7 @@ public partial class LearningHubWindow : Window
     {
         _root = rootDirectory;
         _version = applicationVersion;
+        _progressStore = new LearningProgressStore(Path.Combine(_root, "progress.json"));
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         PackageList.ItemsSource = Packages;
@@ -68,6 +70,28 @@ public partial class LearningHubWindow : Window
         LessonBodyText.Text = guide.TheoryMaterial is null ? "Este conteúdo ainda não possui uma explicação no pacote." : string.Join("\n\n", guide.TheoryMaterial.Sections.OrderBy(section => section.Position).Select(section => section.Title + "\n" + section.Body));
         PracticeText.Text = guide.PracticeQuestions.Count == 0 ? "" : $"Prática disponível: {guide.PracticeQuestions.Count} questão(ões).";
         AssessmentText.Text = view.Package.Assessments.Count == 0 ? "" : $"Simulados disponíveis: {view.Package.Assessments.Count}.";
+        RefreshProgress(content.Id);
+    }
+
+    private void CompleteContent_Click(object sender, RoutedEventArgs e)
+    {
+        if (ContentList.SelectedItem is not LearningContent content) return;
+        try
+        {
+            _progressStore.MarkContentCompleted(content.Id);
+            RefreshProgress(content.Id);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show("Não foi possível salvar seu progresso.\n\n" + exception.Message, "Aprender", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void RefreshProgress(string contentId)
+    {
+        var completed = _progressStore.Snapshot().CompletedContentIds.Contains(contentId);
+        ProgressText.Text = completed ? "✓ Estudado" : "";
+        CompleteContentButton.IsEnabled = !completed;
     }
 }
 
