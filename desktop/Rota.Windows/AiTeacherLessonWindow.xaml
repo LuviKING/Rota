@@ -78,6 +78,8 @@
                                     AutomationProperties.Name="Gerar explicação local">Explicar</Button>
                             <Button x:Name="CancelButton" Click="Cancel_Click" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="8,0,0,0"
                                     Visibility="Collapsed" AutomationProperties.Name="Cancelar explicação">Cancelar</Button>
+                            <Button x:Name="NewConversationButton" Click="NewConversation_Click" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="8,0,0,0"
+                                    AutomationProperties.Name="Iniciar nova conversa desta aula">Nova conversa</Button>
                         </WrapPanel>
                         <TextBlock x:Name="OperationNoticeText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,10,0,0" />
                     </StackPanel>

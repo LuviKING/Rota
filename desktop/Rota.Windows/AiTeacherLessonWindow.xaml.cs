@@ -230,6 +230,24 @@ public partial class AiTeacherLessonWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _generationCancellation?.Cancel();
 
+    private void NewConversation_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isGenerating) return;
+        _conversationId = Guid.Empty;
+        AnswerPanel.Visibility = Visibility.Collapsed;
+        AnswerTitleText.Text = "";
+        AnswerIntroductionText.Text = "";
+        AnswerStepsList.ItemsSource = null;
+        AnswerRecapText.Text = "";
+        LimitationsList.ItemsSource = null;
+        LimitationsPanel.Visibility = Visibility.Collapsed;
+        ShowEvidence(
+            AiTeacherGroundingMetadataFactory.Create(_controller.LessonContext),
+            AiTeacherKnowledgeDisclosureFactory.Create(_controller.LessonContext));
+        OperationNoticeText.Text = "A próxima pergunta iniciará uma nova conversa desta aula. O histórico anterior continua salvo somente neste computador.";
+        QuestionBox.Focus();
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void DisposeOwnedStores()
@@ -251,6 +269,7 @@ public partial class AiTeacherLessonWindow : Window
         CancelButton.Visibility = _isGenerating ? Visibility.Visible : Visibility.Collapsed;
         QuestionBox.IsEnabled = !_isGenerating;
         StylePicker.IsEnabled = !_isGenerating;
+        NewConversationButton.IsEnabled = !_isGenerating;
         QuestionHintText.Text = $"{QuestionBox.Text.Length:N0}/4.000 caracteres";
     }
 
