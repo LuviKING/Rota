@@ -24,6 +24,7 @@ public partial class AiTeacherLessonWindow : Window
     private CancellationTokenSource? _generationCancellation;
     private bool _ownedStoresDisposed;
     private bool _isGenerating;
+    private bool _isRestoringSubjectPreference;
     private Guid _conversationId;
 
     public ObservableCollection<AiTeacherExplanationStyleDescriptor> Styles { get; } = new();
@@ -102,8 +103,16 @@ public partial class AiTeacherLessonWindow : Window
             var preference = await _stylePreferenceService.GetPreferenceAsync(_subjectBinding).ConfigureAwait(true);
             if (preference is not null && IsLoaded)
             {
-                StylePicker.SelectedItem = Styles.Single(item => item.Style == preference.Style);
-                UseContinuityCheckBox.IsChecked = preference.UseConversationContinuity;
+                _isRestoringSubjectPreference = true;
+                try
+                {
+                    StylePicker.SelectedItem = Styles.Single(item => item.Style == preference.Style);
+                    UseContinuityCheckBox.IsChecked = preference.UseConversationContinuity;
+                }
+                finally
+                {
+                    _isRestoringSubjectPreference = false;
+                }
                 OperationNoticeText.Text = "Suas escolhas de explicação e continuidade para esta matéria foram restauradas localmente.";
             }
         }
@@ -144,7 +153,7 @@ public partial class AiTeacherLessonWindow : Window
 
     private async void StylePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!IsLoaded || _isGenerating || _subjectBinding is null || _stylePreferenceService is null ||
+        if (!IsLoaded || _isGenerating || _isRestoringSubjectPreference || _subjectBinding is null || _stylePreferenceService is null ||
             StylePicker.SelectedItem is not AiTeacherExplanationStyleDescriptor descriptor)
         {
             return;
@@ -165,7 +174,7 @@ public partial class AiTeacherLessonWindow : Window
 
     private async void UseContinuityCheckBox_Changed(object sender, RoutedEventArgs e)
     {
-        if (!IsLoaded || _isGenerating || _subjectBinding is null || _stylePreferenceService is null ||
+        if (!IsLoaded || _isGenerating || _isRestoringSubjectPreference || _subjectBinding is null || _stylePreferenceService is null ||
             StylePicker.SelectedItem is not AiTeacherExplanationStyleDescriptor descriptor)
         {
             return;
