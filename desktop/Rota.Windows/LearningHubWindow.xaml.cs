@@ -297,7 +297,11 @@ public partial class LearningHubWindow : Window
         try
         {
             var context = AiTeacherLessonContextFactory.Create(view.Package, content.Id);
-            var dialog = new AiTeacherLessonWindow(_teacherService, context) { Owner = this };
+            var subjectBinding = AiTeacherSubjectBindingFactory.Create(view.Package, content.Id);
+            var dialog = new AiTeacherLessonWindow(
+                _teacherService,
+                context,
+                subjectBinding: subjectBinding) { Owner = this };
             dialog.ShowDialog();
         }
         catch (Exception exception) when (exception is AiContractValidationException or InvalidDataException)

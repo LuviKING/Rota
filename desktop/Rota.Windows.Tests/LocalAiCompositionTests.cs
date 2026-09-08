@@ -20,7 +20,13 @@ public static class LocalAiCompositionTests
       .Concat(AiTeacherPackageGroundingTests.Cases)
       .Concat(AiTeacherSourceConfidenceTests.Cases)
       .Concat(AiTeacherKnowledgeDisclosureTests.Cases)
-      .Concat(AiTeacherLessonControllerTests.Cases);
+      .Concat(AiTeacherLessonControllerTests.Cases)
+      .Concat(AiTeacherConversationHistoryTests.Cases)
+      .Concat(AiTeacherLessonSummaryTests.Cases)
+      .Concat(AiTeacherSubjectMemoryTests.Cases)
+      .Concat(AiTeacherSubjectMemoryRegressionTests.Cases)
+      .Concat(AiTeacherDeterministicValidationTests.Cases)
+      .Concat(AiTeacherPedagogicalQualityTests.Cases);
 
     private static void CompositionStaysInert()
     {
@@ -37,6 +43,12 @@ public static class LocalAiCompositionTests
                 Require(services.ConfigurationStore.ConfigurationPath == Path.Combine(aiRoot, "config.json"));
                 Require(services.ProposalStore.StorePath == Path.Combine(aiRoot, "proposals.json"));
                 Require(services.ConversationStore.StorePath == Path.Combine(aiRoot, "conversation.json"));
+                Require(services.TeacherConversationStore.RootDirectory == Path.Combine(aiRoot, "teacher", "conversations"));
+                Require(services.TeacherLessonSummaryStore.RootDirectory == Path.Combine(aiRoot, "teacher", "summaries"));
+                Require(services.TeacherLessonSummaryService is IAiTeacherLessonSummaryService);
+                Require(services.TeacherSubjectBindingStore.RootDirectory == Path.Combine(aiRoot, "teacher", "memory", "subject-bindings"));
+                Require(services.TeacherSubjectMemoryStore.RootDirectory == Path.Combine(aiRoot, "teacher", "memory", "subjects"));
+                Require(services.TeacherSubjectMemoryService is IAiTeacherSubjectMemoryService);
                 Require(services.EnemCatalog.CatalogVersion == EnemCatalogService.CurrentCatalogVersion);
                 Require(services.ModelManager.RootDirectory == aiRoot);
                 Require(services.HardwareDiagnostics is not null);
@@ -67,6 +79,10 @@ public static class LocalAiCompositionTests
             Expect<ObjectDisposedException>(() => services.TeacherBackend.ExplainAsync(
                 new AiTeacherRequest { Question = "Explique razão." },
                 new AiConfiguration()).GetAwaiter().GetResult());
+            Expect<ObjectDisposedException>(() => services.TeacherConversationStore.ListAsync().GetAwaiter().GetResult());
+            Expect<ObjectDisposedException>(() => services.TeacherLessonSummaryStore.TryLoadAsync(Guid.NewGuid()).GetAwaiter().GetResult());
+            Expect<ObjectDisposedException>(() => services.TeacherSubjectBindingStore.TryLoadAsync(Guid.NewGuid()).GetAwaiter().GetResult());
+            Expect<ObjectDisposedException>(() => services.TeacherSubjectMemoryStore.TryLoadAsync("pacote", "materia").GetAwaiter().GetResult());
         });
     }
 
@@ -147,6 +163,12 @@ public static class LocalAiCompositionTests
                 Require(services.Backend is ILocalAiBackend);
                 Require(services.TeacherBackend is IAiTeacherBackend);
                 Require(services.TeacherService is IAiTeacherService);
+                Require(services.TeacherConversationStore is IAiTeacherConversationStore);
+                Require(services.TeacherLessonSummaryStore is IAiTeacherLessonSummaryStore);
+                Require(services.TeacherLessonSummaryService is IAiTeacherLessonSummaryService);
+                Require(services.TeacherSubjectBindingStore is IAiTeacherSubjectBindingStore);
+                Require(services.TeacherSubjectMemoryStore is IAiTeacherSubjectMemoryStore);
+                Require(services.TeacherSubjectMemoryService is IAiTeacherSubjectMemoryService);
                 Require(services.RuntimeHost.Status.State == AiRuntimeState.Stopped);
                 Require(!Directory.Exists(aiRoot));
             }

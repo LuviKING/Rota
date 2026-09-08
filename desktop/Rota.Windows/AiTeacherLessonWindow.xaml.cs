@@ -6,23 +6,58 @@ using Rota.Desktop.LocalAI;
 namespace Rota.Desktop;
 
 /// <summary>
-/// Janela de estudo vinculada a um único conteúdo verificado. Ela não conversa
-/// com o planejamento, não aplica alterações e exibe as fontes/limites decididos
-/// deterministicamente pelo Rota junto de toda explicação.
+/// Janela de estudo vinculada a um único conteúdo verificado. Histórico, resumo e
+/// memória por matéria ficam locais e passivos; nenhum deles é reenviado ao modelo.
 /// </summary>
 public partial class AiTeacherLessonWindow : Window
 {
     private readonly AiTeacherLessonController _controller;
+    private readonly IAiTeacherConversationStore _conversationStore;
+    private readonly bool _ownsConversationStore;
+    private readonly IAiTeacherLessonSummaryStore? _ownedSummaryStore;
+    private readonly IAiTeacherSubjectBindingStore? _ownedSubjectBindingStore;
+    private readonly IAiTeacherSubjectMemoryStore? _ownedSubjectMemoryStore;
     private CancellationTokenSource? _generationCancellation;
+    private bool _ownedStoresDisposed;
     private bool _isGenerating;
+    private Guid _conversationId;
 
     public ObservableCollection<AiTeacherExplanationStyleDescriptor> Styles { get; } = new();
 
     public AiTeacherLessonWindow(
         IAiTeacherService teacherService,
-        AiTeacherLessonContext lessonContext)
+        AiTeacherLessonContext lessonContext,
+        IAiTeacherConversationStore? conversationStore = null,
+        IAiTeacherLessonSummaryService? summaryService = null,
+        AiTeacherSubjectBinding? subjectBinding = null,
+        IAiTeacherSubjectMemoryService? subjectMemoryService = null)
     {
-        _controller = new AiTeacherLessonController(teacherService, lessonContext);
+        _conversationStore = conversationStore ?? new AiTeacherConversationStore();
+        _ownsConversationStore = conversationStore is null;
+        if (summaryService is null)
+        {
+            var summaryStore = new AiTeacherLessonSummaryStore();
+            _ownedSummaryStore = summaryStore;
+            summaryService = new AiTeacherLessonSummaryService(_conversationStore, summaryStore);
+        }
+        if (subjectBinding is not null && subjectMemoryService is null)
+        {
+            var bindingStore = new AiTeacherSubjectBindingStore();
+            var memoryStore = new AiTeacherSubjectMemoryStore();
+            _ownedSubjectBindingStore = bindingStore;
+            _ownedSubjectMemoryStore = memoryStore;
+            subjectMemoryService = new AiTeacherSubjectMemoryService(
+                _conversationStore,
+                bindingStore,
+                memoryStore);
+        }
+        _controller = new AiTeacherLessonController(
+            teacherService,
+            lessonContext,
+            _conversationStore,
+            summaryService,
+            subjectBinding,
+            subjectMemoryService);
         InitializeComponent();
         WindowSizing.FitToWorkArea(this);
         foreach (var style in AiTeacherExplanationStyles.All) Styles.Add(style);
@@ -39,8 +74,7 @@ public partial class AiTeacherLessonWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         _generationCancellation?.Cancel();
-        _generationCancellation?.Dispose();
-        _generationCancellation = null;
+        if (!_isGenerating) DisposeOwnedStores();
         Closed -= Window_Closed;
     }
 
@@ -57,40 +91,70 @@ public partial class AiTeacherLessonWindow : Window
         }
 
         _isGenerating = true;
-        _generationCancellation = new CancellationTokenSource();
+        var generationCancellation = new CancellationTokenSource();
+        _generationCancellation = generationCancellation;
         OperationNoticeText.Text = "A Professora Local está preparando uma explicação a partir do material interno…";
         RefreshInputState();
         try
         {
             var style = (StylePicker.SelectedItem as AiTeacherExplanationStyleDescriptor)?.Style
                 ?? AiTeacherExplanationStyle.StepByStep;
-            var answer = await _controller.ExplainAsync(question, style, _generationCancellation.Token);
+            var turn = await _controller.AskAsync(
+                _conversationId,
+                question,
+                studentAttempt: "",
+                AiTeacherRequestMode.Explain,
+                style,
+                generationCancellation.Token);
             if (!IsLoaded) return;
-            ShowAnswer(answer);
-            OperationNoticeText.Text = answer.Knowledge.CanAnswerSubstantively
-                ? "Explicação pronta. As fontes e o nível de cobertura aparecem abaixo."
-                : "A Professora Local não iniciou o modelo: o pacote ainda não sustenta uma explicação segura.";
+
+            _conversationId = turn.ConversationId;
+            ShowAnswer(turn.GroundedAnswer);
+            var exchangeCount = turn.Conversation?.Exchanges.Count ?? 0;
+            var summaryStatus = string.IsNullOrWhiteSpace(turn.SummaryWarning)
+                ? " Resumo automático atualizado localmente."
+                : " " + turn.SummaryWarning;
+            var memoryStatus = string.IsNullOrWhiteSpace(turn.SubjectMemoryWarning)
+                ? " Memória da matéria atualizada localmente."
+                : " " + turn.SubjectMemoryWarning;
+            OperationNoticeText.Text = turn.GroundedAnswer.Knowledge.CanAnswerSubstantively
+                ? $"Explicação pronta. Conversa salva localmente · {exchangeCount} troca(s).{summaryStatus}{memoryStatus} As fontes e o nível de cobertura aparecem abaixo."
+                : $"A Professora Local não iniciou o modelo: o pacote ainda não sustenta uma explicação segura. Conversa salva localmente · {exchangeCount} troca(s).{summaryStatus}{memoryStatus}";
         }
-        catch (OperationCanceledException) when (_generationCancellation?.IsCancellationRequested == true)
+        catch (OperationCanceledException) when (generationCancellation.IsCancellationRequested)
         {
-            OperationNoticeText.Text = "Explicação cancelada. Nenhuma alteração foi feita no seu plano ou progresso.";
+            if (IsLoaded)
+                OperationNoticeText.Text = "Explicação cancelada. O cancelamento ficou registrado no histórico local; nenhuma alteração foi feita no seu plano ou progresso.";
         }
-        catch (Exception ex) when (ex is AiInferenceException or AiContractValidationException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is AiInferenceException or AiContractValidationException or IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            OperationNoticeText.Text = ex.Message;
+            if (IsLoaded) OperationNoticeText.Text = ex.Message;
         }
         finally
         {
-            _generationCancellation?.Dispose();
-            _generationCancellation = null;
+            if (ReferenceEquals(_generationCancellation, generationCancellation))
+                _generationCancellation = null;
+            generationCancellation.Dispose();
             _isGenerating = false;
             if (IsLoaded) RefreshInputState();
+            else DisposeOwnedStores();
         }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _generationCancellation?.Cancel();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void DisposeOwnedStores()
+    {
+        if (_ownedStoresDisposed) return;
+        _ownedStoresDisposed = true;
+        if (_ownedSubjectMemoryStore is IDisposable memoryDisposable) memoryDisposable.Dispose();
+        if (_ownedSubjectBindingStore is IDisposable bindingDisposable) bindingDisposable.Dispose();
+        if (_ownedSummaryStore is IDisposable summaryDisposable) summaryDisposable.Dispose();
+        if (_ownsConversationStore && _conversationStore is IDisposable conversationDisposable)
+            conversationDisposable.Dispose();
+    }
 
     private void RefreshInputState()
     {

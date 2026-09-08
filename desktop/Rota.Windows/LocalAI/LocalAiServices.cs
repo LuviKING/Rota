@@ -21,10 +21,6 @@ public sealed class LocalAiServices : IAsyncDisposable
             ModelManager,
             RuntimeHost);
 
-        // Planejamento e tutoria compartilham somente runtime/modelo. Contratos, prompts,
-        // parsers e autoridades permanecem deliberadamente separados. Na composição real,
-        // a professora só entra em inferência depois que o Rota fornecer um contexto
-        // pedagógico interno verificado.
         Backend = new LlamaServerBackend(RuntimeHost);
         TeacherBackend = new LlamaTeacherBackend(RuntimeHost, TeacherManual);
         TeacherService = new AiTeacherService(
@@ -33,6 +29,21 @@ public sealed class LocalAiServices : IAsyncDisposable
             ModelManager,
             requireVerifiedLessonContext: true,
             manual: TeacherManual);
+        TeacherConversationStore = new AiTeacherConversationStore(
+            Path.Combine(rootDirectory, "teacher", "conversations"));
+        TeacherLessonSummaryStore = new AiTeacherLessonSummaryStore(
+            Path.Combine(rootDirectory, "teacher", "summaries"));
+        TeacherLessonSummaryService = new AiTeacherLessonSummaryService(
+            TeacherConversationStore,
+            TeacherLessonSummaryStore);
+        TeacherSubjectBindingStore = new AiTeacherSubjectBindingStore(
+            Path.Combine(rootDirectory, "teacher", "memory", "subject-bindings"));
+        TeacherSubjectMemoryStore = new AiTeacherSubjectMemoryStore(
+            Path.Combine(rootDirectory, "teacher", "memory", "subjects"));
+        TeacherSubjectMemoryService = new AiTeacherSubjectMemoryService(
+            TeacherConversationStore,
+            TeacherSubjectBindingStore,
+            TeacherSubjectMemoryStore);
 
         ContextProvider = new StudyPlanningContextProvider(repository);
         EnemCatalog = EnemCatalogService.Default;
@@ -56,11 +67,6 @@ public sealed class LocalAiServices : IAsyncDisposable
     }
 
     public string RootDirectory { get; }
-
-    /// <summary>
-    /// Manual pedagógico canônico. Ele é embarcado, somente leitura e deliberadamente
-    /// separado do prompt do planejador de calendário.
-    /// </summary>
     public AiTeacherManual TeacherManual { get; }
 
     public WindowsAiHardwareProfileDetector HardwareDetector { get; }
@@ -73,6 +79,24 @@ public sealed class LocalAiServices : IAsyncDisposable
     public LlamaServerBackend Backend { get; }
     public LlamaTeacherBackend TeacherBackend { get; }
     public AiTeacherService TeacherService { get; }
+
+    public AiTeacherConversationStore TeacherConversationStore { get; }
+    public AiTeacherLessonSummaryStore TeacherLessonSummaryStore { get; }
+    public AiTeacherLessonSummaryService TeacherLessonSummaryService { get; }
+
+    /// <summary>
+    /// Associação conversa→matéria derivada de pacote verificado. Fica separada do
+    /// prompt e do calendário; não é um diagnóstico do aluno.
+    /// </summary>
+    public AiTeacherSubjectBindingStore TeacherSubjectBindingStore { get; }
+
+    /// <summary>
+    /// Memória factual por matéria, derivada do histórico completo. Continua passiva
+    /// até um bloco posterior definir recuperação explícita e limitada para o prompt.
+    /// </summary>
+    public AiTeacherSubjectMemoryStore TeacherSubjectMemoryStore { get; }
+    public AiTeacherSubjectMemoryService TeacherSubjectMemoryService { get; }
+
     public StudyPlanningContextProvider ContextProvider { get; }
     public EnemCatalogService EnemCatalog { get; }
     public AiPlanningService PlanningService { get; }
@@ -114,6 +138,10 @@ public sealed class LocalAiServices : IAsyncDisposable
         finally
         {
             Installer.Dispose();
+            TeacherSubjectMemoryStore.Dispose();
+            TeacherSubjectBindingStore.Dispose();
+            TeacherLessonSummaryStore.Dispose();
+            TeacherConversationStore.Dispose();
             ConversationStore.Dispose();
             ProposalStore.Dispose();
             ConfigurationStore.Dispose();
