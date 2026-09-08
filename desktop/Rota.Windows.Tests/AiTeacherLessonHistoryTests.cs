@@ -7,6 +7,7 @@ public static class AiTeacherLessonHistoryTests
     public static IEnumerable<(string Name, Action Body)> Cases => new (string, Action)[]
     {
         ("Teacher lesson history keeps the local question and validated recap", ShowsLocalTranscript),
+        ("Teacher lesson history includes the latest completed local exchange", IncludesLatestCompletion),
         ("Teacher lesson history limits the displayed exchanges", BoundsDisplay),
         ("Teacher lesson history labels terminal states without a fabricated answer", LabelsTerminalStates),
         ("Teacher lesson history rejects a different frozen lesson", RejectsForeignLesson)
@@ -35,6 +36,19 @@ public static class AiTeacherLessonHistoryTests
         Require(result.TotalExchangeCount == 24);
         Require(result.HasEarlierEntries && result.Entries.Count == AiTeacherLessonHistoryFactory.MaximumDisplayedExchanges);
         Require(result.Entries.First().Question == "Pergunta 5.");
+    }
+
+    private static void IncludesLatestCompletion()
+    {
+        var context = Context();
+        var result = AiTeacherLessonHistoryFactory.Create(Conversation(
+            context,
+            Completed("Primeira pergunta.", "Primeiro recap."),
+            Completed("Pergunta mais recente.", "Recap mais recente.")), context);
+
+        Require(result.TotalExchangeCount == 2);
+        Require(result.Entries.Last().Question == "Pergunta mais recente.");
+        Require(result.Entries.Last().AnswerRecap == "Recap mais recente.");
     }
 
     private static void LabelsTerminalStates()

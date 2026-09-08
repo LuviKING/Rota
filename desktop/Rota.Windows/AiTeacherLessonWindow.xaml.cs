@@ -243,6 +243,7 @@ public partial class AiTeacherLessonWindow : Window
             OperationNoticeText.Text = turn.GroundedAnswer.Knowledge.CanAnswerSubstantively
                 ? $"Explicação pronta. Conversa salva localmente · {exchangeCount} troca(s).{summaryStatus}{memoryStatus} As fontes e o nível de cobertura aparecem abaixo."
                 : $"A Professora Local não iniciou o modelo: o pacote ainda não sustenta uma explicação segura. Conversa salva localmente · {exchangeCount} troca(s).{summaryStatus}{memoryStatus}";
+            await RefreshVisibleHistoryAsync();
         }
         catch (OperationCanceledException) when (generationCancellation.IsCancellationRequested)
         {
@@ -306,12 +307,7 @@ public partial class AiTeacherLessonWindow : Window
 
         try
         {
-            var conversation = await _conversationStore.LoadAsync(_conversationId).ConfigureAwait(true);
-            var history = AiTeacherLessonHistoryFactory.Create(conversation, _controller.LessonContext);
-            HistoryEntriesList.ItemsSource = history.Entries;
-            HistoryInfoText.Text = history.HasEarlierEntries
-                ? $"Mostrando as últimas {history.Entries.Count} de {history.TotalExchangeCount} trocas. Este histórico continua somente no computador."
-                : $"{history.TotalExchangeCount} troca(s) nesta conversa. Este histórico continua somente no computador.";
+            await LoadHistoryAsync().ConfigureAwait(true);
             HistoryPanel.Visibility = Visibility.Visible;
             HistoryButton.Content = "Ocultar histórico";
         }
@@ -319,6 +315,24 @@ public partial class AiTeacherLessonWindow : Window
         {
             if (IsLoaded) OperationNoticeText.Text = exception.Message;
         }
+    }
+
+    private async Task RefreshVisibleHistoryAsync()
+    {
+        if (HistoryPanel.Visibility != Visibility.Visible || _conversationId == Guid.Empty)
+            return;
+
+        await LoadHistoryAsync().ConfigureAwait(true);
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        var conversation = await _conversationStore.LoadAsync(_conversationId).ConfigureAwait(true);
+        var history = AiTeacherLessonHistoryFactory.Create(conversation, _controller.LessonContext);
+        HistoryEntriesList.ItemsSource = history.Entries;
+        HistoryInfoText.Text = history.HasEarlierEntries
+            ? $"Mostrando as últimas {history.Entries.Count} de {history.TotalExchangeCount} trocas. Este histórico continua somente no computador."
+            : $"{history.TotalExchangeCount} troca(s) nesta conversa. Este histórico continua somente no computador.";
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
