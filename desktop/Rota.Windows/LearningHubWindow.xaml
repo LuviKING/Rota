@@ -22,7 +22,7 @@
                     <ListBox x:Name="ContentList" SelectionChanged="ContentList_SelectionChanged" BorderThickness="0" Background="Transparent" Margin="0,7,0,12"><ListBox.ItemTemplate><DataTemplate><Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="0,0,0,6"><TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextBrush}"/></Border></DataTemplate></ListBox.ItemTemplate></ListBox>
                     <TextBlock x:Name="LessonTitleText" Foreground="{DynamicResource TextBrush}" FontSize="18" FontWeight="SemiBold"/>
                     <TextBlock x:Name="LessonGoalText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,5,0,10"/>
-                    <TextBlock x:Name="LessonBodyText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" LineHeight="21"/>
+                    <TextBox x:Name="LessonBodyText" IsReadOnly="True" Background="Transparent" BorderThickness="0" Padding="0" TextWrapping="Wrap" AcceptsReturn="True" Foreground="{DynamicResource TextBrush}" Cursor="IBeam" />
                     <TextBlock x:Name="PracticeText" Foreground="{DynamicResource PrimaryTextBrush}" Margin="0,16,0,0" TextWrapping="Wrap"/>
 
                     <Border x:Name="PracticePanel" Visibility="Collapsed" Margin="0,10,0,0" Padding="14"
