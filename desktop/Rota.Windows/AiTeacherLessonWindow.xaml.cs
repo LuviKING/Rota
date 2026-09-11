@@ -28,6 +28,8 @@ public partial class AiTeacherLessonWindow : Window
     private bool _isRestoringSubjectPreference;
     private Guid _conversationId;
     private AiTeacherAnswer? _displayedAnswer;
+    private string _selectedExcerpt = "";
+    private bool _askSelectedExcerpt;
 
     public ObservableCollection<AiTeacherExplanationStyleDescriptor> Styles { get; } = new();
 
@@ -38,7 +40,8 @@ public partial class AiTeacherLessonWindow : Window
         IAiTeacherLessonSummaryService? summaryService = null,
         AiTeacherSubjectBinding? subjectBinding = null,
         IAiTeacherSubjectMemoryService? subjectMemoryService = null,
-        IAiTeacherStylePreferenceService? stylePreferenceService = null)
+        IAiTeacherStylePreferenceService? stylePreferenceService = null,
+        string? selectedExcerpt = null)
     {
         _conversationStore = conversationStore ?? new AiTeacherConversationStore();
         _ownsConversationStore = conversationStore is null;
@@ -67,6 +70,8 @@ public partial class AiTeacherLessonWindow : Window
         }
         _subjectBinding = subjectBinding;
         _stylePreferenceService = stylePreferenceService;
+        _selectedExcerpt = (selectedExcerpt ?? "").Trim();
+        _askSelectedExcerpt = _selectedExcerpt.Length > 0;
         _continuationService = new AiTeacherLessonContinuationService(_conversationStore);
         _controller = new AiTeacherLessonController(
             teacherService,
@@ -201,7 +206,13 @@ public partial class AiTeacherLessonWindow : Window
         if (!_isGenerating) DisposeOwnedStores();
         Closed -= Window_Closed;
     }
-
+    private void AnswerText_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox textBox) return;
+        var selected = textBox.SelectedText.Trim();
+        if (selected.Length == 0) return;
+        _selectedExcerpt = selected;
+    }
     private void QuestionBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshInputState();
 
     private async void Explain_Click(object sender, RoutedEventArgs e)
@@ -213,7 +224,18 @@ public partial class AiTeacherLessonWindow : Window
             OperationNoticeText.Text = "Escreva uma pergunta sobre este conteúdo antes de pedir a explicação.";
             return;
         }
-
+        if (_askSelectedExcerpt)
+        {
+            try
+            {
+                question = AiTeacherSelectedExcerptQuestion.Create(question, _selectedExcerpt);
+            }
+            catch (AiContractValidationException ex)
+            {
+                OperationNoticeText.Text = ex.Message;
+                return;
+            }
+        }
         _isGenerating = true;
         var generationCancellation = new CancellationTokenSource();
         _generationCancellation = generationCancellation;
@@ -232,7 +254,8 @@ public partial class AiTeacherLessonWindow : Window
                 generationCancellation.Token,
                 includeContinuity: UseContinuityCheckBox.IsChecked == true);
             if (!IsLoaded) return;
-
+            _askSelectedExcerpt = false;
+            _selectedExcerpt = "";
             _conversationId = turn.ConversationId;
             ShowAnswer(turn.GroundedAnswer);
             var exchangeCount = turn.Conversation?.Exchanges.Count ?? 0;
@@ -273,6 +296,8 @@ public partial class AiTeacherLessonWindow : Window
     {
         if (_isGenerating) return;
         _conversationId = Guid.Empty;
+        _selectedExcerpt = "";
+        _askSelectedExcerpt = false;
         HistoryPanel.Visibility = Visibility.Collapsed;
         HistoryEntriesList.ItemsSource = null;
         HistoryInfoText.Text = "";
@@ -339,7 +364,17 @@ public partial class AiTeacherLessonWindow : Window
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
-
+    private void AskSelectedExcerpt_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedExcerpt.Length == 0)
+        {
+            OperationNoticeText.Text = "Selecione um trecho da explicação antes de fazer uma pergunta sobre ele.";
+            return;
+        }
+        _askSelectedExcerpt = true;
+        QuestionBox.Focus();
+        OperationNoticeText.Text = "Trecho selecionado. Escreva sua dúvida acima e clique em Explicar.";
+    }
     private void CopyAnswer_Click(object sender, RoutedEventArgs e)
     {
         if (_displayedAnswer is null)

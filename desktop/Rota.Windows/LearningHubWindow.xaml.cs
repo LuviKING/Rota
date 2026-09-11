@@ -18,7 +18,6 @@ public partial class LearningHubWindow : Window
     private IReadOnlyList<LearningPracticeQuestion> _practiceQuestions = Array.Empty<LearningPracticeQuestion>();
     private int _practiceIndex;
     private string? _selectedPracticeOptionId;
-
     public ObservableCollection<LearningHubPackageView> Packages { get; } = new();
 
     public LearningHubWindow(
@@ -287,9 +286,9 @@ public partial class LearningHubWindow : Window
             MessageBox.Show("Não foi possível salvar seu progresso.\n\n" + exception.Message, "Aprender", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
-
     private void AskTeacher_Click(object sender, RoutedEventArgs e)
     {
+        var selectedExcerpt = LessonBodyText.SelectedText.Trim();
         if (_teacherService is null ||
             PackageList.SelectedItem is not LearningHubPackageView view ||
             ContentList.SelectedItem is not LearningContent content)
@@ -305,7 +304,8 @@ public partial class LearningHubWindow : Window
                 _teacherService,
                 context,
                 subjectBinding: subjectBinding,
-                stylePreferenceService: _teacherStylePreferenceService) { Owner = this };
+                stylePreferenceService: _teacherStylePreferenceService,
+                selectedExcerpt: selectedExcerpt) { Owner = this };
             dialog.ShowDialog();
         }
         catch (Exception exception) when (exception is AiContractValidationException or InvalidDataException)
